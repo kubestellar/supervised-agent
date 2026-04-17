@@ -9,9 +9,16 @@ set -u
 : "${AGENT_WORKDIR:?AGENT_WORKDIR is required}"
 : "${AGENT_LOOP_PROMPT:?AGENT_LOOP_PROMPT is required}"
 
+: "${AGENT_LAUNCH_CMD:?AGENT_LAUNCH_CMD is required}"
+
 SESSION="$AGENT_SESSION_NAME"
 WORKDIR="$AGENT_WORKDIR"
-LAUNCH="/usr/local/bin/agent-launch.sh"
+# AGENT_LAUNCH_CMD is expanded inline below in start_session. We intentionally
+# do NOT wrap it in a separate launcher script: tmux new-session panes inherit
+# env from the already-running tmux server, not from the caller, so any
+# wrapper that reads env vars at exec time would see whatever the server had
+# when it was first started — typically stale or empty. Expanding AGENT_LAUNCH_CMD
+# here lets the supervisor's fully-loaded env flow into the tmux command string.
 POLL_SEC="${AGENT_POLL_SEC:-10}"
 READY_TIMEOUT_SEC="${AGENT_READY_TIMEOUT_SEC:-45}"
 READY_MARKER="${AGENT_READY_MARKER:-bypass permissions on}"
@@ -56,7 +63,8 @@ send_loop_prompt() {
 start_session() {
   log "starting tmux session $SESSION"
   tmux kill-session -t "$SESSION" 2>/dev/null || true
-  tmux new-session -d -s "$SESSION" -c "$WORKDIR" "$LAUNCH"
+  # Pass AGENT_LAUNCH_CMD expanded, not via a wrapper — see comment above.
+  tmux new-session -d -s "$SESSION" -c "$WORKDIR" "$AGENT_LAUNCH_CMD"
   if wait_for_ready; then
     send_loop_prompt
   else

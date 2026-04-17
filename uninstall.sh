@@ -90,7 +90,9 @@ for unit in \
 done
 
 echo "==> removing scripts"
-rm -f "$BIN_DIR/agent-launch.sh" "$BIN_DIR/agent-supervisor.sh" "$BIN_DIR/agent-healthcheck.sh"
+rm -f "$BIN_DIR/agent-supervisor.sh" "$BIN_DIR/agent-healthcheck.sh"
+# Also remove the legacy wrapper if a pre-fix install left it behind.
+rm -f "$BIN_DIR/agent-launch.sh"
 
 echo "==> systemctl daemon-reload"
 systemctl daemon-reload

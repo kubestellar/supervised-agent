@@ -78,9 +78,11 @@ if ! id "$AGENT_USER" >/dev/null 2>&1; then
 fi
 
 echo "==> installing scripts to $BIN_DIR"
-install -m 0755 "$REPO_DIR/bin/agent-launch.sh"       "$BIN_DIR/agent-launch.sh"
 install -m 0755 "$REPO_DIR/bin/agent-supervisor.sh"   "$BIN_DIR/agent-supervisor.sh"
 install -m 0755 "$REPO_DIR/bin/agent-healthcheck.sh"  "$BIN_DIR/agent-healthcheck.sh"
+# Remove the old agent-launch.sh if it exists from a prior install — the
+# supervisor now expands AGENT_LAUNCH_CMD inline, no wrapper needed.
+rm -f "$BIN_DIR/agent-launch.sh"
 
 if [ "$TEMPLATED" = 1 ]; then
   UNITS=(
