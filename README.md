@@ -34,6 +34,8 @@ This repo is the four systemd components that patch those holes:
 
 ## Architecture
 
+### Single-instance topology
+
 ```mermaid
 flowchart TB
   subgraph systemd["systemd (always running)"]
@@ -51,18 +53,19 @@ flowchart TB
 
   NTFY(["ntfy.sh/$NTFY_TOPIC<br/>push to phone"])
 
-  OPERATOR(["Operator<br/>(claude-dev scanner etc.)"])
+  OPERATOR(["Operator<br/>(tmux attach)"])
 
   SUPERVISOR -- "spawns / respawns<br/>if session or process missing" --> tmux
   SUPERVISOR -- "sends /loop prompt<br/>after TUI is ready" --> LOOP
   SUPERVISOR -- "auto-approves<br/>sensitive-file prompts" --> AGENT
-  LOOP -- "fires every 15m" --> AGENT
-  AGENT -- "appends<br/>SCAN_START_ET / SCAN_END_ET block" --> HEARTBEAT
+  SUPERVISOR -- "notify on phrase match<br/>(usage limits etc.)" --> NTFY
+  LOOP -- "fires every N min" --> AGENT
+  AGENT -- "appends<br/>heartbeat block" --> HEARTBEAT
 
   RENEW -- "kills tmux session<br/>&rarr; supervisor re-registers /loop" --> tmux
 
   HEALTH -- "reads mtime" --> HEARTBEAT
-  HEALTH -- "if stale &gt; $AGENT_STALE_MAX_SEC<br/>kill session + alert" --> tmux
+  HEALTH -- "if stale &gt; threshold<br/>kill session + alert" --> tmux
   HEALTH -- "push on stall / recovery" --> NTFY
 
   OPERATOR -- "tmux attach<br/>(optional, read/write)" --> tmux
@@ -77,6 +80,68 @@ flowchart TB
   class HEARTBEAT data
   class NTFY,OPERATOR ext
 ```
+
+### Multi-instance topology
+
+Two agents (or more) on the same host, each with its own supervisor + heartbeat log but sharing a [beads](https://github.com/steveyegge/beads) ledger for coordination. See [`examples/scanner-policy.md`](examples/scanner-policy.md) and [`examples/reviewer-policy.md`](examples/reviewer-policy.md) for a complete pair.
+
+```mermaid
+flowchart TB
+  subgraph A_systemd["scanner instance"]
+    AS["supervised-agent@scanner.service"]
+    AH["healthcheck@scanner.timer"]
+    AR["renew@scanner.timer"]
+  end
+
+  subgraph B_systemd["reviewer instance"]
+    BS["supervised-agent@reviewer.service"]
+    BH["healthcheck@reviewer.timer"]
+    BR["renew@reviewer.timer"]
+  end
+
+  subgraph tmuxes["two tmux sessions"]
+    AT["session 'scanner'<br/>--actor scanner"]
+    BT["session 'reviewer'<br/>--actor reviewer"]
+  end
+
+  LEDGER[("beads ledger<br/>~/agent-ledger/<br/>shared work queue")]
+
+  AHEART[("scanner_log.md")]
+  BHEART[("reviewer_log.md")]
+
+  NTFY(["ntfy.sh/TOPIC<br/>both agents push"])
+
+  AS --> AT
+  BS --> BT
+  AT -- "bd create/update/close<br/>--actor scanner" --> LEDGER
+  BT -- "bd create/update/close<br/>--actor reviewer" --> LEDGER
+  AT --> AHEART
+  BT --> BHEART
+  AH --> AHEART
+  BH --> BHEART
+  AH --> NTFY
+  BH --> NTFY
+  AR --> AT
+  BR --> BT
+  BT -. "peer audit via<br/>bd list --actor=scanner<br/>(reviewer supervises scanner)" .-> LEDGER
+
+  classDef sys fill:#1f4e79,stroke:#0b2540,color:#fff
+  classDef tm fill:#2f5d3a,stroke:#173d20,color:#fff
+  classDef data fill:#7a5c14,stroke:#3b2d07,color:#fff
+  classDef ext fill:#6b1e4a,stroke:#361027,color:#fff
+  class AS,AH,AR,BS,BH,BR sys
+  class AT,BT tm
+  class LEDGER,AHEART,BHEART data
+  class NTFY ext
+```
+
+Key differences from single-instance:
+
+- **Templated systemd units** (`supervised-agent@<name>.service` etc.) — one triplet per agent.
+- **Per-instance env file** at `/etc/supervised-agent/<name>.env` — own session name, own heartbeat log, own LOOP_PROMPT.
+- **Shared ledger** with distinct `--actor` names — lets agents see each other's work without duplicating it.
+- **Lane boundary** in policy — each agent's `policy.md` declares what it owns and what it leaves alone.
+- **Peer supervision** — one agent can audit the other's responsiveness via `bd list --actor=<peer>` queries.
 
 See [docs/architecture.md](docs/architecture.md) for the detailed failure-mode table.
 
@@ -237,6 +302,8 @@ Make the **very first thing in your policy** a directive to re-read the policy f
 The example policy in [`examples/scanner-policy.md`](examples/scanner-policy.md) shows the exact pattern under "Step 0 — pre-flight re-read".
 
 See the same file for a full GitHub issue-scanner policy used against KubeStellar repos (the original use case), including an optional site-health + adoption digest pattern.
+
+For **multi-agent** setups, a second example [`examples/reviewer-policy.md`](examples/reviewer-policy.md) covers the patterns that only matter once you have more than one agent: lane boundary (what each agent owns vs hands off), workflow offload (push deterministic checks into GitHub Actions instead of re-running them forever), and peer supervision (one agent auditing the other's responsiveness). The two example policies are designed to compose — deploy scanner first, then reviewer, both pointing at the same beads ledger.
 
 ---
 
