@@ -39,6 +39,16 @@ NOTIFY_ON_PHRASE_REGEX="${AGENT_NOTIFY_ON_PHRASE_REGEX:-}"
 NOTIFY_ON_PHRASE_TITLE="${AGENT_NOTIFY_ON_PHRASE_TITLE:-Agent needs attention}"
 NOTIFY_ON_PHRASE_BODY="${AGENT_NOTIFY_ON_PHRASE_BODY:-Matched notify phrase in session $SESSION on $(hostname). Check the pane and take whatever action you prefer; the supervisor will not act on its own.}"
 
+# Display persistence across respawns. tmux session styling (status bar
+# color, pane border color) is per-session and disappears when the session
+# is killed. Claude Code's /rename slash command also disappears. These env
+# vars let the supervisor re-apply both every time it spawns the session.
+# Leave blank to skip.
+TMUX_STATUS_STYLE="${AGENT_TMUX_STATUS_STYLE:-}"
+TMUX_PANE_BORDER_STYLE="${AGENT_TMUX_PANE_BORDER_STYLE:-}"
+TMUX_PANE_ACTIVE_BORDER_STYLE="${AGENT_TMUX_PANE_ACTIVE_BORDER_STYLE:-}"
+CLAUDE_RENAME_TO="${AGENT_CLAUDE_RENAME_TO:-}"
+
 log() { printf '[%s] %s\n' "$(date -Is)" "$*"; }
 
 wait_for_ready() {
@@ -60,13 +70,36 @@ send_loop_prompt() {
   tmux send-keys -t "$SESSION" Enter
 }
 
+apply_tmux_styling() {
+  # Re-apply per-session tmux styling. tmux set is per-session and is lost
+  # when the session is killed, so we run this every start_session.
+  [ -n "$TMUX_STATUS_STYLE" ] && tmux set -t "$SESSION" status-style "$TMUX_STATUS_STYLE" 2>/dev/null || true
+  [ -n "$TMUX_PANE_BORDER_STYLE" ] && tmux set -t "$SESSION" pane-border-style "$TMUX_PANE_BORDER_STYLE" 2>/dev/null || true
+  [ -n "$TMUX_PANE_ACTIVE_BORDER_STYLE" ] && tmux set -t "$SESSION" pane-active-border-style "$TMUX_PANE_ACTIVE_BORDER_STYLE" 2>/dev/null || true
+}
+
+send_claude_rename() {
+  # Claude Code's /rename slash command labels the session footer. Lost on
+  # respawn, so we re-send after each /loop prompt. Must run AFTER the
+  # /loop has been submitted, otherwise /rename gets consumed as part of it.
+  [ -z "$CLAUDE_RENAME_TO" ] && return 0
+  log "sending /rename $CLAUDE_RENAME_TO"
+  tmux send-keys -t "$SESSION" -l "/rename $CLAUDE_RENAME_TO"
+  sleep 1
+  tmux send-keys -t "$SESSION" Enter
+  sleep 1
+}
+
 start_session() {
   log "starting tmux session $SESSION"
   tmux kill-session -t "$SESSION" 2>/dev/null || true
   # Pass AGENT_LAUNCH_CMD expanded, not via a wrapper — see comment above.
   tmux new-session -d -s "$SESSION" -c "$WORKDIR" "$AGENT_LAUNCH_CMD"
+  apply_tmux_styling
   if wait_for_ready; then
     send_loop_prompt
+    sleep 5
+    send_claude_rename
   else
     log "agent TUI did not show ready marker within ${READY_TIMEOUT_SEC}s; will retry on next tick"
   fi
