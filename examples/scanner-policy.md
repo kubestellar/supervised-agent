@@ -104,6 +104,14 @@ Sequence for every unPR'd issue:
 
 The rule applies equally to bugs, features, enhancements, docs. The only defer signals are the three exemptions. Silent queue backlog is a scanner bug, not a feature.
 
+### Zombie-label rule — auto-dispatch labels are NOT defer signals
+
+Many projects set labels like `ai-processing` / `ai-fix-requested` / `in-progress` when an auto-dispatcher triggers, to prevent double-claiming. But the dispatch can fail silently (usage limit, crash, timeout), leaving the label as a zombie marker on an issue where nothing is actually happening.
+
+**Scanner's rule**: only a linked open/merged PR counts as "in progress." A label alone does NOT. When you find an issue with `ai-processing` / similar but no linked PR and no bead in your ledger, treat it as unPR'd and apply the sequence above. Strip or update the zombie label when you claim, so the label state reflects reality.
+
+This rule exists because a single near-miss can be expensive — a cluster of 3 notification-UX issues on a real operator's project sat idle for 5+ hours under zombie labels before the operator noticed and asked why. If scanner had applied this rule rigorously, the cluster would have been bundled and dispatched within the first 15-minute iteration after the issues landed.
+
 ---
 
 ## Lane boundary (only matters with multi-agent setups)

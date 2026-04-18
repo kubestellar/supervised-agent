@@ -160,6 +160,34 @@ Thresholds (tune to your scanner cadence — these assume 15m scanner):
 
 **F.3 Scanner heartbeat freshness** — if scanner's heartbeat log mtime is >2× its cadence old, flag as technical stall. (The systemd healthcheck already catches this, but belt-and-suspenders.)
 
+### Workflow-failure recovery + blame (critical gaps most teams miss)
+
+Two bookend rules for any `workflow-failure` labeled issue your project auto-files:
+
+**Recovery (close issues when the workflow self-heals)**:
+
+On every iteration, for every open issue labeled `workflow-failure`:
+
+1. Identify the workflow name from the issue title.
+2. `gh run list --repo <repo> --workflow "<name>" --branch main --limit 5`.
+3. If **all 5 recent runs on main are `success`**, the workflow has self-recovered. Close the issue with a comment: *"Workflow has self-recovered. Last 5 runs on main all completed successfully. Closing as resolved. Reopen if it fails again."* Also close the associated bead.
+4. If 3-4 of 5 are success, log but don't close yet — wait for the streak.
+5. If any recent run is still failing, continue with blame (below).
+
+Without this rule, recovered workflows leave zombie issues that inflate the queue. Seen a workflow-failure issue stay open for hours after the workflow started succeeding again? That's the gap this closes.
+
+**Blame (act on scanner-to-reviewer workflow-failure lane transfers the SAME iteration)**:
+
+When you find a bead with `lane_transfer=scanner-to-reviewer` referencing a workflow failure, you **must** on the same iteration:
+
+1. Identify the failing run.
+2. Find PRs merged to main between the last-successful-run timestamp and the first-failed-run timestamp.
+3. If 1 PR → that's the blame candidate. Post a comment on the issue + suggest revert or fix. Update the bead with `--set-metadata blamed_pr=<num>`.
+4. If 2-5 PRs → list all candidates, ask operator to confirm (or bisect via CI if tooling supports it).
+5. If the area is historically flaky, note `flaky=true` and wait for 2+ consecutive confirmations before blaming.
+
+**Never leave a workflow-failure bead in `open` state across iterations without at least an attempted blame.** That's the policy gap that lets real regressions sit idle.
+
 **Pattern generalizes**: any agent can audit a peer's queue via `bd list --actor=<peer> --status=<x>`. Reviewer watches scanner; scanner could watch reviewer for missed regression filings; etc. Don't overdo it — one supervision pairing usually suffices.
 
 ---

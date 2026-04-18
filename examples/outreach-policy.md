@@ -92,6 +92,48 @@ Durable state in a separate file (e.g., `outreach-pipeline.md`) — one row per 
 6. **Adopter** — ADOPTERS entry on your repo merged
 - **X. Cold** — no response after 2 follow-ups, OR negative feedback. Never auto-re-engage.
 
+### Ask first, PR on request (HARD rule — never open unsolicited PRs)
+
+Never open a PR on another project's repo as a first outreach action, even if the PR is small and helpful (adding a badge, fixing a typo mentioning you, etc.). **Badges and README edits are brand-surface, not code.** Sending an unsolicited PR reads as "please endorse us publicly" and burns goodwill.
+
+Exceptions (where a PR is not "forward"):
+- Projects already in your ADOPTERS with active engagement in the last 30 days.
+- Projects where you have explicit commit rights or a prior understanding.
+- Your own downstream forks.
+
+Everywhere else, the sequence is:
+
+1. **Stage 1**: file the issue asking + include the line *"Happy to open a PR with this change if you'd like — just say the word."* This flips the offer to opt-in.
+2. **Stage 2**: watch for engagement (analytics event, comment, maintainer click on your UTM link).
+3. **Stage 3**: if they respond positively in any form, propose a PR to the operator for approval.
+4. **Stage 4**: operator approves → open the solicited PR.
+
+The "happy to open a PR" offer line should be rendered in every issue template. It costs nothing and respects the target project's agency.
+
+### Campaign-type cross-check (NOT a universal ADOPTERS check)
+
+Different campaigns target different things. Being in ADOPTERS doesn't preclude all other outreach.
+
+- **Install-mission / integration-guide campaigns** target PROJECT adoption. If the org is in ADOPTERS, skip new cold-start outreach to that org — they've adopted; expansion conversations only.
+- **Per-repo badge / maturity-model campaigns** target PER-REPO scoring. An org being in ADOPTERS via one repo does NOT preclude outreach to their other repos. Example from a real deployment: an org was in ADOPTERS via their primary repo; the outreach agent was about to skip all of that org's repos, but the operator caught it and clarified — the badge campaign is per-repo, so sibling repos in the same org are still valid targets.
+- **Future campaigns**: each new campaign declares what "already engaged" means (per-org? per-repo? per-feature?). Cross-check accordingly.
+
+Implementation: at Step 0, fetch your ADOPTERS file + the list of existing campaign-type-specific issues per campaign. For each target, check "is this target already engaged for THIS specific campaign?" — not "is this target engaged in any way?"
+
+### Operator-decision contract (how the human reacts to your drafts)
+
+Each draft bead you file for approval carries a metadata field `operator_decision` that starts unset. The operator sets it:
+
+- `operator_decision=approved` → you execute the drafted action on your next iteration. Record `executed_at` + `executed_artifact_url` on the bead after executing.
+- `operator_decision=rejected` → bead is closed. Do not re-draft for that target for at least 30 days.
+- `operator_decision=modify` → operator has appended edits via `--append-notes`. Re-read the notes, produce a revised draft in a new bead (external-ref suffix `-v2`), link with `--set-metadata previous_draft=<old-bead-id>`.
+
+At Step 0.5 each iteration, query your own beads for `operator_decision=approved AND executed_at=null` and execute those. Do NOT execute beads where `operator_decision` is still unset — those are awaiting the operator's review.
+
+### Render the full body — never leave placeholders
+
+Bead `--notes` must contain the **exact text that would be posted publicly**, not a template reference. "Uses standard template with placeholders filled" is not acceptable; render the real body with every substitution applied so the operator can approve with confidence. If the rendering is long, that's fine — the operator wants to see it all.
+
 ### Pacing rules (HARD — never violate)
 
 - **No more than 1 follow-up per target per 14 days.** Even if data screams engagement. Respect their inbox.
