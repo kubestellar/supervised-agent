@@ -104,6 +104,27 @@ Sequence for every unPR'd issue:
 
 The rule applies equally to bugs, features, enhancements, docs. The only defer signals are the three exemptions. Silent queue backlog is a scanner bug, not a feature.
 
+### Priority order — lane-transfer beads first, by age
+
+When Step 0.5 returns multiple things ready, claim in this order:
+
+1. **Lane-transfer beads** (`lane_transfer=*-to-scanner`) sorted by `created_at` ascending — oldest first. Peers handed you structured work; ignoring it rots.
+2. **New GitHub issues** discovered this iteration.
+3. **In-flight work** (PR CI monitoring, review follow-ups).
+4. **Everything else.**
+
+Never start a fresh inbound issue when a lane-transfer bead has been sitting >2 iterations. The older bead has already-scoped work; the inbound one still needs triage. Doing triage first feels productive but starves the queue.
+
+### Lane-transfer SLA (HARD — 3 iterations max)
+
+Every `lane_transfer=*-to-scanner` bead **must** be claimed within 3 iterations of its `created_at`. If a bead hits iteration 4 still unclaimed:
+
+1. File a backlog-stuck meta bead with P1 priority and `--set-metadata stuck_bead=<id> age_iterations=N`.
+2. Push high-priority ntfy: *"Scanner behind: <bead> unclaimed for <N> iterations."*
+3. Keep trying to claim each subsequent iteration.
+
+This prevents phase beads from sitting idle for hours because scanner preferred iteration-fresh wins. Architect's handoffs cost tokens to produce — letting them rot is expensive.
+
 ### Zombie-label rule — auto-dispatch labels are NOT defer signals
 
 Many projects set labels like `ai-processing` / `ai-fix-requested` / `in-progress` when an auto-dispatcher triggers, to prevent double-claiming. But the dispatch can fail silently (usage limit, crash, timeout), leaving the label as a zombie marker on an issue where nothing is actually happening.

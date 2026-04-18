@@ -160,6 +160,23 @@ Thresholds (tune to your scanner cadence — these assume 15m scanner):
 
 **F.3 Scanner heartbeat freshness** — if scanner's heartbeat log mtime is >2× its cadence old, flag as technical stall. (The systemd healthcheck already catches this, but belt-and-suspenders.)
 
+**F.4 Unclaimed lane-transfer beads** (catches falls-between-cracks):
+
+Query open beads handed to scanner via lane-transfer that scanner hasn't claimed:
+
+```sh
+(cd ~/agent-ledger && bd list --status=open --json) \
+  | jq --arg now "$(date -u +%s)" \
+      '[.[] | select((.metadata.lane_transfer // "") | test("to-scanner$")) | select(((.created_at | fromdateiso8601) + 2700) < ($now | tonumber))]'
+```
+
+2700 seconds = 45 minutes = 3 iterations at a 15m cadence (tune to your scanner's cadence).
+
+- ≥1 unclaimed >45m: high ntfy + P1 meta bead `--title "Scanner backlog: <id> unclaimed <age>m"`. Do NOT claim it yourself — cross-lane violation.
+- ≥3 unclaimed >45m: urgent ntfy + P0 meta bead — scanner is meaningfully behind; operator needs visibility.
+
+This catches exactly the failure mode where a peer produces RFC phase beads for scanner, scanner prefers iteration-fresh work, and phases rot. Without this rule, the operator only notices hours later when they manually ask "where is X being worked on?"
+
 ### Workflow-failure recovery + blame (critical gaps most teams miss)
 
 Two bookend rules for any `workflow-failure` labeled issue your project auto-files:
