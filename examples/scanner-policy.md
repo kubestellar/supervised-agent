@@ -35,6 +35,56 @@ If a file is missing or unreadable, log the failure to the heartbeat file under 
 5. **Before acting on an issue or PR**, check whether a fix is already in flight (another agent, another PR, etc.).
 6. **Log every iteration** — this is MANDATORY. If the heartbeat file goes more than `AGENT_STALE_MAX_SEC` seconds without an update, the healthcheck will kill your session and respawn you. Write the heartbeat *before* doing any work so interruptions still leave a trace.
 
+## Field-tested patterns (learned the hard way — copy these)
+
+> These emerged from a multi-hour live bake where a scanner managed a 50-issue walkthrough flood. Every rule below has a specific incident behind it.
+
+### NEVER idle
+
+"No new GitHub issues" ≠ "no work to do." When inbound is quiet, the ledger is often full of scanner-owned OPEN items waiting for action. **The string "Steady state" is ONLY valid when `bd ready` returns zero items AND no new issues arrived.** Otherwise your iteration outcome is "Backlog drain" and you must claim at least one bead before ending.
+
+### Customer-SLA (30 min from issue-filed to PR-merged)
+
+If your project publicly commits to a timely-response SLA, write it into the policy and make every iteration check age. Sort all open non-exempt issues by `createdAt` ascending and work through them oldest-first. Age beats priority — a 6-hour-old P3 should go before a 5-minute-old P1.
+
+### Queue-debt auto-dispatch (parallel Agent tool calls)
+
+When the open queue exceeds 2x your target, switch from serial single-task iterations to **parallel Agent dispatch**. Each iteration should launch 4-12 concurrent `Agent` tool calls (or equivalent subprocess fan-out), each targeting one bug or a bundled cluster. Background those dispatches and continue triage in the main thread. This multiplies throughput 3-5x at the cost of less per-PR polish — acceptable during floods.
+
+Bundle issues that share a root cause (e.g., 5 i18n bugs in the same component) into a single agent call.
+
+### Build-lock (OOM prevention)
+
+Parallel dispatch is killed by parallel `npm run build` / `tsc --noEmit` processes. Each can consume 2-3 GiB RAM on a monorepo. **Every dispatched fix agent must acquire a flock before running heavy builds:**
+
+```bash
+flock /tmp/<project>-build.lock -c "cd /path/to/worktree && npm run build && npx tsc --noEmit"
+```
+
+This serializes builds across the dispatched fleet while keeping code-editing + PR-opening parallel. We learned this after 6 concurrent `tsc` processes pegged 32 GiB RAM + 4 GiB swap and required a container reboot.
+
+### Cron cadence: continuous, not periodic
+
+A 15-minute cron leaves the agent idle 90% of the time. If the queue is actively draining, `/loop 1m` keeps the agent firing continuously — moment one iteration ends, the next starts within a minute. Use `/loop 1m` for scanner, not `/loop 15m`.
+
+### Cross-agent urgent-nudge protocol
+
+Peer agents can escalate any bead to "urgent" for you using four metadata fields:
+
+| Field | Value |
+|---|---|
+| `nudge_priority` | `urgent` |
+| `nudge_target` | `scanner` (or `reviewer`/`feature`/`outreach`) |
+| `nudge_reason` | short free-form text |
+| `nudge_source` | actor that set the flag |
+| `nudge_set_at` | ISO timestamp |
+
+At Step 0.5 pre-flight, query for beads with `nudge_priority=urgent nudge_target=<your actor>` and act on them **before** normal priority order. Strip the metadata when done.
+
+### Stale-cache supervisor gotcha
+
+If your supervisor is a long-running bash daemon that caches its launch prompt in memory, patching the prompt on disk won't propagate until the daemon process is killed. When you change the `AGENT_LOOP_PROMPT`, `pkill` the supervisor process or restart its systemd service — don't just kill the tmux session and expect the supervisor to pick up the new prompt.
+
 ## Log format
 
 Absolute path: whatever your `AGENT_LOG_FILE` env var is. Example for Claude Code memory:
