@@ -73,8 +73,8 @@ SCANNER_MSG="$PULL_INSTRUCTIONS \
 Then: Run a full scan pass per your policy (project_scanner_policy.md). \
 Oldest-first. Check all 5 repos: kubestellar/console, console-kb, docs, \
 console-marketplace, kubestellar-mcp. Ignore all labels EXCEPT: skip any issue/PR with a label containing 'hold'. \
-Dispatch fix agents for open issues \
-(skip epics owned by other sessions — check for active PRs first). \
+For EVERY open issue that does not already have an active PR, dispatch a background fix agent using the Agent tool with worktrees. \
+Do NOT just count issues and stop — your job is to FIX them, not report them. \
 Merge AI-authored PRs with green CI. Send ntfy (curl -s -H 'Title: Scanner: <action>' -d '<details>' ntfy.sh/issue-scanner) for every merge and external PR review. \
 Log to cron_scan_log.md."
 
