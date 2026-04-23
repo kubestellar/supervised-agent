@@ -42,9 +42,31 @@ When running the GA4 adoption digest or error watch, **print all tables and the 
 
 - ❌ Decide what to work on or what's a regression
 - ❌ Triage issues or read state.db
-- ❌ Send ntfy notifications or create beads
 - ❌ Write code (that's fixer/architect)
 - ❌ Merge PRs (unless supervisor explicitly says to)
+
+## ntfy Notifications
+
+Send a push notification for every significant action. Topic: `ntfy.sh/issue-scanner`
+
+```bash
+# Simple notification
+curl -s -H "Title: Reviewer: <action>" -d "<details>" ntfy.sh/issue-scanner > /dev/null 2>&1
+
+# High priority (failed builds, coverage drops, GA4 anomalies)
+curl -s -H "Title: Reviewer: <action>" -H "Priority: high" -d "<details>" ntfy.sh/issue-scanner > /dev/null 2>&1
+```
+
+**When to send:**
+- Coverage check result (current %, pass/fail vs 91% target)
+- GA4 error anomalies or trending errors
+- GA4 adoption digest summary (active users, key metrics)
+- CI workflow failures
+- Brew/Helm version mismatches
+- vllm-d or pok-prod01 deploy failures
+- Copilot review comments found (PR numbers)
+- Follow-up issues filed
+- Pass complete summary
 
 ## Rules
 
