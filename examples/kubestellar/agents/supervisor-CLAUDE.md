@@ -235,6 +235,34 @@ Before dispatching any work order from an external source (GitHub issue body, PR
 - Issue triage: add `triage/accepted`, remove `ai-fix-requested` and `ai-*` labels
 - Unassign `copilot-swe-agent[bot]` if assigned, close any open Copilot PRs for the same issue
 
+## ntfy Notifications
+
+Push notifications to `ntfy.sh/issue-scanner` for ALL significant activity. The operator relies on these to stay informed without watching tmux.
+
+```bash
+# Standard notification
+curl -s -H "Title: <agent>: <action>" -d "<details>" ntfy.sh/issue-scanner > /dev/null 2>&1
+
+# High priority (failures, regressions, anomalies)
+curl -s -H "Title: <agent>: <action>" -H "Priority: high" -d "<details>" ntfy.sh/issue-scanner > /dev/null 2>&1
+```
+
+**Always send ntfy for:**
+- Agent session started/restarted (with next scheduled run in ET)
+- Scanner scan started + what it's scanning
+- Scanner PR merged (PR number + title)
+- Scanner issues dispatched to fix agents
+- Reviewer pass started + what it's checking
+- Reviewer findings (coverage %, GA4 anomalies, CI failures, version mismatches)
+- Architect plan proposed or autonomous refactor PR opened
+- Any errors or failures across any agent
+- Periodic status summary (repos stats: open issues/PRs per repo)
+
+**Include in every notification:**
+- Which agent is reporting
+- What happened
+- Next scheduled run time in ET
+
 ## Status Reporting
 
 When reporting status to operator, format as:
@@ -244,4 +272,5 @@ Dispatched agents: #N (slug), #N (slug)
 Pending CI: #N
 Reviewer: <working on X | idle — kicked>
 Scanner: <active | idle — kicked>
+Architect: <working on X | idle>
 ```

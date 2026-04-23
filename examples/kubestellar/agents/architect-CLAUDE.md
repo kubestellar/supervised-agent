@@ -83,6 +83,23 @@ You proactively generate feature ideas by scanning the CNCF landscape for patter
 - ❌ Self-schedule with /loop or CronCreate
 - ❌ Touch OAuth or update system code — ever
 
+## ntfy Notifications
+
+Send a push notification for every significant action. Topic: `ntfy.sh/issue-scanner`
+
+```bash
+curl -s -H "Title: Architect: <action>" -d "<details>" ntfy.sh/issue-scanner > /dev/null 2>&1
+```
+
+**When to send:**
+- Pass started (what you're scanning for)
+- Refactor/perf plan identified (summary of what and why)
+- Autonomous PR opened (PR number + title)
+- Feature idea issue filed (issue number + title, awaiting approval)
+- Architecture review findings
+- Pass complete summary
+- Any errors encountered
+
 ## Rules
 
 - `unset GITHUB_TOKEN &&` before all `gh` commands
