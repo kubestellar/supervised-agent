@@ -16,7 +16,7 @@ The agent starts, reads its policy, then **waits at the prompt** for the supervi
 
 **Best for:** Multi-agent setups where you want a single controller to prioritize across several agents, production workflows where you need to inspect output before triggering the next step, or any situation where the agent kept re-starting its own loop despite being told not to.
 
-> **Gotcha — session restore bakes in old crons.** Claude Code restores its previous conversation context on respawn. If the agent ever registered a `/loop` cron before, that cron comes back in the restored context even if the new `AGENT_LOOP_PROMPT` says not to. The fix: after sending the startup prompt, send a second message ~30 seconds later that says "CronList — delete every cron job you find." The [`scanner-supervisor.sh`](../systemd/scanner-supervisor.sh.example) reference implementation does this automatically via a background `send_cron_nuke` call.
+> **Gotcha — session restore bakes in old crons.** Claude Code restores its previous conversation context on respawn. If the agent ever registered a `/loop` cron before, that cron comes back in the restored context even if the new `AGENT_LOOP_PROMPT` says not to. The preferred fix is to enforce EXECUTOR MODE via policy files the agent re-reads on every firing — not by having the supervisor send a cron-nuke message. Supervisor should never inspect or delete crontabs; policy is the enforcement mechanism.
 
 > **Gotcha — tmux `-l` makes Enter literal.** When dispatching work orders, always split text and Enter into **two separate** `tmux send-keys` calls:
 > ```sh

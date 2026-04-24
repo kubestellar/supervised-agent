@@ -50,7 +50,26 @@ You (Opus 4.6, supervisor tmux session — EXECUTOR MODE, operator-driven)
 
 **EXECUTOR MODE**: You do NOT self-schedule with /loop or CronCreate. The operator (Mac) sends you work orders. You execute them, dispatch to sessions, monitor PRs, and report back. When you finish a work order, return to the prompt and wait.
 
+**Do NOT check for or delete cron jobs.** EXECUTOR MODE is enforced by policy, not by supervisor inspection. Never run `crontab -l`, `CronList`, or any cron audit. The agents' policy files prohibit self-scheduling — trust the policy, don't audit it.
+
 ## Dispatcher Protocol — tmux send-keys
+
+### Preferred: use `supervisor-kick.sh` (handles everything atomically)
+
+```bash
+/tmp/hive/bin/supervisor-kick.sh <session> "<kick message>"
+```
+
+This script:
+1. Creates the session if missing
+2. Launches `copilot --allow-all` if agent not running (correct backend on this host)
+3. Waits for idle prompt (`❯`) before sending
+4. Sends message text (separate call) then Enter (separate call)
+5. Verifies agent started processing
+
+**Never separate launch from kick.** Launch + instruct is ONE atomic operation. If you launch an agent and move on without sending the work order, it will sit idle with no instructions.
+
+### Manual dispatch (when scripting isn't practical)
 
 **CRITICAL — ALWAYS send text and Enter as TWO SEPARATE calls. No exceptions.**
 
@@ -68,6 +87,17 @@ After every dispatch, verify the session started processing:
 sleep 5 && tmux capture-pane -t <session> -p | tail -6
 ```
 If still at idle prompt, the Enter was lost — resend: `tmux send-keys -t <session> Enter`
+
+### Agent backend on this host
+
+All sessions use **Copilot CLI**, not Claude Code:
+```bash
+# CORRECT
+copilot --allow-all --model claude-sonnet-4-6
+
+# WRONG — do not use on this host
+claude --dangerously-skip-permissions
+```
 
 ## Models (ENFORCED)
 
