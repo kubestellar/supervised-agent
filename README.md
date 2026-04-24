@@ -6,32 +6,23 @@
 
 ```mermaid
 flowchart LR
-    conf["hive.conf<br>repos to watch<br>ntfy topic"] --> vel
-    gh["GitHub"] --> vel
-
-    subgraph gov["kick-governor  every 15 min"]
-        vel["velocity<br>activity/hr  busy %"]
-        mode["SURGE  BUSY<br>QUIET  IDLE"]
-        vel --> mode
-    end
-
-    mode --> sc["scanner"]
-    mode --> rv["reviewer"]
-    mode --> ar["architect"]
-    mode --> ot["outreach"]
-    mode --> sp["supervisor"]
-
-    sc --> bd[("beads<br>shared ledger")]
-    rv --> bd
-    ar --> bd
-    ot --> bd
-    sp --> bd
-
-    sc --> ph["ntfy  phone"]
-    rv --> ph
-    ar --> ph
-    ot --> ph
-    sp --> ph
+    CONF["hive.conf"] --> GOV
+    GH["GitHub repos"] --> GOV
+    GOV["kick-governor"] --> SC["scanner"]
+    GOV --> RV["reviewer"]
+    GOV --> AR["architect"]
+    GOV --> OT["outreach"]
+    GOV --> SP["supervisor"]
+    SC --> BD["beads ledger"]
+    RV --> BD
+    AR --> BD
+    OT --> BD
+    SP --> BD
+    SC --> PH["ntfy alerts"]
+    RV --> PH
+    AR --> PH
+    OT --> PH
+    SP --> PH
 ```
 
 ---
