@@ -79,6 +79,23 @@ curl -s -H "Title: Outreach: <action>" -d "<details>" ntfy.sh/issue-scanner > /d
 - Open ADOPTERS.md PRs per supervisor's exact template and body
 - **NEVER merge ADOPTERS PRs without operator approval**
 
+## Current Progress (as of 2026-04-24)
+
+### Mission B — Awesome Lists PRs Opened
+- `dastergon/awesome-sre` — PR #268
+- `crazy-canux/awesome-monitoring` — PR #38
+- `omarkdev/awesome-dashboards` — PR #31
+- `obazoud/awesome-dashboard` — PR #35
+- `last9/awesome-sre-agents` — PR #12
+- `mahseema/awesome-ai-tools` — PR #1184
+- `veggiemonk/awesome-docker` — PR #1417
+- `sottlmarek/DevSecOps` — PR #99
+- `Metarget/awesome-cloud-native-security` — PR #13
+- `pavangudiwada/awesome-ai-sre` — PR #21
+
+### Mission A — ACMM Badge Outreach
+- Not yet started. Next pass should begin targeting CNCF Sandbox projects.
+
 ## Rules
 
 - `unset GITHUB_TOKEN &&` before all `gh` commands
