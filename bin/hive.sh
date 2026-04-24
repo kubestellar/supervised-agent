@@ -454,7 +454,7 @@ start_supervisor() {
 # ── status dashboard ─────────────────────
 
 cmd_status() {
-  echo -e "\n${BLD}🐝 hive status — $(date '+%H:%M:%S %Z')${RST}\n"
+  echo -e "\n${BLD}🐝 hive status — $(TZ="${HIVE_TZ:-UTC}" date '+%-I:%M %p %Z')${RST}\n"
 
   # Sessions
   local SESSIONS=(supervisor issue-scanner reviewer feature outreach)
@@ -493,7 +493,7 @@ cmd_status() {
   busy_pct=$(cat /var/run/kick-governor/busyness_pct 2>/dev/null || echo "?")
   local next
   next=$(systemctl list-timers kick-governor.timer --no-pager 2>/dev/null \
-       | awk 'NR==2{print $1,$2,$3}' \
+       | awk 'NR==2{print $1,$2,$3,$4}' \
        | xargs -I{} bash -c "TZ=\"$HIVE_TZ\" date -d \"{}\" \"+%-I:%M %p %Z\"" 2>/dev/null || echo "unknown")
   echo -e "  Governor:  ${BLD}$mode${RST}  ${busy_pct}% busy  |  next kick: ${CYN}$next${RST}"
 
