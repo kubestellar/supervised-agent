@@ -287,40 +287,59 @@ kick() {
   check_rate_limit "$session" "$agent" 60
 }
 
-PULL_INSTRUCTIONS="First: cd /tmp/supervised-agent && git pull --rebase origin main. Re-read your CLAUDE.md for any updated instructions."
+PULL_INSTRUCTIONS="First: cd /tmp/supervised-agent && git pull --rebase origin main. Re-read your CLAUDE.md for any updated instructions. \
+HARD RULE — enforced before any other action: never touch any issue or PR that carries a label containing the word 'hold' (case-insensitive). \
+Do not comment on it, do not merge it, do not reference it in other PRs, do not create sub-issues from it. Treat it as if it does not exist."
+
+# Beads startup restore: read in-progress and open items so agent picks up where it left off.
+BEADS_RESTORE="Then read your beads: run 'bd list --json' to see all open/in-progress items. \
+Resume any item with status in_progress first (bd show <id>). \
+For new work, run 'bd ready --json' to find unblocked items. \
+Claim each item before starting it: bd update <id> --claim."
+
+# Beads end-of-pass sync: persist state to remote so next restart restores cleanly.
+BEADS_SYNC="At the END of this pass: update beads for everything you worked on \
+(bd close <id> --reason '...' for completed, bd update <id> --status blocked --description '...' for blockers). \
+Then run: bd dolt push."
 
 SCANNER_MSG="$PULL_INSTRUCTIONS \
+$BEADS_RESTORE \
 Then: Run a full scan pass per your policy (project_scanner_policy.md). \
 Oldest-first. Check all 5 repos: kubestellar/console, console-kb, docs, \
-console-marketplace, kubestellar-mcp. Ignore all labels EXCEPT: skip any issue/PR with a label containing 'hold'. \
+console-marketplace, kubestellar-mcp. \
 For EVERY open issue that does not already have an active PR, dispatch a background fix agent using the Agent tool with worktrees. \
 Do NOT just count issues and stop — your job is to FIX them, not report them. \
 Merge AI-authored PRs with green CI. Send ntfy (curl -s -H 'Title: Scanner: <action>' -d '<details>' ntfy.sh/issue-scanner) for every merge and external PR review. \
-Log to cron_scan_log.md."
+Log to cron_scan_log.md. $BEADS_SYNC"
 
 REVIEWER_MSG="$PULL_INSTRUCTIONS \
+$BEADS_RESTORE \
 Then: Run a full reviewer pass per /tmp/supervised-agent/examples/kubestellar/agents/reviewer-CLAUDE.md. \
 Check: (A) coverage ≥91%, (B) OAuth code presence, (B.5) CI workflow health sweep, \
 (C) release freshness + brew formula + Helm chart appVersion + vllm-d + pok-prod01 \
 deploy health, (D) GA4 error watch + adoption digest, (F) post-merge diff scan. \
-Print all GA4 tables to this pane. Send ntfy for all findings. Write all results to reviewer_log.md."
+Print all GA4 tables to this pane. Send ntfy for all findings. Write all results to reviewer_log.md. $BEADS_SYNC"
 
 ARCHITECT_MSG="$PULL_INSTRUCTIONS \
+$BEADS_RESTORE \
 Then: Run an architect pass per /tmp/supervised-agent/examples/kubestellar/agents/architect-CLAUDE.md. \
 Pull main, scan the codebase for refactor or perf improvement opportunities. \
 You may work autonomously on refactors and perf as long as you do not break \
 the build, touch OAuth, or touch the update system. For new feature ideas, \
 open an issue with label architect-idea and wait for operator approval. \
-Send ntfy for all plans and PRs. Print your plan to this pane."
+Send ntfy for all plans and PRs. Print your plan to this pane. $BEADS_SYNC"
 
 OUTREACH_MSG="$PULL_INSTRUCTIONS \
+$BEADS_RESTORE \
 Then: Run an outreach pass per /tmp/supervised-agent/examples/kubestellar/agents/outreacher-CLAUDE.md. \
-Your primary objective is increasing organic search results for KubeStellar Console \
-using every marketing angle available. Find awesome lists, directories, comparison sites, \
-aggregators, community forums, and anywhere else Console should be listed. \
-Open PRs and issues to get Console added. Fork under clubanderson account for external PRs. \
-Also work on ACMM badge outreach to CNCF projects. \
-Send ntfy for all outreach actions. One outreach per project — never spam."
+LANE — outreach owns ONLY: awesome lists, directories, comparison sites, aggregators, \
+community forums, package registries, CNCF landscape entries, and any public index where \
+KubeStellar Console should be listed. Target 200+ awesome-list placements. \
+LANE BOUNDARIES — outreach must NEVER: touch GitHub issues or PRs in any kubestellar repo, \
+fix bugs, review code, implement features, merge PRs, or do anything the scanner/reviewer/architect agents do. \
+If you find a bug or improvement idea, file a beads issue for the scanner — do not act on it yourself. \
+Fork under clubanderson account for all external PRs to third-party repos. \
+Send ntfy for every new listing secured. One outreach per project — never spam. $BEADS_SYNC"
 
 case "$TARGET" in
   scanner)
