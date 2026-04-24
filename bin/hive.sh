@@ -87,10 +87,27 @@ ${BLD}LOCAL MODELS${RST}  (set HIVE_MODEL_SERVICES=ollama litellm in hive.conf)
 install_tools() {
   hdr "Checking tools"
 
+  # curl (needed for everything below)
+  if ! command -v curl &>/dev/null; then
+    info "Installing curl..."
+    sudo apt-get install -y curl &>/dev/null
+    ok "curl installed"
+  else
+    ok "curl"
+  fi
+
+  # git
+  if ! command -v git &>/dev/null; then
+    info "Installing git..."
+    sudo apt-get install -y git &>/dev/null
+    ok "git installed"
+  else
+    ok "git $(git --version | awk '{print $3}')"
+  fi
+
   # gh CLI
   if ! command -v gh &>/dev/null; then
     info "Installing gh CLI..."
-    type -p curl &>/dev/null || sudo apt-get install -y curl &>/dev/null
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] \
@@ -102,22 +119,31 @@ install_tools() {
     ok "gh $(gh --version 2>/dev/null | head -1 | awk '{print $3}')"
   fi
 
-  # python3
-  if ! command -v python3 &>/dev/null; then
-    info "Installing python3..."
-    sudo apt-get install -y python3 &>/dev/null
-    ok "python3 installed"
-  else
-    ok "python3 $(python3 --version 2>&1 | awk '{print $2}')"
+  # Node.js + npm — required for copilot / claude / gemini CLI backends
+  local need_node=0
+  for _b in $HIVE_BACKENDS; do
+    case "$_b" in copilot|claude|gemini) need_node=1; break;; esac
+  done
+  if [[ $need_node -eq 1 ]] && ! command -v npm &>/dev/null; then
+    info "Installing Node.js (LTS) via NodeSource..."
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo bash - &>/dev/null
+    sudo apt-get install -y nodejs &>/dev/null
+    ok "node $(node --version) / npm $(npm --version)"
+  elif command -v npm &>/dev/null; then
+    ok "node $(node --version 2>/dev/null) / npm $(npm --version 2>/dev/null)"
   fi
 
-  # git
-  if ! command -v git &>/dev/null; then
-    info "Installing git..."
-    sudo apt-get install -y git &>/dev/null
-    ok "git installed"
-  else
-    ok "git $(git --version | awk '{print $3}')"
+  # python3 — required for litellm
+  local need_python=0
+  for _s in $HIVE_MODEL_SERVICES; do
+    [[ "$_s" == "litellm" ]] && need_python=1 && break
+  done
+  if [[ $need_python -eq 1 ]] && ! command -v python3 &>/dev/null; then
+    info "Installing python3..."
+    sudo apt-get install -y python3 python3-pip &>/dev/null
+    ok "python3 installed"
+  elif command -v python3 &>/dev/null; then
+    ok "python3 $(python3 --version 2>&1 | awk '{print $2}')"
   fi
 
   # bd (beads)
@@ -132,13 +158,77 @@ install_tools() {
     ok "bd (beads)"
   fi
 
-  # Supervisor CLI check
-  if ! command -v "$SUPERVISOR_CLI" &>/dev/null; then
-    die "$SUPERVISOR_CLI CLI not found. Install it first:
-  copilot: npm i -g @github/copilot-cli  (or your package manager)
-  claude:  https://docs.anthropic.com/claude-code"
+  # ── Backend CLIs ──────────────────────────────────────────────────────────
+  if [[ "${HIVE_AUTO_INSTALL:-true}" == "true" ]]; then
+    for backend in $HIVE_BACKENDS; do
+      if command -v "$backend" &>/dev/null; then
+        ok "$backend CLI"
+        continue
+      fi
+      info "Installing $backend CLI..."
+      case "$backend" in
+        copilot)
+          npm i -g @github/copilot-cli &>/dev/null && ok "copilot installed" \
+            || warn "copilot install failed — run: npm i -g @github/copilot-cli"
+          ;;
+        claude)
+          npm i -g @anthropic-ai/claude-code &>/dev/null && ok "claude installed" \
+            || warn "claude install failed — run: npm i -g @anthropic-ai/claude-code"
+          ;;
+        gemini)
+          npm i -g @google/gemini-cli &>/dev/null && ok "gemini installed" \
+            || warn "gemini install failed — run: npm i -g @google/gemini-cli"
+          ;;
+        goose)
+          curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh \
+            | bash &>/dev/null && ok "goose installed" \
+            || warn "goose install failed — see https://github.com/block/goose"
+          ;;
+        *)
+          warn "Unknown backend '$backend' — skipping auto-install"
+          ;;
+      esac
+    done
+  else
+    # HIVE_AUTO_INSTALL=false — just verify they exist
+    for backend in $HIVE_BACKENDS; do
+      if ! command -v "$backend" &>/dev/null; then
+        die "$backend CLI not found. Set HIVE_AUTO_INSTALL=true or install manually."
+      fi
+      ok "$backend CLI"
+    done
   fi
-  ok "$SUPERVISOR_CLI CLI"
+
+  # ── Model services (optional) ────────────────────────────────────────────
+  if [[ "${HIVE_AUTO_INSTALL:-true}" == "true" ]]; then
+    for svc in ${HIVE_MODEL_SERVICES:-}; do
+      case "$svc" in
+        ollama)
+          if ! command -v ollama &>/dev/null; then
+            info "Installing ollama..."
+            curl -fsSL https://ollama.ai/install.sh | bash &>/dev/null \
+              && ok "ollama installed" \
+              || warn "ollama install failed — see https://ollama.ai"
+          else
+            ok "ollama $(ollama --version 2>/dev/null || echo '')"
+          fi
+          ;;
+        litellm)
+          if ! python3 -c "import litellm" &>/dev/null 2>&1; then
+            info "Installing litellm[proxy]..."
+            pip install litellm[proxy] -q \
+              && ok "litellm installed" \
+              || warn "litellm install failed — run: pip install litellm[proxy]"
+          else
+            ok "litellm $(python3 -c 'import litellm; print(litellm.__version__)' 2>/dev/null || echo '')"
+          fi
+          ;;
+        *)
+          warn "Unknown model service '$svc' — skipping"
+          ;;
+      esac
+    done
+  fi
 
   # gh auth
   if ! gh auth status &>/dev/null 2>&1; then
