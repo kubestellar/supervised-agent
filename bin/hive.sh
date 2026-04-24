@@ -460,17 +460,18 @@ cmd_status() {
   local SESSIONS=(supervisor issue-scanner reviewer feature outreach)
   local LABELS=("supervisor" "scanner" "reviewer" "architect" "outreach")
   local ENV_FILES=("supervisor" "issue-scanner" "reviewer" "feature" "outreach")
-  printf "  %-12s  %-8s  %-8s  %s\n" "AGENT" "STATE" "CLI" "LAST LINE"
-  printf "  %-12s  %-8s  %-8s  %s\n" "-----" "-----" "---" "---------"
+  local GOV_STATE="/var/run/kick-governor"
+  printf "  %-12s  %-8s  %-8s  %-8s  %s\n" "AGENT" "STATE" "CLI" "CADENCE" "BUSY"
+  printf "  %-12s  %-8s  %-8s  %-8s  %s\n" "-----" "-----" "---" "-------" "----"
   for i in "${!SESSIONS[@]}"; do
     local s="${SESSIONS[$i]}" label="${LABELS[$i]}"
-    local cli
+    local cli cadence busy_flag
+    cadence=$(cat "${GOV_STATE}/cadence_${label}" 2>/dev/null || echo "?")
     if tmux has-session -t "$s" 2>/dev/null; then
-      local pane line
+      local pane pane_tail
       pane=$(tmux capture-pane -t "$s" -p 2>/dev/null || echo "")
-      # Detect actual running CLI from last 5 lines of pane only
-      local pane_tail
       pane_tail=$(echo "$pane" | tail -5)
+      # Detect CLI
       if echo "$pane_tail" | grep -q "bypass permissions\|claude doctor\|Claude Code v"; then
         cli="claude"
       elif echo "$pane_tail" | grep -q "ctrl+q enqueue\|/ commands.*help"; then
@@ -478,24 +479,44 @@ cmd_status() {
       else
         cli=$(grep "^AGENT_CLI=" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
       fi
-      line=$(echo "$pane" | grep -v '^$' | tail -1 | cut -c1-55 || echo "")
-      printf "  ${GRN}%-12s${RST}  %-8s  %-8s  ${CYN}%s${RST}\n" "$label" "running" "$cli" "$line"
+      # Detect busy: check more lines for active tool spinners
+      local pane_body
+      pane_body=$(echo "$pane" | tail -20)
+      # ◎ = active Copilot tool call; ⏺ = Claude active; ↳ = sub-task running
+      if echo "$pane_body" | grep -qE "^◎ |^⏺ |^↳ |Esc to cancel"; then
+        busy_flag="${YLW}working${RST}"
+      else
+        busy_flag="idle"
+      fi
+      printf "  ${GRN}%-12s${RST}  %-8s  %-8s  %-8s  %b\n" "$label" "running" "$cli" "$cadence" "$busy_flag"
     else
       cli=$(grep "^AGENT_CLI=" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
-      printf "  ${RED}%-12s${RST}  %-8s  %-8s\n" "$label" "stopped" "$cli"
+      printf "  ${RED}%-12s${RST}  %-8s  %-8s  %-8s\n" "$label" "stopped" "$cli" "$cadence"
     fi
   done
 
   # Governor
   echo ""
-  local mode busy_pct
-  mode=$(    cat /var/run/kick-governor/mode         2>/dev/null || echo "unknown")
-  busy_pct=$(cat /var/run/kick-governor/busyness_pct 2>/dev/null || echo "?")
+  local mode queue
+  mode=$(  cat /var/run/kick-governor/mode        2>/dev/null || echo "unknown")
+  queue=$( cat /var/run/kick-governor/queue_depth 2>/dev/null || echo "?")
   local next
   next=$(systemctl list-timers kick-governor.timer --no-pager 2>/dev/null \
        | awk 'NR==2{print $1,$2,$3,$4}' \
        | xargs -I{} bash -c "TZ=\"$HIVE_TZ\" date -d \"{}\" \"+%-I:%M %p %Z\"" 2>/dev/null || echo "unknown")
-  echo -e "  Governor:  ${BLD}$mode${RST}  ${busy_pct}% busy  |  next kick: ${CYN}$next${RST}"
+  echo -e "  Governor:  ${BLD}$mode${RST}  |  next kick: ${CYN}$next${RST}"
+
+  # Per-repo issue + PR counts
+  echo ""
+  printf "  %-32s  %-10s  %s\n" "REPO" "ISSUES" "PRS"
+  printf "  %-32s  %-10s  %s\n" "----" "------" "---"
+  for repo in ${HIVE_REPOS:-}; do
+    local rname issues prs
+    rname="${repo##*/}"
+    issues=$(gh issue list --repo "$repo" --state open --json number --jq 'length' 2>/dev/null || echo "?")
+    prs=$(   gh pr    list --repo "$repo" --state open --json number --jq 'length' 2>/dev/null || echo "?")
+    printf "  %-32s  %-10s  %s\n" "$rname" "$issues" "$prs"
+  done
 
   # Beads
   echo ""

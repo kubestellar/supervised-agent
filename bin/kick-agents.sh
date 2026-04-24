@@ -356,6 +356,17 @@ If you find a bug or improvement idea, file a beads issue for the scanner — do
 Fork under clubanderson account for all external PRs to third-party repos. \
 Send ntfy for every new listing secured. One outreach per project — never spam. $BEADS_SYNC"
 
+SUPERVISOR_MSG="MONITORING PASS — do all of the following right now: \
+1. Check every agent session for questions, stalls, or errors: \
+   tmux capture-pane -t issue-scanner -p | tail -20 \
+   tmux capture-pane -t reviewer -p | tail -20 \
+   tmux capture-pane -t feature -p | tail -20 \
+   tmux capture-pane -t outreach -p | tail -20 \
+   If any agent has an unresolved question or idle prompt, respond immediately via tmux send-keys. \
+2. Check for AI-authored PRs with CI green across all kubestellar repos — merge any that are ready. \
+3. Check for rate-limited agents — switch their backend if needed (hive switch <agent> <backend>). \
+4. Run: bd dolt push"
+
 case "$TARGET" in
   scanner)
     kick "issue-scanner" "$SCANNER_MSG" "scanner"
@@ -369,14 +380,18 @@ case "$TARGET" in
   outreach)
     kick "outreach" "$OUTREACH_MSG" "outreach"
     ;;
+  supervisor)
+    kick "supervisor" "$SUPERVISOR_MSG" "supervisor"
+    ;;
   all)
     kick "issue-scanner" "$SCANNER_MSG" "scanner"
     kick "reviewer" "$REVIEWER_MSG" "reviewer"
     kick "feature" "$ARCHITECT_MSG" "architect"
     kick "outreach" "$OUTREACH_MSG" "outreach"
+    # supervisor is NOT kicked in "all" — it has its own cadence via governor
     ;;
   *)
-    echo "Usage: $0 [scanner|reviewer|architect|outreach|all]" >&2
+    echo "Usage: $0 [scanner|reviewer|architect|outreach|supervisor|all]" >&2
     exit 1
     ;;
 esac

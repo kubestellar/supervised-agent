@@ -74,7 +74,15 @@ CADENCE_ARCHITECT_BUSY_SEC="${CADENCE_ARCHITECT_BUSY_SEC:-0}"     # PAUSED
 CADENCE_ARCHITECT_QUIET_SEC="${CADENCE_ARCHITECT_QUIET_SEC:-3600}"  # 1 hour
 CADENCE_ARCHITECT_IDLE_SEC="${CADENCE_ARCHITECT_IDLE_SEC:-1800}"    # 30 min (jam)
 
-CADENCE_SUPERVISOR_SEC="${CADENCE_SUPERVISOR_SEC:-1800}"  # 30 min — fixed regardless of mode
+CADENCE_SUPERVISOR_SURGE_SEC="${CADENCE_SUPERVISOR_SURGE_SEC:-300}"   # 5 min
+CADENCE_SUPERVISOR_BUSY_SEC="${CADENCE_SUPERVISOR_BUSY_SEC:-600}"    # 10 min
+CADENCE_SUPERVISOR_QUIET_SEC="${CADENCE_SUPERVISOR_QUIET_SEC:-900}"  # 15 min
+CADENCE_SUPERVISOR_IDLE_SEC="${CADENCE_SUPERVISOR_IDLE_SEC:-1800}"   # 30 min
+
+CADENCE_OUTREACH_SURGE_SEC="${CADENCE_OUTREACH_SURGE_SEC:-1800}"    # 30 min
+CADENCE_OUTREACH_BUSY_SEC="${CADENCE_OUTREACH_BUSY_SEC:-3600}"      # 1 hour
+CADENCE_OUTREACH_QUIET_SEC="${CADENCE_OUTREACH_QUIET_SEC:-7200}"    # 2 hours
+CADENCE_OUTREACH_IDLE_SEC="${CADENCE_OUTREACH_IDLE_SEC:-7200}"      # 2 hours
 
 # ── Paths ───────────────────────────────────────────────────────────────────
 STATE_DIR="/var/run/kick-governor"
@@ -99,7 +107,7 @@ TIMESTAMP="$(TZ=America/New_York date '+%Y-%m-%d %H:%M:%S %Z')"
 
 log() {
   local msg="[$TIMESTAMP] $*"
-  echo "$msg"
+  echo "$msg" >&2
   echo "$msg" >> "$LOG_FILE" 2>/dev/null || true
 }
 
@@ -166,7 +174,7 @@ measure_queue() {
 
 get_queue_depth() {
   local depth
-  if depth=$(measure_queue 2>&1); then
+  if depth=$(measure_queue); then
     echo "$depth"
   else
     # gh failed (rate limit, network); fall back to last known depth
@@ -225,7 +233,12 @@ get_cadence() {
         idle)  echo "$CADENCE_OUTREACH_IDLE_SEC"  ;;
       esac ;;
     supervisor)
-      echo "$CADENCE_SUPERVISOR_SEC" ;;  # fixed — always 30 min regardless of mode
+      case "$mode" in
+        surge) echo "$CADENCE_SUPERVISOR_SURGE_SEC" ;;
+        busy)  echo "$CADENCE_SUPERVISOR_BUSY_SEC"  ;;
+        quiet) echo "$CADENCE_SUPERVISOR_QUIET_SEC" ;;
+        idle)  echo "$CADENCE_SUPERVISOR_IDLE_SEC"  ;;
+      esac ;;
     *)
   esac
 }
@@ -292,9 +305,24 @@ log "GOVERNOR START"
 
 queue_depth=$(get_queue_depth)
 mode=$(determine_mode "$queue_depth")
+threshold="${BUSY_THRESHOLD_ISSUES:-1}"
+[ "$threshold" -le 0 ] && threshold=1
+busy_pct=$(( queue_depth * 100 / threshold ))
+[ "$busy_pct" -gt 100 ] && busy_pct=100
 
 prev_mode=$(cat "$STATE_DIR/mode" 2>/dev/null || echo "")
-echo "$mode" > "$STATE_DIR/mode"
+echo "$mode"      > "$STATE_DIR/mode"
+echo "$busy_pct"  > "$STATE_DIR/busyness_pct"
+
+# Write per-agent cadences for hive status to read
+for _agent in scanner reviewer architect outreach supervisor; do
+  _secs=$(get_cadence "$_agent" "$mode")
+  if [ "$_secs" -eq 0 ]; then
+    echo "paused"
+  else
+    secs_to_label "$_secs"
+  fi > "$STATE_DIR/cadence_${_agent}"
+done
 
 # Report mode transitions
 if [ -n "$prev_mode" ] && [ "$prev_mode" != "$mode" ]; then
