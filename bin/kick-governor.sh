@@ -82,9 +82,14 @@ LOG_FILE="/var/log/kick-governor.log"
 KICK_SCRIPT="${KICK_SCRIPT:-/usr/local/bin/kick-agents.sh}"
 GH_BIN="${GH_BIN:-gh}"
 
-# ── Notification config (optional) ─────────────────────────────────────────
+# ── Notification config ─────────────────────────────────────────────────────
 NTFY_TOPIC="${NTFY_TOPIC:-}"
 NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
+SLACK_WEBHOOK="${SLACK_WEBHOOK:-}"
+DISCORD_WEBHOOK="${DISCORD_WEBHOOK:-}"
+# shellcheck source=notify.sh
+NOTIFY_LIB="${NOTIFY_LIB:-/usr/local/bin/notify.sh}"
+[ -f "$NOTIFY_LIB" ] && . "$NOTIFY_LIB"
 
 # ── Log rotation ────────────────────────────────────────────────────────────
 MAX_LOG_LINES=500
@@ -99,14 +104,13 @@ log() {
 }
 
 ntfy() {
-  [ -z "$NTFY_TOPIC" ] && return 0
-  local priority="$1" title="$2" body="$3" tags="${4:-}"
-  curl -sS -m 10 \
-    -H "Priority: $priority" \
-    -H "Title: $title" \
-    -H "Tags: $tags" \
-    -d "$body" \
-    "$NTFY_SERVER/$NTFY_TOPIC" >/dev/null 2>&1 || true
+  # Legacy wrapper — maps old 4-arg ntfy() calls to notify()
+  # ntfy <priority> <title> <body> <tags>
+  local _priority="$1" title="$2" body="$3"
+  local pri="default"
+  [[ "$_priority" == "urgent" || "$_priority" == "high" ]] && pri="high"
+  [[ "$_priority" == "low" || "$_priority" == "min" ]]    && pri="low"
+  notify "$title" "$body" "$pri"
 }
 
 rotate_log() {

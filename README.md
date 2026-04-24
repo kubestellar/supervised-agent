@@ -1,6 +1,6 @@
 # hive
 
-**One command starts everything. Your phone buzzes if anything needs you.**
+**One command starts everything. Your phone, Slack, or Discord buzzes if anything needs you.**
 
 ---
 
@@ -19,11 +19,9 @@ curl -fsSL https://raw.githubusercontent.com/kubestellar/hive/main/install.sh | 
 
 # 3. configure
 sudo nano /etc/supervised-agent/hive.conf
-#   NTFY_TOPIC=your-ntfy-topic    # free at ntfy.sh
-#   HIVE_REPOS="owner/repo ..."   # repos to watch
 
 # 4. start
-hive supervisor --copilot   # or --claude
+hive supervisor
 ```
 
 That's it. `hive supervisor` installs missing tools, starts all agents, sets the kick cadence, and launches the supervisor. No tmux knowledge needed.
@@ -33,9 +31,7 @@ That's it. `hive supervisor` installs missing tools, starts all agents, sets the
 ## Commands
 
 ```bash
-hive supervisor --copilot   # start everything
-hive supervisor --claude    # start with Claude Code instead
-
+hive supervisor             # start everything
 hive status                 # live dashboard
 hive attach supervisor      # watch the supervisor  (Ctrl+B D to leave)
 hive attach scanner         # watch any agent
@@ -53,7 +49,7 @@ hive stop all               # stop everything
 
 ## How it works
 
-The **kick-governor** measures issue and PR velocity across your repos every 15 minutes and picks a mode:
+The **kick-governor** measures issue and PR backlog across your repos every 15 minutes and picks a mode:
 
 | Mode | Trigger | Scanner | Reviewer | Architect | Outreach | Supervisor |
 |------|---------|---------|----------|-----------|----------|-----------|
@@ -68,6 +64,43 @@ Cadences are tunable in `/etc/supervised-agent/governor.env` — no restart need
 
 ---
 
+## Backends
+
+Set `HIVE_BACKENDS` in `hive.conf`. `HIVE_AUTO_INSTALL=true` installs missing backends on startup.
+
+| Backend | Type | Models |
+|---------|------|--------|
+| `copilot` | Cloud | Claude Sonnet/Opus via GitHub Copilot |
+| `claude` | Cloud | Claude Sonnet/Opus via Anthropic |
+| `gemini` | Cloud | Gemini Pro/Flash via Google |
+| `goose` | Cloud or local | Any model via config |
+
+### Local models (optional)
+
+Set `HIVE_MODEL_SERVICES="ollama litellm"` to run models on-device with no API costs.
+
+```
+ollama        → runs local models (llama3, codestral, qwen2.5-coder, ...)
+    └── litellm proxy :4000  ← unified OpenAI-compatible endpoint
+            └── goose        ← points here when AGENT_BACKEND=goose
+```
+
+Ollama and litellm start as background services before any agent session launches.
+
+---
+
+## Notifications
+
+hive sends alerts to any combination of ntfy, Slack, and Discord. Set whichever you use in `hive.conf` — all three fire simultaneously if configured.
+
+| Channel | Config key | How to get it |
+|---------|-----------|---------------|
+| ntfy (phone push) | `NTFY_TOPIC` | Free at [ntfy.sh](https://ntfy.sh) — pick any topic string |
+| Slack | `SLACK_WEBHOOK` | api.slack.com/apps → Incoming Webhooks |
+| Discord | `DISCORD_WEBHOOK` | Channel Settings → Integrations → Webhooks |
+
+---
+
 ## Config
 
 `/etc/supervised-agent/hive.conf` — the only file you need to edit:
@@ -76,11 +109,19 @@ Cadences are tunable in `/etc/supervised-agent/governor.env` — no restart need
 # Repos to watch (space-separated)
 HIVE_REPOS="owner/repo1 owner/repo2"
 
-# ntfy.sh topic for phone alerts (free at ntfy.sh)
-NTFY_TOPIC=your-secret-topic
+# Agent CLI backends to use (space-separated)
+HIVE_BACKENDS="copilot"          # copilot claude gemini goose
 
-# Which CLI to use for the supervisor session
-SUPERVISOR_CLI=copilot   # or claude
+# Local model services (optional — needs GPU or fast CPU)
+# HIVE_MODEL_SERVICES="ollama litellm"
+
+# Auto-install missing backends on hive supervisor start
+HIVE_AUTO_INSTALL=true
+
+# Notifications — set any combination
+NTFY_TOPIC=your-secret-topic     # free at ntfy.sh
+# SLACK_WEBHOOK=https://hooks.slack.com/services/...
+# DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
 ```
 
 ---

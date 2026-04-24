@@ -2,9 +2,9 @@
 # hive — KubeStellar AI hive
 #
 # Usage:
-#   hive supervisor [--copilot|--claude]   # bootstrap everything and start
-#   hive status                             # live dashboard
-#   hive attach  [agent]                    # watch an agent (Ctrl+B D to leave)
+#   hive supervisor   # bootstrap everything and start
+#   hive status       # live dashboard
+#   hive attach  [agent]
 #   hive kick    [all|scanner|reviewer|architect|outreach]
 #   hive logs    [governor|scanner|reviewer|architect|outreach|supervisor]
 #   hive stop    [all|agent]
@@ -38,11 +38,17 @@ load_conf() {
   # Defaults
   HIVE_REPOS="${HIVE_REPOS:-kubestellar/console kubestellar/kubestellar kubestellar/docs kubestellar/homebrew-tap kubestellar/console-kb}"
   NTFY_TOPIC="${NTFY_TOPIC:-}"
+  NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
+  SLACK_WEBHOOK="${SLACK_WEBHOOK:-}"
+  DISCORD_WEBHOOK="${DISCORD_WEBHOOK:-}"
   SUPERVISOR_CLI="${SUPERVISOR_CLI:-copilot}"
   SUPERVISOR_WORKDIR="${SUPERVISOR_WORKDIR:-/home/dev/kubestellar-console}"
   BEADS_SUPERVISOR_DIR="${BEADS_SUPERVISOR_DIR:-/home/dev/kubestellar-console}"
   BEADS_WORKER_DIR="${BEADS_WORKER_DIR:-/home/dev/scanner-beads}"
   AGENT_USER="${AGENT_USER:-dev}"
+  HIVE_BACKENDS="${HIVE_BACKENDS:-copilot}"           # space-separated: copilot claude gemini goose
+  HIVE_MODEL_SERVICES="${HIVE_MODEL_SERVICES:-}"      # space-separated: ollama litellm
+  HIVE_AUTO_INSTALL="${HIVE_AUTO_INSTALL:-true}"      # auto-install missing backends/services
 }
 
 
@@ -52,16 +58,26 @@ usage() {
 ${BLD}SETUP${RST}
   1. sudo apt install tmux
   2. curl -fsSL https://raw.githubusercontent.com/kubestellar/hive/main/install.sh | sudo bash
-  3. sudo nano /etc/supervised-agent/hive.conf   # set NTFY_TOPIC + HIVE_REPOS
-  4. hive supervisor --copilot
+  3. sudo nano /etc/supervised-agent/hive.conf   # set NTFY_TOPIC, HIVE_REPOS, HIVE_BACKENDS
+  4. hive supervisor
 
 ${BLD}COMMANDS${RST}
-  supervisor [--copilot|--claude]   Start everything: agents, governor, supervisor
+  supervisor                        Start everything: agents, governor, supervisor
   status                            Live dashboard
   attach  [agent]                   Watch an agent live  (Ctrl+B D to leave)
   kick    [all|scanner|reviewer|architect|outreach]
   logs    [governor|scanner|reviewer|architect|outreach|supervisor]
   stop    [all|agent]
+
+${BLD}BACKENDS${RST}  (set HIVE_BACKENDS in hive.conf)
+  copilot   GitHub Copilot CLI (cloud)
+  claude    Claude Code / Anthropic (cloud)
+  gemini    Gemini CLI / Google (cloud)
+  goose     Goose by Block (cloud or local via litellm)
+
+${BLD}LOCAL MODELS${RST}  (set HIVE_MODEL_SERVICES=ollama litellm in hive.conf)
+  ollama    Runs local models (llama3, codestral, qwen2.5-coder, ...)
+  litellm   Unified proxy: routes goose → ollama or cloud APIs
 "
   exit 0
 }
@@ -139,11 +155,13 @@ install_tools() {
 validate_conf() {
   hdr "Config ($CONF)"
 
-  if [[ -z "$NTFY_TOPIC" ]]; then
-    warn "NTFY_TOPIC not set — phone alerts disabled"
-    echo "  Set it: echo 'NTFY_TOPIC=your-topic' | sudo tee -a $CONF"
-  else
-    ok "NTFY_TOPIC=$NTFY_TOPIC"
+  local any_notify=0
+  if [[ -n "$NTFY_TOPIC" ]];      then ok "ntfy → ${NTFY_SERVER}/${NTFY_TOPIC}"; any_notify=1; fi
+  if [[ -n "$SLACK_WEBHOOK" ]];   then ok "Slack webhook configured"; any_notify=1; fi
+  if [[ -n "$DISCORD_WEBHOOK" ]]; then ok "Discord webhook configured"; any_notify=1; fi
+  if [[ $any_notify -eq 0 ]]; then
+    warn "No notification channels configured — alerts disabled"
+    echo "  Set NTFY_TOPIC, SLACK_WEBHOOK, or DISCORD_WEBHOOK in $CONF"
   fi
 
   ok "HIVE_REPOS=${HIVE_REPOS}"

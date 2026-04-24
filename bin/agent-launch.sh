@@ -48,15 +48,38 @@ case "$BACKEND" in
     PERM_FLAG="--allow-all"
     MODEL_FLAG="--model"
     ;;
-  # ── Add new backends here ──
-  # aider)
-  #   CMD="aider"
-  #   PERM_FLAG="--yes"
-  #   MODEL_FLAG="--model"
-  #   ;;
+  gemini)
+    CMD="gemini"
+    PERM_FLAG="--yolo"
+    MODEL_FLAG="--model"
+    ;;
+  codex)
+    CMD="codex"
+    PERM_FLAG="--full-auto"
+    MODEL_FLAG="--model"
+    ;;
+  amazonq)
+    CMD="q"
+    PERM_FLAG="--trust-all-tools"
+    MODEL_FLAG=""
+    ;;
+  goose)
+    # Goose: open source, any backend via config (~/.config/goose/config.yaml)
+    # Point it at ollama or litellm for local models, or cloud APIs.
+    CMD="goose"
+    PERM_FLAG="--no-confirm"
+    MODEL_FLAG=""  # model set in ~/.config/goose/config.yaml
+    ;;
+  aider)
+    # Aider: best local coding agent. Use with ollama or litellm proxy.
+    # Set AIDER_BASE_URL=http://localhost:4000 to route through litellm.
+    CMD="aider"
+    PERM_FLAG="--yes"
+    MODEL_FLAG="--model"
+    ;;
   *)
     echo "Unknown backend: $BACKEND" >&2
-    echo "Supported: claude, copilot" >&2
+    echo "Supported: claude, copilot, gemini, codex, amazonq, goose, aider" >&2
     exit 1
     ;;
 esac

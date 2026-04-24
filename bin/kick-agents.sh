@@ -20,7 +20,12 @@ TMUX_BIN="${TMUX_BIN:-tmux}"
 LOG="/var/log/kick-agents.log"
 TIMESTAMP="$(TZ=America/New_York date '+%Y-%m-%d %H:%M:%S %Z')"
 ET_NOW="$(TZ=America/New_York date '+%I:%M %p ET')"
-NTFY_TOPIC="ntfy.sh/issue-scanner"
+NTFY_TOPIC="${NTFY_TOPIC:-ntfy.sh/issue-scanner}"
+NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
+SLACK_WEBHOOK="${SLACK_WEBHOOK:-}"
+DISCORD_WEBHOOK="${DISCORD_WEBHOOK:-}"
+NOTIFY_LIB="${NOTIFY_LIB:-/usr/local/bin/notify.sh}"
+[ -f "$NOTIFY_LIB" ] && . "$NOTIFY_LIB"
 
 # Backend state directory — tracks which backend each agent is currently using.
 # On rate limit, the agent switches to its fallback backend.
@@ -32,7 +37,7 @@ HANDOFF_DIR="/tmp/agent-handoff"
 mkdir -p "$HANDOFF_DIR" 2>/dev/null || true
 
 log() { echo "[$TIMESTAMP] $*" | tee -a "$LOG"; }
-ntfy() { curl -s -H "Title: $1" -d "$2" "$NTFY_TOPIC" > /dev/null 2>&1 || true; }
+ntfy() { notify "$1" "$2"; }  # legacy shim — use notify() directly for new code
 
 # ── Backend management ──────────────────────────────────────────────
 # Each agent has a primary and fallback backend. State is tracked in

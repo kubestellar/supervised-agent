@@ -95,6 +95,8 @@ install -m 0755 "$REPO_DIR/bin/agent-supervisor.sh"   "$BIN_DIR/agent-supervisor
 install -m 0755 "$REPO_DIR/bin/agent-healthcheck.sh"  "$BIN_DIR/agent-healthcheck.sh"
 install -m 0755 "$REPO_DIR/bin/kick-agents.sh"        "$BIN_DIR/kick-agents.sh"
 install -m 0755 "$REPO_DIR/bin/kick-governor.sh"      "$BIN_DIR/kick-governor.sh"
+install -m 0755 "$REPO_DIR/bin/notify.sh"             "$BIN_DIR/notify.sh"
+install -m 0755 "$REPO_DIR/bin/supervisor-kick.sh"    "$BIN_DIR/supervisor-kick.sh"
 # Remove the old agent-launch.sh if it exists from a prior install — the
 # supervisor now expands AGENT_LAUNCH_CMD inline, no wrapper needed.
 rm -f "$BIN_DIR/agent-launch.sh"

@@ -20,20 +20,25 @@ STALE_MAX_SEC="${AGENT_STALE_MAX_SEC:-1800}"
 MAX_RESPAWNS="${AGENT_MAX_RESPAWNS:-3}"
 NTFY_TOPIC="${NTFY_TOPIC:-}"
 NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
+SLACK_WEBHOOK="${SLACK_WEBHOOK:-}"
+DISCORD_WEBHOOK="${DISCORD_WEBHOOK:-}"
+NOTIFY_LIB="${NOTIFY_LIB:-/usr/local/bin/notify.sh}"
+[ -f "$NOTIFY_LIB" ] && . "$NOTIFY_LIB"
 
 mkdir -p "$STATE_DIR"
 
 notify() {
-  # notify <priority> <title> <body> <tags>
-  local priority="$1" title="$2" body="$3" tags="$4"
+  # Fallback if notify.sh not installed yet — ntfy only
+  local _priority="$1" title="$2" body="$3"
   if [ -z "$NTFY_TOPIC" ]; then
-    printf '[%s] (ntfy disabled) %s: %s\n' "$(date -Is)" "$title" "$body"
+    printf '[%s] (notifications disabled) %s: %s\n' "$(date -Is)" "$title" "$body"
     return 0
   fi
+  local pri="default"
+  [[ "$_priority" == "urgent" || "$_priority" == "high" ]] && pri="urgent"
   curl -sS -m 10 \
-    -H "Priority: $priority" \
+    -H "Priority: $pri" \
     -H "Title: $title" \
-    -H "Tags: $tags" \
     -d "$body" \
     "$NTFY_SERVER/$NTFY_TOPIC" >/dev/null || true
 }
