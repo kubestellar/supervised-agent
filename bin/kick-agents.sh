@@ -292,15 +292,19 @@ HARD RULE — enforced before any other action: never touch any issue or PR that
 Do not comment on it, do not merge it, do not reference it in other PRs, do not create sub-issues from it. Treat it as if it does not exist."
 
 # Beads startup restore: read in-progress and open items so agent picks up where it left off.
-BEADS_RESTORE="Then read your beads: run 'bd list --json' to see all open/in-progress items. \
+# Scanner, reviewer, feature, and outreach all share /home/dev/scanner-beads/.
+# Supervisor uses /home/dev/kubestellar-console/.beads/ (console DB).
+BEADS_DIR="/home/dev/scanner-beads"
+BEADS_RESTORE="Then read your beads from $BEADS_DIR: run 'cd $BEADS_DIR && bd list --json' to see all open/in-progress items. \
 Resume any item with status in_progress first (bd show <id>). \
-For new work, run 'bd ready --json' to find unblocked items. \
-Claim each item before starting it: bd update <id> --claim."
+For new work, run 'cd $BEADS_DIR && bd ready --json' to find unblocked items. \
+Claim each item before starting it: cd $BEADS_DIR && bd update <id> --claim. \
+ALL bd commands must be run from $BEADS_DIR — never from a different directory."
 
 # Beads end-of-pass sync: persist state to remote so next restart restores cleanly.
 BEADS_SYNC="At the END of this pass: update beads for everything you worked on \
-(bd close <id> --reason '...' for completed, bd update <id> --status blocked --description '...' for blockers). \
-Then run: bd dolt push."
+(cd $BEADS_DIR && bd close <id> --reason '...' for completed, bd update <id> --status blocked --description '...' for blockers). \
+Then run: cd $BEADS_DIR && bd dolt push."
 
 SCANNER_MSG="$PULL_INSTRUCTIONS \
 $BEADS_RESTORE \
