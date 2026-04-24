@@ -32,12 +32,18 @@ That's it. `hive supervisor` installs missing tools, starts all agents, sets the
 
 ```bash
 hive supervisor             # start everything
-hive status                 # live dashboard
+hive status                 # live terminal dashboard
+hive status --json          # machine-readable JSON output
+hive status --watch 5       # auto-refresh every 5 seconds (in-place overwrite)
+hive dashboard              # launch web dashboard (port 3001)
 hive attach supervisor      # watch the supervisor  (Ctrl+B D to leave)
 hive attach scanner         # watch any agent
 
 hive kick all               # immediate kick to all agents
 hive kick scanner           # kick one agent
+
+hive switch scanner claude  # switch agent to a different CLI backend
+hive switch reviewer copilot
 
 hive logs governor          # tail governor decisions
 hive logs scanner           # tail any agent's service log

@@ -20,6 +20,12 @@
     h1 { font-size: 1.4rem; margin-bottom: 20px; }
     h1 span.bee { font-size: 1.6rem; }
     .timestamp { color: var(--muted); font-size: 0.8rem; margin-left: 12px; }
+    .widget-dl {
+      float: right; font-size: 0.75rem; color: var(--cyan); text-decoration: none;
+      border: 1px solid var(--cyan); border-radius: 6px; padding: 4px 10px;
+      transition: background 0.2s, color 0.2s;
+    }
+    .widget-dl:hover { background: var(--cyan); color: var(--bg); }
 
     /* Agent cards */
     .agents { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 24px; }
@@ -95,17 +101,23 @@
     .connection .dot-live { color: var(--green); }
     .connection .dot-dead { color: var(--red); }
 
+    /* Slow blink for LIVE indicator */
+    @keyframes slow-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+    .connection.live { animation: slow-blink 3s ease-in-out infinite; }
+
     /* Pulse animation for working agents */
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
     .agent-card.working .agent-name { animation: pulse 2s ease-in-out infinite; }
   </style>
 </head>
 <body>
-  <div class="connection" id="conn">
+  <div class="connection live" id="conn">
     <span class="dot-live">●</span> live
   </div>
 
-  <h1><span class="bee">🐝</span> Hive Dashboard <span class="timestamp" id="ts"></span></h1>
+  <h1><span class="bee">🐝</span> Hive Dashboard <span class="timestamp" id="ts"></span>
+    <a href="/api/widget" class="widget-dl" title="Download Übersicht widget">⬇ Widget</a>
+  </h1>
 
   <div class="agents" id="agents"></div>
 
@@ -224,6 +236,7 @@
         try {
           const data = JSON.parse(e.data);
           render(data);
+          conn.className = 'connection live';
           conn.innerHTML = '<span class="dot-live">●</span> live';
         } catch (err) {
           console.error('SSE parse error:', err);
@@ -231,6 +244,7 @@
       };
 
       source.onerror = () => {
+        conn.className = 'connection';
         conn.innerHTML = '<span class="dot-dead">●</span> reconnecting...';
         source.close();
         setTimeout(connect, 3000);

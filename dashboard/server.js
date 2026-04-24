@@ -1,6 +1,7 @@
 const express = require('express');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.HIVE_DASHBOARD_PORT || 3001;
@@ -60,6 +61,22 @@ app.get('/api/events', (req, res) => {
   send();
   const interval = setInterval(send, REFRESH_MS);
   req.on('close', () => clearInterval(interval));
+});
+
+// Widget download
+app.get('/api/widget', (_req, res) => {
+  console.log('widget endpoint hit');
+  const widgetDir = path.join(__dirname, 'ubersicht', 'hive-status.widget');
+  if (!fs.existsSync(widgetDir)) {
+    console.error('widget dir not found:', widgetDir);
+    return res.status(404).json({ error: 'widget not found', path: widgetDir });
+  }
+  res.setHeader('Content-Type', 'application/gzip');
+  res.setHeader('Content-Disposition', 'attachment; filename="hive-status.widget.tar.gz"');
+  const tar = spawn('tar', ['czf', '-', '-C', path.join(__dirname, 'ubersicht'), 'hive-status.widget']);
+  tar.stdout.pipe(res);
+  tar.stderr.on('data', (d) => console.error('tar error:', d.toString()));
+  tar.on('error', () => res.status(500).end());
 });
 
 // Control endpoints
