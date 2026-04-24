@@ -4,7 +4,7 @@
 
 ---
 
-![hive architecture](docs/architecture.svg)
+![hive architecture](docs/hive-arch.svg)
 
 ---
 
