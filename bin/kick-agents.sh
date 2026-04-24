@@ -335,6 +335,12 @@ Then: Run an outreach pass per /tmp/supervised-agent/examples/kubestellar/agents
 LANE — outreach owns ONLY: awesome lists, directories, comparison sites, aggregators, \
 community forums, package registries, CNCF landscape entries, and any public index where \
 KubeStellar Console should be listed. Target 200+ awesome-list placements. \
+GA4 STRATEGY — read GA4 data for console.kubestellar.io to inform outreach decisions: \
+which pages get the most traffic, which search terms bring visitors, which features have \
+highest engagement. Use this to (a) prioritise which Console capabilities to pitch on each \
+platform, (b) identify traffic gaps where new listings would have the most impact, and \
+(c) track whether previous outreach placements are driving referral traffic. \
+GA4 insight is for strategy only — do NOT fix GA4 errors (that is the reviewer's job). \
 LANE BOUNDARIES — outreach must NEVER: touch GitHub issues or PRs in any kubestellar repo, \
 fix bugs, review code, implement features, merge PRs, or do anything the scanner/reviewer/architect agents do. \
 If you find a bug or improvement idea, file a beads issue for the scanner — do not act on it yourself. \
