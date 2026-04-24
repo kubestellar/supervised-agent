@@ -3,7 +3,7 @@
 #
 # Usage:
 #   hive supervisor   # bootstrap everything and start
-#   hive status       # live dashboard
+#   hive status       # live dashboard (add --watch 5 for auto-refresh)
 #   hive attach  [agent]
 #   hive kick    [all|scanner|reviewer|architect|outreach]
 #   hive logs    [governor|scanner|reviewer|architect|outreach|supervisor]
@@ -79,7 +79,7 @@ ${BLD}SETUP${RST}
 
 ${BLD}COMMANDS${RST}
   supervisor                        Start everything: agents, governor, supervisor
-  status                            Live dashboard
+  status  [--watch N]                 Live dashboard (--watch N refreshes every N sec, default 5)
   attach  [agent]                   Watch an agent live  (Ctrl+B D to leave)
   kick    [all|scanner|reviewer|architect|outreach]
   logs    [governor|scanner|reviewer|architect|outreach|supervisor]
@@ -500,9 +500,9 @@ cmd_status() {
       # if ❯ is last, the agent is at the idle prompt even if spinner lines exist above.
       local pane_body doing task_ctx log_age_str log_file last_content
       pane_body=$(echo "$pane" | tail -30)
-      last_content=$(echo "$pane" | grep -v '^\s*$' | tail -1)
+      last_content=$(echo "$pane" | grep -v '^\s*$' | tail -1 || true)
       local queued_tasks
-      queued_tasks=$(echo "$pane" | grep -oP '\d+(?= background /tasks)' | tail -1)
+      queued_tasks=$(echo "$pane" | grep -oP '\d+(?= background /tasks)' | tail -1 || true)
 
       if echo "$last_content" | grep -qE "^[◐◉] |^⏺ |Esc to cancel|↳ "; then
         # Spinner is the last meaningful line — actively working
@@ -512,7 +512,7 @@ cmd_status() {
           | tail -1 \
           | sed 's/^[◐◉●◎⏺] //' \
           | sed 's/ (Esc to cancel.*//' \
-          | cut -c1-50)
+          | cut -c1-50 || true)
         [[ -n "$doing" ]] && busy_flag="${YLW}working${RST}  ${CYN}${doing}${RST}"
       elif [[ -n "$queued_tasks" ]]; then
         busy_flag="${CYN}queued(${queued_tasks})${RST}"
@@ -741,7 +741,28 @@ main() {
       cmd_status
       ;;
 
-    status)   cmd_status ;;
+    status)
+      shift
+      local watch_interval=0
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          -w|--watch)  watch_interval="${2:-5}"; shift 2 || shift ;;
+          *)           watch_interval="$1"; shift ;;
+        esac
+      done
+      if [[ "$watch_interval" -gt 0 ]] 2>/dev/null; then
+        trap 'tput cnorm 2>/dev/null; exit 0' INT TERM
+        tput civis 2>/dev/null  # hide cursor
+        while true; do
+          tput cup 0 0 2>/dev/null || clear
+          tput ed 2>/dev/null || true
+          cmd_status
+          sleep "$watch_interval"
+        done
+      else
+        cmd_status
+      fi
+      ;;
     attach)   shift; cmd_attach  "${1:-supervisor}" ;;
     kick)     shift; cmd_kick    "${1:-all}" ;;
     logs)     shift; cmd_logs    "${1:-governor}" ;;
