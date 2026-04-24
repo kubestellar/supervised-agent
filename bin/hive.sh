@@ -519,7 +519,7 @@ cmd_status() {
   next=$(systemctl list-timers kick-governor.timer --no-pager 2>/dev/null \
        | awk 'NR==2{print $1,$2,$3,$4}' \
        | xargs -I{} bash -c "TZ=\"$HIVE_TZ\" date -d \"{}\" \"+%-I:%M %p %Z\"" 2>/dev/null || echo "unknown")
-  echo -e "  Governor:  ${BLD}$mode${RST}  issues: ${queue}  |  next kick: ${CYN}$next${RST}"
+  echo -e "  Governor:  ${BLD}$mode${RST}  actionable: ${queue}  |  next kick: ${CYN}$next${RST}"
 
   # Per-repo issue + PR counts with trend markers
   local STATUS_CACHE="/var/run/kick-governor/repo_cache"
