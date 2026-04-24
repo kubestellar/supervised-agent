@@ -90,20 +90,113 @@ curl -s -H "Title: Outreach: <action>" -d "<details>" ntfy.sh/issue-scanner > /d
 
 ## Current Progress (as of 2026-04-24)
 
-### Mission B — Awesome Lists PRs Opened
-- `dastergon/awesome-sre` — PR #268
+### Mission B — Awesome Lists PRs Opened (89+ external open PRs, 16 cold/closed repos)
+
+**Key open PRs (sample — full list via `gh search prs --author clubanderson --state open --limit 100`):**
+- `4ndersonLin/awesome-cloud-security` — open PR
+- `51nk0r5w1m/awesome-cloudNative` — open PR
+- `adriannovegil/awesome-observability` — PR #53 (prev opened, "Dashboarding section")
+- `adriannovegil/awesome-sre` — open PR
+- `agamm/awesome-ai-sre` — open PR
+- `akuity/awesome-argo` — open PR
+- `awesome-mlops/awesome-mlops-kubernetes` — open PR
+- `awesome-mlops/awesome-mlops-platforms` — open PR
+- `awesome-sre/awesome-sre` — open PR
+- `bijualbert/awesome-cloud-native-trainings` — open PR
+- `bregman-arie/devops-resources` — open PR
+- `cdwv/awesome-helm` — open PR
+- `CognonicLabs/awesome-AI-kubernetes` — open PR
 - `crazy-canux/awesome-monitoring` — PR #38
-- `omarkdev/awesome-dashboards` — PR #31
-- `obazoud/awesome-dashboard` — PR #35
+- `Curated-Awesome-Lists/awesome-devops-tools` — open PR
+- `dastergon/awesome-chaos-engineering` — open PR
+- `dastergon/awesome-sre` — PR #268
+- `datreeio/awesome-gitops` — open PR
+- `devsecops/awesome-devsecops` — open PR
+- `fititnt/awesome-aiops` — open PR
+- `gorkemozlu/awesome-sre-tools` — open PR
+- `hysnsec/awesome-policy-as-code` — open PR
+- `iGusev/awesome-cloud-native` — open PR
+- `infracloudio/awesome-platform-engineering` — open PR
+- `InftyAI/Awesome-LLMOps` — open PR
+- `JakobTheDev/awesome-devsecops` — open PR
+- `jatrost/awesome-kubernetes-threat-detection` — open PR
+- `jmfontaine/awesome-finops` — open PR
+- `joubertredrat/awesome-devops` — open PR
+- `kelvins/awesome-mlops` — open PR
+- `ksoclabs/awesome-kubernetes-security` — open PR
+- `kubernetes-hybrid-cloud/awesome-kubernetes` — open PR
 - `last9/awesome-sre-agents` — PR #12
+- `LeanerCloud/awesome-finops` — open PR
+- `Lets-DevOps/awesome-learning` — open PR
+- `lukecav/awesome-kubernetes` — open PR
+- `magnologan/awesome-k8s-security` — open PR
+- `mahomedalid/awesome-multicloud` — PR #2 ✨ NEW
 - `mahseema/awesome-ai-tools` — PR #1184
-- `veggiemonk/awesome-docker` — PR #1417
-- `sottlmarek/DevSecOps` — PR #99
+- `magsther/awesome-opentelemetry` — open PR
+- `mehdihadeli/awesome-software-architecture` — open PR
 - `Metarget/awesome-cloud-native-security` — PR #13
+- `mfornos/awesome-microservices` — open PR
+- `mikeroyal/Kubernetes-Guide` — open PR
+- `mstrYoda/awesome-istio` — open PR
+- `myugan/awesome-cicd-security` — open PR
+- `nataz77/awesome-k8s` — open PR
+- `ndrpnt/awesome-kubernetes-configuration-management` — open PR
+- `nik-kale/awesome-autonomous-ops` — open PR
+- `nirgeier/awesome-devops` — open PR
+- `NotHarshhaa/awesome-devops-cloud` — open PR
+- `NotHarshhaa/devops-tools` — open PR
+- `nubenetes/awesome-kubernetes` — open PR
+- `obazoud/awesome-dashboard` — PR #35
+- `omarkdev/awesome-dashboards` — PR #31 (COLD — closed)
 - `pavangudiwada/awesome-ai-sre` — PR #21
+- `paulveillard/cybersecurity-devsecops` — open PR
+- `pditommaso/awesome-k8s` — open PR
+- `pditommaso/awesome-pipeline` — open PR
+- `ramitsurana/awesome-kubernetes` — PR #1088 (already open, diff branch)
+- `roaldnefs/awesome-prometheus` — open PR
+- `rohitg00/kubernetes-resources` — open PR
+- `run-x/awesome-kubernetes` — open PR
+- `sbilly/awesome-security` — open PR
+- `seifrajhi/awesome-platform-engineering-tools` — PR #147 (prev opened)
+- `ShakedBraimok/awesome-platform-engineering` — open PR
+- `shibuiwilliam/awesome-k8s-crd` — open PR
+- `siderolabs/awesome-talos` — open PR
+- `SigNoz/Awesome-OpenTelemetry` — open PR
+- `sottlmarek/DevSecOps` — PR #99
+- `SquadcastHub/awesome-sre-tools` — open PR
+- `techiescamp/devops-tools` — open PR
+- `tensorchord/Awesome-LLMOps` — open PR
+- `thedevopstooling/awesome-kubernetes-for-devops` — open PR
+- `tmrts/awesome-kubernetes` — open PR (COLD — archived)
+- `tomhuang12/awesome-k8s-resources` — PR #187 (prev opened)
+- `toptechevangelist/awesome-platform-engineering` — open PR
+- `trimstray/the-book-of-secret-knowledge` — open PR
+- `tuan-devops/awesome-kubernetes` — open PR
+- `tysoncung/awesome-devops-platform` — PR #1 ✨ NEW
+- `tysoncung/awesome-devsecops` — open PR
+- `veggiemonk/awesome-docker` — PR #1417
+- `vilaca/awesome-k8s-tools` — open PR
+- `visenger/awesome-mlops` — open PR
+- `warpnet/awesome-prometheus` — open PR
+- `weaveworks/awesome-gitops` — PR #70 (prev opened, "Dashboards section")
+- `wh211212/awesome-cloudnative` — open PR
+- `wmariuss/awesome-devops` — open PR
+- `yarncraft/awesome-edge` — open PR
+
+**Cold/closed repos (never retry):**
+- brandonhimpfen/* (5 repos) — closed PRs
+- open-policy-agent/awesome-opa — closed
+- ripienaar/free-for-dev — closed
+- servicemesher/awesome-servicemesh — closed
+- cloudnativebasel/awesome-cloud-native — closed
+- awesome-foss/awesome-sysadmin — closed
+- rezmoss/awesome-security-pipeline — closed
+- qijianpeng/awesome-edge-computing — already listed
+- shospodarets/awesome-platform-engineering — already listed
 
 ### Mission A — ACMM Badge Outreach
-- Not yet started. Next pass should begin targeting CNCF Sandbox projects.
+- Not yet started. Blocked — no new CNCF issues per operator directive (HARD STOP active).
+
 
 ## PR Follow-up — CRITICAL
 
