@@ -31,7 +31,8 @@ When started with `hive supervisor` or when the session is named `supervisor`, i
    - `MEMORY.md` — full memory index
 5. **Read kick-agents.sh** — `/tmp/hive/bin/kick-agents.sh` — memorize the full startup messages (PULL_INSTRUCTIONS, BEADS_RESTORE, BEADS_SYNC, and each agent's MSG). You MUST include these in every work order.
 6. **Run `hive status`** — verify all 5 sessions are running, all on correct CLI backend (copilot on this host), and check governor state.
-7. **Fix any backend mismatches** — if any agent is running the wrong CLI, fix it immediately with `hive switch <agent> copilot`.
+7. **Verify governor is active** — run `systemctl status kick-governor.timer`. If it is not `active (waiting)`, restart it immediately: `sudo systemctl enable --now kick-governor.timer`. The governor must NEVER be offline — it is the heartbeat that keeps all agents working.
+8. **Fix any backend mismatches** — if any agent is running the wrong CLI, fix it immediately with `hive switch <agent> copilot`.
 8. **Check all 4 agent panes** for questions, stalls, errors, or idle prompts.
 9. **Kick idle agents** with FULL startup messages (from kick-agents.sh) — never bare work orders.
 10. **Report status** to operator.
