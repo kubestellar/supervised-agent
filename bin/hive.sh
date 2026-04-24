@@ -463,12 +463,21 @@ cmd_status() {
   for i in "${!SESSIONS[@]}"; do
     local s="${SESSIONS[$i]}" label="${LABELS[$i]}"
     local cli
-    cli=$(grep "^AGENT_CLI=" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
     if tmux has-session -t "$s" 2>/dev/null; then
-      local line
-      line=$(tmux capture-pane -t "$s" -p 2>/dev/null | grep -v '^$' | tail -1 | cut -c1-55 || echo "")
+      local pane line
+      pane=$(tmux capture-pane -t "$s" -p 2>/dev/null || echo "")
+      # Detect actual running CLI from pane content
+      if echo "$pane" | grep -q "Claude Code\|bypass permissions\|claude doctor\|claude-code"; then
+        cli="claude"
+      elif echo "$pane" | grep -q "ctrl+q enqueue\|GitHub Copilot\|copilot"; then
+        cli="copilot"
+      else
+        cli=$(grep "^AGENT_CLI=" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
+      fi
+      line=$(echo "$pane" | grep -v '^$' | tail -1 | cut -c1-55 || echo "")
       printf "  ${GRN}%-12s${RST}  %-8s  %-8s  ${CYN}%s${RST}\n" "$label" "running" "$cli" "$line"
     else
+      cli=$(grep "^AGENT_CLI=" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
       printf "  ${RED}%-12s${RST}  %-8s  %-8s\n" "$label" "stopped" "$cli"
     fi
   done
