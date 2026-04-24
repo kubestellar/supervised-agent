@@ -207,7 +207,13 @@ maybe_kick() {
   elapsed=$(seconds_since_last_kick "$agent")
 
   if [ "$elapsed" -ge "$cadence" ]; then
-    log "KICK ${agent} (mode=${mode} cadence=$(secs_to_label "$cadence") elapsed=$(secs_to_label "$elapsed"))"
+    local next_et
+    next_et=$(TZ=America/New_York date -d "+${cadence} seconds" '+%H:%M %Z')
+    log "KICK ${agent} (mode=${mode} cadence=$(secs_to_label "$cadence") elapsed=$(secs_to_label "$elapsed") next≈${next_et})"
+    ntfy "default" \
+      "Kick: ${agent}" \
+      "mode=${mode} cadence=$(secs_to_label "$cadence") next≈${next_et} queue=${queue_depth}" \
+      "bell"
     if "$KICK_SCRIPT" "$agent" 2>&1 \
         | while IFS= read -r line; do log "  [${agent}] ${line}"; done; then
       record_kick "$agent"
