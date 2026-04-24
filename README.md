@@ -4,26 +4,7 @@
 
 ---
 
-```mermaid
-flowchart LR
-    CONF["hive.conf"] --> GOV
-    GH["GitHub repos"] --> GOV
-    GOV["kick-governor"] --> SC["scanner"]
-    GOV --> RV["reviewer"]
-    GOV --> AR["architect"]
-    GOV --> OT["outreach"]
-    GOV --> SP["supervisor"]
-    SC --> BD["beads ledger"]
-    RV --> BD
-    AR --> BD
-    OT --> BD
-    SP --> BD
-    SC --> PH["ntfy alerts"]
-    RV --> PH
-    AR --> PH
-    OT --> PH
-    SP --> PH
-```
+![hive architecture](docs/architecture.svg)
 
 ---
 

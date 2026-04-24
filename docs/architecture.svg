@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="500" viewBox="0 0 980 500">
+<rect width="980" height="500" fill="#f8fafc" rx="12" stroke="#e2e8f0" stroke-width="1"/>
+<defs><marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#94a3b8"/></marker></defs>
+<text x="110" y="26" text-anchor="middle" font-size="11" fill="#94a3b8" font-family="ui-sans-serif,system-ui,sans-serif">config</text>
+<text x="310" y="26" text-anchor="middle" font-size="11" fill="#94a3b8" font-family="ui-sans-serif,system-ui,sans-serif">governor</text>
+<text x="540" y="26" text-anchor="middle" font-size="11" fill="#94a3b8" font-family="ui-sans-serif,system-ui,sans-serif">agents</text>
+<text x="785" y="26" text-anchor="middle" font-size="11" fill="#94a3b8" font-family="ui-sans-serif,system-ui,sans-serif">coordination</text>
+<rect x="40" y="160" width="140" height="36" rx="6" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.5"/>
+<text x="110" y="172" text-anchor="middle" font-size="13" font-weight="600" fill="#1e293b" font-family="ui-sans-serif,system-ui,sans-serif">hive.conf</text>
+<text x="110" y="187" text-anchor="middle" font-size="10" fill="#1d4ed8" font-family="ui-sans-serif,system-ui,sans-serif">repos · ntfy topic</text>
+
+<rect x="40" y="270" width="140" height="36" rx="6" fill="#d1fae5" stroke="#065f46" stroke-width="1.5"/>
+<text x="110" y="293" text-anchor="middle" font-size="13" font-weight="600" fill="#1e293b" font-family="ui-sans-serif,system-ui,sans-serif">GitHub repos</text>
+
+<rect x="240" y="212" width="140" height="36" rx="6" fill="#fed7aa" stroke="#92400e" stroke-width="1.5"/>
+<text x="310" y="224" text-anchor="middle" font-size="13" font-weight="600" fill="#1e293b" font-family="ui-sans-serif,system-ui,sans-serif">kick-governor</text>
+<text x="310" y="239" text-anchor="middle" font-size="10" fill="#92400e" font-family="ui-sans-serif,system-ui,sans-serif">velocity · busy%</text>
+
+<rect x="470" y="55" width="140" height="36" rx="6" fill="#ede9fe" stroke="#5b21b6" stroke-width="1.5"/>
+<text x="540" y="78" text-anchor="middle" font-size="13" font-weight="600" fill="#1e293b" font-family="ui-sans-serif,system-ui,sans-serif">scanner</text>
+
+<rect x="470" y="130" width="140" height="36" rx="6" fill="#ede9fe" stroke="#5b21b6" stroke-width="1.5"/>
+<text x="540" y="153" text-anchor="middle" font-size="13" font-weight="600" fill="#1e293b" font-family="ui-sans-serif,system-ui,sans-serif">reviewer</text>
+
+<rect x="470" y="205" width="140" height="36" rx="6" fill="#ede9fe" stroke="#5b21b6" stroke-width="1.5"/>
+<text x="540" y="228" text-anchor="middle" font-size="13" font-weight="600" fill="#1e293b" font-family="ui-sans-serif,system-ui,sans-serif">architect</text>
+
+<rect x="470" y="280" width="140" height="36" rx="6" fill="#ede9fe" stroke="#5b21b6" stroke-width="1.5"/>
+<text x="540" y="303" text-anchor="middle" font-size="13" font-weight="600" fill="#1e293b" font-family="ui-sans-serif,system-ui,sans-serif">outreach</text>
+
+<rect x="470" y="355" width="140" height="36" rx="6" fill="#ede9fe" stroke="#5b21b6" stroke-width="1.5"/>
+<text x="540" y="378" text-anchor="middle" font-size="13" font-weight="600" fill="#1e293b" font-family="ui-sans-serif,system-ui,sans-serif">supervisor</text>
+
+<rect x="715" y="150" width="140" height="46" fill="#fef9c3" stroke="#854d0e" stroke-width="1.5"/>
+<ellipse cx="785" cy="196" rx="70" ry="10" fill="#fef9c3" stroke="#854d0e" stroke-width="1.5"/>
+<ellipse cx="785" cy="150" rx="70" ry="10" fill="white" fill-opacity="0.5" stroke="#854d0e" stroke-width="1.5"/>
+<text x="785" y="168" text-anchor="middle" font-size="13" font-weight="600" fill="#1e293b" font-family="ui-sans-serif,system-ui,sans-serif">beads</text>
+<text x="785" y="183" text-anchor="middle" font-size="10" fill="#854d0e" font-family="ui-sans-serif,system-ui,sans-serif">shared ledger</text>
+
+<rect x="715" y="300" width="140" height="36" rx="6" fill="#fce7f3" stroke="#9d174d" stroke-width="1.5"/>
+<text x="785" y="312" text-anchor="middle" font-size="13" font-weight="600" fill="#1e293b" font-family="ui-sans-serif,system-ui,sans-serif">ntfy</text>
+<text x="785" y="327" text-anchor="middle" font-size="10" fill="#9d174d" font-family="ui-sans-serif,system-ui,sans-serif">phone alerts</text>
+
+<path d="M180,178 C210,178 210,230 240,230" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M180,288 C210,288 210,230 240,230" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M380,230 C425,230 425,73 470,73" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M380,230 C425,230 425,148 470,148" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M380,230 C425,230 425,223 470,223" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M380,230 C425,230 425,298 470,298" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M380,230 C425,230 425,373 470,373" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M610,73 C662,73 662,160 715,160" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M610,148 C662,148 662,160 715,160" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M610,223 C662,223 662,160 715,160" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M610,298 C662,298 662,160 715,160" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M610,373 C662,373 662,160 715,160" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M610,73 C662,73 662,318 715,318" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M610,148 C662,148 662,318 715,318" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M610,223 C662,223 662,318 715,318" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M610,298 C662,298 662,318 715,318" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+<path d="M610,373 C662,373 662,318 715,318" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+</svg>
