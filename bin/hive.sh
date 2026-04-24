@@ -540,16 +540,22 @@ cmd_status() {
 
   # Governor
   echo ""
-  local mode queue qi qp
+  local mode queue qi qp gov_active gov_label
   mode=$(cat /var/run/kick-governor/mode         2>/dev/null || echo "unknown")
   qi=$(  cat /var/run/kick-governor/queue_issues 2>/dev/null || echo "?")
   qp=$(  cat /var/run/kick-governor/queue_prs    2>/dev/null || echo "?")
   queue="${qi}i ${qp}p"
+  gov_active=$(systemctl is-active kick-governor.timer 2>/dev/null || echo "inactive")
+  if [[ "$gov_active" == "active" ]]; then
+    gov_label="${GRN}active${RST}"
+  else
+    gov_label="${RED}⚠ DEAD${RST}"
+  fi
   local next
   next=$(systemctl list-timers kick-governor.timer --no-pager 2>/dev/null \
        | awk 'NR==2{print $1,$2,$3,$4}' \
-       | xargs -I{} bash -c "TZ=\"$HIVE_TZ\" date -d \"{}\" \"+%-I:%M %p %Z\"" 2>/dev/null || echo "unknown")
-  echo -e "  Governor:  ${BLD}$mode${RST}  actionable: ${queue}  |  next kick: ${CYN}$next${RST}"
+       | xargs -I{} bash -c "TZ=\"$HIVE_TZ\" date -d \"{}\" \"+%-I:%M %p %Z\"" 2>/dev/null || echo "—")
+  echo -e "  Governor:  ${BLD}$mode${RST} [${gov_label}]  actionable: ${queue}  |  next kick: ${CYN}$next${RST}"
 
   # Per-repo issue + PR counts with trend markers
   local STATUS_CACHE="/var/run/kick-governor/repo_cache"
