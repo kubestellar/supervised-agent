@@ -101,7 +101,6 @@ sequenceDiagram
     T->>A: spawn agent
     S->>T: wait for AGENT_READY_MARKER
     S->>A: send EXECUTOR startup prompt (no /loop)
-    S->>A: (30s later) CronList — delete every cron
     A->>A: reads policy, reports status, waits
 
     loop operator-driven

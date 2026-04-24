@@ -69,14 +69,6 @@ send_loop_prompt() {
   tmux send-keys -t "$SESSION" Enter
 }
 
-send_cron_nuke() {
-  log "scheduling cron nuke (30s delay)"
-  sleep 30
-  log "sending cron nuke"
-  tmux send-keys -t "$SESSION" -l "CronList — delete every cron job you find. EXECUTOR MODE means zero crons, zero self-scheduling."
-  sleep 1
-  tmux send-keys -t "$SESSION" Enter
-}
 
 CLAUDE_RENAME_TO="Scanner"
 TMUX_STATUS_STYLE="bg=colour24,fg=white"
@@ -120,7 +112,7 @@ start_session() {
     sleep 5
     send_claude_rename
     send_statusline
-    send_cron_nuke &
+
   else
     log "agent TUI did not become ready within ${READY_TIMEOUT_SEC}s; will retry on next tick"
   fi
