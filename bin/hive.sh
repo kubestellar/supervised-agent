@@ -457,16 +457,19 @@ cmd_status() {
   # Sessions
   local SESSIONS=(supervisor issue-scanner reviewer feature outreach)
   local LABELS=("supervisor" "scanner" "reviewer" "architect" "outreach")
-  printf "  %-12s  %-8s  %s\n" "AGENT" "STATE" "LAST LINE"
-  printf "  %-12s  %-8s  %s\n" "-----" "-----" "---------"
+  local ENV_FILES=("supervisor" "issue-scanner" "reviewer" "feature" "outreach")
+  printf "  %-12s  %-8s  %-8s  %s\n" "AGENT" "STATE" "CLI" "LAST LINE"
+  printf "  %-12s  %-8s  %-8s  %s\n" "-----" "-----" "---" "---------"
   for i in "${!SESSIONS[@]}"; do
     local s="${SESSIONS[$i]}" label="${LABELS[$i]}"
+    local cli
+    cli=$(grep "^AGENT_CLI=" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
     if tmux has-session -t "$s" 2>/dev/null; then
       local line
-      line=$(tmux capture-pane -t "$s" -p 2>/dev/null | grep -v '^$' | tail -1 | cut -c1-60 || echo "")
-      printf "  ${GRN}%-12s${RST}  %-8s  ${CYN}%s${RST}\n" "$label" "running" "$line"
+      line=$(tmux capture-pane -t "$s" -p 2>/dev/null | grep -v '^$' | tail -1 | cut -c1-55 || echo "")
+      printf "  ${GRN}%-12s${RST}  %-8s  %-8s  ${CYN}%s${RST}\n" "$label" "running" "$cli" "$line"
     else
-      printf "  ${RED}%-12s${RST}  %-8s\n" "$label" "stopped"
+      printf "  ${RED}%-12s${RST}  %-8s  %-8s\n" "$label" "stopped" "$cli"
     fi
   done
 
