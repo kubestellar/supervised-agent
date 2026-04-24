@@ -68,6 +68,7 @@ ${BLD}COMMANDS${RST}
   kick    [all|scanner|reviewer|architect|outreach]
   logs    [governor|scanner|reviewer|architect|outreach|supervisor]
   stop    [all|agent]
+  switch  <agent> <backend>            Switch agent to a different CLI backend
 
 ${BLD}BACKENDS${RST}  (set HIVE_BACKENDS in hive.conf)
   copilot   GitHub Copilot CLI (cloud)
@@ -498,9 +499,9 @@ cmd_status() {
   echo ""
   local wc sc
   wc=$(cd "$BEADS_WORKER_DIR"     2>/dev/null && bd list --json 2>/dev/null \
-     | python3 -c 'import sys,json; d=json.load(sys.stdin); print(len(d.get("items",[])))' 2>/dev/null || echo '?')
+     | python3 -c 'import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else len(d.get("items",[])))' 2>/dev/null || echo '?')
   sc=$(cd "$BEADS_SUPERVISOR_DIR" 2>/dev/null && bd list --json 2>/dev/null \
-     | python3 -c 'import sys,json; d=json.load(sys.stdin); print(len(d.get("items",[])))' 2>/dev/null || echo '?')
+     | python3 -c 'import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else len(d.get("items",[])))' 2>/dev/null || echo '?')
   echo -e "  Beads:     workers ${BLD}$wc${RST}  |  supervisor ${BLD}$sc${RST}"
   echo ""
 }
@@ -567,6 +568,58 @@ cmd_stop() {
   fi
 }
 
+# ── switch ───────────────────────────────────────────────────────────────────
+
+cmd_switch() {
+  local agent="${1:-}" backend="${2:-}"
+  [[ -z "$agent" || -z "$backend" ]] && die "Usage: hive switch <agent> <backend>  (backends: copilot claude gemini goose)"
+
+  # Map agent name → session name and env file
+  local session envfile
+  case "$agent" in
+    scanner)            session="issue-scanner"; envfile="issue-scanner" ;;
+    reviewer)           session="reviewer";      envfile="reviewer" ;;
+    architect|feature)  session="feature";       envfile="feature" ;;
+    outreach)           session="outreach";      envfile="outreach" ;;
+    supervisor)         session="supervisor";    envfile="supervisor" ;;
+    *) die "Unknown agent: $agent (valid: scanner reviewer architect outreach supervisor)" ;;
+  esac
+
+  # Resolve launch command for backend
+  local launch_cmd
+  case "$backend" in
+    copilot) launch_cmd="/usr/bin/copilot --allow-all --model claude-opus-4.6" ;;
+    claude)  launch_cmd="/usr/bin/claude --dangerously-skip-permissions --model claude-opus-4-7" ;;
+    gemini)  launch_cmd="/usr/bin/gemini --yolo" ;;
+    goose)   launch_cmd="/usr/bin/goose --no-confirm" ;;
+    *) die "Unknown backend: $backend (valid: copilot claude gemini goose)" ;;
+  esac
+
+  info "Switching $agent → $backend"
+
+  # Update env file
+  local ef="$ENV_DIR/${envfile}.env"
+  if [[ -f "$ef" ]]; then
+    sudo sed -i "s|^AGENT_LAUNCH_CMD=.*|AGENT_LAUNCH_CMD=\"${launch_cmd}\"|" "$ef"
+    sudo sed -i "s|^AGENT_CLI=.*|AGENT_CLI=${backend}|" "$ef"
+    ok "Updated $ef"
+  else
+    die "Env file not found: $ef"
+  fi
+
+  # Kill existing session
+  if tmux has-session -t "$session" 2>/dev/null; then
+    tmux kill-session -t "$session" 2>/dev/null && ok "Killed session $session"
+  fi
+
+  # Respawn via kick
+  sleep 1
+  /usr/local/bin/kick-agents.sh "$agent" 2>/dev/null || true
+  ok "Kicked $agent — will start with $backend"
+  sleep 3
+  cmd_status
+}
+
 # ── main ─────────────────────────────────────────────────────────────────────
 
 main() {
@@ -608,6 +661,7 @@ main() {
     kick)     shift; cmd_kick    "${1:-all}" ;;
     logs)     shift; cmd_logs    "${1:-governor}" ;;
     stop)     shift; cmd_stop    "${1:-all}" ;;
+    switch)   shift; cmd_switch  "$@" ;;
     -h|--help|help) usage ;;
     *) fail "Unknown command: $1"; usage ;;
   esac
