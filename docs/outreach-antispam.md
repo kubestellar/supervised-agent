@@ -7,11 +7,33 @@
 
 ---
 
-## 0. Core Principle
+## 0. Core Principles
 
 **One action per target, ever.** A "target" is the combination of (surface, entity). For example:
 `github.com / dastergon/awesome-sre` is one target. Opening a second PR there after the first is
 spam, regardless of whether you remember the first. Every rule below enforces this principle.
+
+**One PR per GitHub user/org, ever.** Same owner = same person's inbox. Submitting to
+`dastergon/awesome-sre` AND `dastergon/awesome-chaos-engineering` means that person receives two
+PRs from you. This is spam even if the repos are different. **Before opening any PR, check how
+many open PRs you already have under that owner:**
+
+```bash
+# Pre-flight owner check (MANDATORY — run before every new PR)
+OWNER="<repo-owner>"
+unset GITHUB_TOKEN && gh search prs --author clubanderson --state open --limit 100 \
+  --json repository,number | python3 -c "
+import sys,json
+d=json.loads(sys.stdin.read())
+hits=[p for p in d if p['repository']['nameWithOwner'].startswith('$OWNER/')]
+if hits: print('SKIP — already have', len(hits), 'open PR(s) for', '$OWNER:', [p['repository']['nameWithOwner']+'#'+str(p['number']) for p in hits])
+else: print('OK — no open PRs for $OWNER')
+"
+```
+
+If any open PR already exists under that owner → **SKIP**. Do not open a second one.
+The only exception: a maintainer explicitly invites a resubmission to a different section
+(close the old PR first, then resubmit — still counts as one active PR at a time).
 
 ---
 

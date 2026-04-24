@@ -205,28 +205,61 @@ After opening PRs on external repos, you MUST monitor them for review comments a
 **On every pass:**
 1. List all open PRs by `clubanderson` across your target repos:
    ```bash
-   unset GITHUB_TOKEN && gh search prs --author clubanderson --state open --limit 50 --json repository,number,title,updatedAt
+   unset GITHUB_TOKEN && gh search prs --author clubanderson --state open --limit 100 --json repository,number,title,updatedAt
    ```
-2. For each open PR, check for new review comments:
+2. Also check **closed** PRs for maintainer feedback inviting resubmission:
    ```bash
-   unset GITHUB_TOKEN && gh pr view <N> --repo <owner/repo> --json reviews,comments
+   unset GITHUB_TOKEN && gh search prs --author clubanderson --state closed --limit 100 --json repository,number,title,comments
    ```
-3. If there are unaddressed comments from CodeRabbit, Copilot, or human reviewers:
+3. For each open PR updated recently, check for review comments:
+   ```bash
+   unset GITHUB_TOKEN && gh pr view <N> --repo <owner/repo> --json reviews,comments,state
+   ```
+4. If there are unaddressed comments from CodeRabbit, Copilot, or human reviewers:
    - Read the feedback carefully
    - Make the requested changes in a new commit on the same branch
    - Push the update
    - Reply to the review comment acknowledging the fix
-4. Send ntfy for every PR update: `curl -s -H "Title: Outreach: PR updated" -d "<repo>#<N>: addressed <reviewer> feedback" ntfy.sh/issue-scanner`
+5. Send ntfy for every PR update: `curl -s -H "Title: Outreach: PR updated" -d "<repo>#<N>: addressed <reviewer> feedback" ntfy.sh/issue-scanner`
 
 **Do NOT ignore review comments.** Unresponsive PRs get closed. Address feedback within the same pass you discover it.
+
+## Known Prolific Maintainers — Watch Carefully
+
+### brandonhimpfen (maintains 20+ awesome-* repos)
+Repos confirmed: `awesome-ai-edge-computing`, `awesome-ai-infrastructure`, `awesome-cloud`, `awesome-cloud-native`, `awesome-devops`, `awesome-kubernetes`, `awesome-mlops` (and more — run `gh search repos "user:brandonhimpfen awesome"`).
+
+**His feedback pattern:**
+- Always responds with a comment before closing
+- Either: *"not a fit for this list"* (COLD — do not resubmit) or *"please resubmit under [X] section"* (ACTION — resubmit with corrected section + neutral description)
+- **Always** requests neutral language: no "AI-powered", no feature bullet lists
+- Uses em dash `–` (not hyphen `-`) as separator in list entries — match exactly
+
+**Resubmission rules for brandonhimpfen repos:**
+1. Check closed PRs first: `gh pr list -R brandonhimpfen/<repo> --author clubanderson --state closed --json number,comments`
+2. If feedback says "resubmit under X": fork the *brandonhimpfen* repo directly (not a fork of another repo with the same name), add to the specified section, neutral description, open new PR referencing the old one
+3. If feedback says "not a fit": mark COLD, never retry that specific repo
+4. Always fork with `gh repo fork brandonhimpfen/<repo>` and verify `gh api repos/clubanderson/<fork> --jq '.parent.full_name'` returns `brandonhimpfen/<repo>` before pushing
+
+**Status as of 2026-04-24:**
+| Repo | Status |
+|------|--------|
+| `awesome-ai-infrastructure` | PR #11 open (resubmit to Cloud Platforms) |
+| `awesome-devops` | PR #2 open (resubmit to DevOps Platforms) |
+| `awesome-ai-edge-computing` | COLD — "not a fit" |
+| `awesome-mlops` | COLD — "not a fit" |
+| `awesome-kubernetes` | COLD — duplicate closed |
 
 ## Rules
 
 - `unset GITHUB_TOKEN &&` before all `gh` commands
 - DCO sign all commits: `git commit -s`
 - Fork under `clubanderson` account for external PRs
+- **One PR per GitHub user/org — same owner = same inbox = spam.** Before opening any PR, run: `gh search prs --author clubanderson --state open --limit 100 --json repository,number | python3 -c "..."` and check the owner has zero existing open PRs. If they do, skip.
+- The only exception to the above: a maintainer explicitly invites a resubmission to a different section. Close the first PR, then open the resubmission — still one active PR per owner at a time.
 - Read each project's CONTRIBUTING.md before opening anything
 - One outreach per project — never spam
-- Match the target repo's format exactly
+- Match the target repo's format exactly (separator style, emoji use, section placement)
 - Never misrepresent KubeStellar's usage of a project
-- Pull latest instructions on every pass: `cd /tmp/hive && git pull --rebase origin main`
+- Pull latest instructions on every pass: `cd /tmp/supervised-agent && git pull --rebase origin main`
+- Instructions repo: **kubestellar/hive** (was: kubestellar/supervised-agent), local path: `/tmp/supervised-agent`
