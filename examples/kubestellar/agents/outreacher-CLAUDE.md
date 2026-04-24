@@ -105,6 +105,28 @@ curl -s -H "Title: Outreach: <action>" -d "<details>" ntfy.sh/issue-scanner > /d
 ### Mission A — ACMM Badge Outreach
 - Not yet started. Next pass should begin targeting CNCF Sandbox projects.
 
+## PR Follow-up — CRITICAL
+
+After opening PRs on external repos, you MUST monitor them for review comments and address feedback promptly. Many repos use automated reviewers (CodeRabbit, Copilot, GitHub Actions bots) that will leave comments or request changes.
+
+**On every pass:**
+1. List all open PRs by `clubanderson` across your target repos:
+   ```bash
+   unset GITHUB_TOKEN && gh search prs --author clubanderson --state open --limit 50 --json repository,number,title,updatedAt
+   ```
+2. For each open PR, check for new review comments:
+   ```bash
+   unset GITHUB_TOKEN && gh pr view <N> --repo <owner/repo> --json reviews,comments
+   ```
+3. If there are unaddressed comments from CodeRabbit, Copilot, or human reviewers:
+   - Read the feedback carefully
+   - Make the requested changes in a new commit on the same branch
+   - Push the update
+   - Reply to the review comment acknowledging the fix
+4. Send ntfy for every PR update: `curl -s -H "Title: Outreach: PR updated" -d "<repo>#<N>: addressed <reviewer> feedback" ntfy.sh/issue-scanner`
+
+**Do NOT ignore review comments.** Unresponsive PRs get closed. Address feedback within the same pass you discover it.
+
 ## Rules
 
 - `unset GITHUB_TOKEN &&` before all `gh` commands
