@@ -25,6 +25,21 @@ ok()    { echo -e "${GRN}✓${RST} $*";  log "OK   $*"; }
 warn()  { echo -e "${YLW}⚠ $*${RST}"; log "WARN $*"; }
 info()  { echo -e "${CYN}→ $*${RST}"; log "INFO $*"; }
 fail()  { echo -e "${RED}✗ $*${RST}"; log "FAIL $*"; }
+
+# trend_marker <current> <previous> <type: issues|prs>
+# issues up = bad (red↑), down = good (green↓), same = →
+# prs    up = good (green↑), down = yellow↓, same = →
+trend_marker() {
+  local cur="$1" prev="$2" kind="$3"
+  [[ "$cur" == "?" || -z "$prev" ]] && echo "" && return
+  if   [[ "$cur" -gt "$prev" ]]; then
+    [[ "$kind" == "issues" ]] && echo " ${RED}↑${RST}" || echo " ${GRN}↑${RST}"
+  elif [[ "$cur" -lt "$prev" ]]; then
+    [[ "$kind" == "issues" ]] && echo " ${GRN}↓${RST}" || echo " ${YLW}↓${RST}"
+  else
+    echo " →"
+  fi
+}
 die()   { fail "$*"; exit 1; }
 hdr()   { echo -e "\n${BLD}$*${RST}"; }
 
@@ -506,16 +521,31 @@ cmd_status() {
        | xargs -I{} bash -c "TZ=\"$HIVE_TZ\" date -d \"{}\" \"+%-I:%M %p %Z\"" 2>/dev/null || echo "unknown")
   echo -e "  Governor:  ${BLD}$mode${RST}  |  next kick: ${CYN}$next${RST}"
 
-  # Per-repo issue + PR counts
+  # Per-repo issue + PR counts with trend markers
+  local STATUS_CACHE="/var/run/kick-governor/repo_cache"
+  mkdir -p "$STATUS_CACHE" 2>/dev/null || true
   echo ""
-  printf "  %-32s  %-10s  %s\n" "REPO" "ISSUES" "PRS"
-  printf "  %-32s  %-10s  %s\n" "----" "------" "---"
+  printf "  %-28s  %-14s  %s\n" "REPO" "ISSUES" "PRS"
+  printf "  %-28s  %-14s  %s\n" "----" "------" "---"
   for repo in ${HIVE_REPOS:-}; do
     local rname issues prs
+    local prev_issues prev_prs
+    local itag ptag
     rname="${repo##*/}"
     issues=$(gh issue list --repo "$repo" --state open --json number --jq 'length' 2>/dev/null || echo "?")
     prs=$(   gh pr    list --repo "$repo" --state open --json number --jq 'length' 2>/dev/null || echo "?")
-    printf "  %-32s  %-10s  %s\n" "$rname" "$issues" "$prs"
+
+    # Trend vs last run
+    prev_issues=$(cat "$STATUS_CACHE/${rname}_issues" 2>/dev/null || echo "")
+    prev_prs=$(   cat "$STATUS_CACHE/${rname}_prs"    2>/dev/null || echo "")
+    itag=$(trend_marker "$issues" "$prev_issues" "issues")
+    ptag=$(trend_marker "$prs"    "$prev_prs"    "prs")
+
+    printf "  %-28s  %-14s  %s\n" "$rname" "${issues}${itag}" "${prs}${ptag}"
+
+    # Save for next run
+    [[ "$issues" != "?" ]] && echo "$issues" > "$STATUS_CACHE/${rname}_issues"
+    [[ "$prs"    != "?" ]] && echo "$prs"    > "$STATUS_CACHE/${rname}_prs"
   done
 
   # Beads
