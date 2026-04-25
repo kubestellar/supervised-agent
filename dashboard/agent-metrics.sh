@@ -36,20 +36,23 @@ adopters_total=$(unset GITHUB_TOKEN && gh api repos/kubestellar/console/contents
 # Subtract header rows (2)
 adopters_total=$(( adopters_total > 2 ? adopters_total - 2 : 0 ))
 
-# ── Architect: count PRs and proposals, not issue numbers ──
-architect_lines=$(tmux capture-pane -t feature -p 2>/dev/null | tail -80)
+# ── Architect: exec summary from tmux + PR/proposal counts ──
+architect_lines=$(tmux capture-pane -t feature -p -S -300 2>/dev/null)
 architect_prs=$(echo "$architect_lines" | grep -oP 'pull/\d+' | sort -u | wc -l)
 architect_prs=${architect_prs:-0}
-architect_proposals=$(echo "$architect_lines" | grep -ciP 'proposal|RFC|design|idea')
-architect_proposals=${architect_proposals:-0}
 architect_closed=$(echo "$architect_lines" | grep -ciP 'closed|resolved|stale')
 architect_closed=${architect_closed:-0}
+# Extract exec summary: last meaningful status line (skip shell commands)
+architect_summary=$(echo "$architect_lines" | grep -P '^\s*(●|◉|◎|→|Now|Focus|Working|Refactor|Split|Audit|Validat|Examin|The main)' | tail -1 | sed 's/^[[:space:]●◉◎→]*//' | head -c 120)
+architect_summary=${architect_summary:-$(echo "$architect_lines" | grep -vP '^\s*(│|└|$|─|[/$~])' | grep -P '\S{10,}' | tail -1 | sed 's/^[[:space:]]*//' | head -c 120)}
+# JSON-escape the summary
+architect_summary_json=$(echo "$architect_summary" | jq -Rs '.')
 
 cat <<EOF
 {
   "scanner": {"pairs": $scanner_json},
   "reviewer": {},
   "outreach": {"ga4Errors": $ga4_errors, "adopterPrs": $adopter_prs, "adopterPending": $adopter_count, "adoptersTotal": $adopters_total},
-  "architect": {"prs": $architect_prs, "proposals": $architect_proposals, "closed": $architect_closed}
+  "architect": {"prs": $architect_prs, "closed": $architect_closed, "summary": $architect_summary_json}
 }
 EOF

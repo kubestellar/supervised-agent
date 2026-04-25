@@ -228,6 +228,7 @@
     .ind-ok { color: #3fb950; }
     .ind-ok .ind-num { color: #3fb950; }
     .ind-row { display: flex; flex-wrap: wrap; gap: 12px; }
+    .ind-summary { font-size: 0.7rem; color: var(--text); margin-bottom: 4px; line-height: 1.4; opacity: 0.85; }
 
     /* Health dots (reused inside reviewer indicators) */
     .health-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
@@ -367,11 +368,15 @@
       }
 
       if (name === 'feature' || name === 'architect') {
-        const items = m.items || [];
+        const summary = (m.summary || '').trim();
+        const prs = m.prs || 0;
         const closed = m.closed || 0;
         return `<div class="agent-indicators">
-          ${items.length > 0 ? `<span class="ind-label">Issues:</span><div class="ind-tags">${items.map(n => `<a class="ind-tag" href="https://github.com/kubestellar/console/issues/${n}" target="_blank">#${n}</a>`).join('')}</div>` : ''}
-          ${closed > 0 ? `<span class="ind-stat"><span class="ind-num">${closed}</span> closed</span>` : ''}
+          ${summary ? `<div class="ind-summary">${esc(summary)}</div>` : ''}
+          <div class="ind-row">
+            ${prs > 0 ? `<span class="ind-stat"><span class="ind-num">${prs}</span> PRs</span>` : ''}
+            ${closed > 0 ? `<span class="ind-stat"><span class="ind-num">${closed}</span> closed</span>` : ''}
+          </div>
         </div>`;
       }
 
