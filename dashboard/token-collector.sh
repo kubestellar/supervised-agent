@@ -21,7 +21,7 @@ mkdir -p "$METRICS_DIR"
 # Find JSONL files modified in the lookback window
 cutoff=$(date -d "-${LOOKBACK_SECS} seconds" +%s 2>/dev/null || date -v-${LOOKBACK_SECS}S +%s 2>/dev/null || echo 0)
 
-BUDGET_RESET_DAY="${TOKEN_BUDGET_RESET_DAY:-6}"  # 0=Mon, 6=Sun
+BUDGET_RESET_DAY="${TOKEN_BUDGET_RESET_DAY:-4}"  # 0=Mon, 4=Fri (Claude resets Fri 7PM)
 
 python3 - "$CLAUDE_PROJECTS" "$cutoff" "$LOOKBACK_HOURS" "$BUDGET_RESET_DAY" <<'PYEOF'
 import json, os, sys, glob, time, datetime

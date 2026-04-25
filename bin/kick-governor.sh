@@ -85,9 +85,9 @@ CADENCE_OUTREACH_QUIET_SEC="${CADENCE_OUTREACH_QUIET_SEC:-7200}"    # 2 hours
 CADENCE_OUTREACH_IDLE_SEC="${CADENCE_OUTREACH_IDLE_SEC:-7200}"      # 2 hours
 
 # ── Token budget ────────────────────────────────────────────────────────────
-TOKEN_BUDGET_WEEKLY="${TOKEN_BUDGET_WEEKLY:-50000000}"
+TOKEN_BUDGET_WEEKLY="${TOKEN_BUDGET_WEEKLY:-200000000}"  # ~200M billable tokens ≈ 100% weekly limit
 TOKEN_BUDGET_SAFETY_PCT="${TOKEN_BUDGET_SAFETY_PCT:-85}"
-TOKEN_BUDGET_RESET_DAY="${TOKEN_BUDGET_RESET_DAY:-0}"  # 0=Sunday
+TOKEN_BUDGET_RESET_DAY="${TOKEN_BUDGET_RESET_DAY:-4}"  # 4=Friday (Claude resets Fri 7PM)
 TOKEN_COLLECTOR_JSON="/var/run/hive-metrics/tokens.json"
 
 # ── Cost weights (relative to Haiku=1) ──────────────────────────────────────
