@@ -16,10 +16,15 @@ brew_ok=$( [ "$formula_ver" = "$latest_rel" ] && echo 1 || echo 0 )
 # Helm chart exists
 helm_ok=$(gh api repos/kubestellar/console/contents/deploy/helm/kubestellar-console/Chart.yaml --jq '.name' >/dev/null 2>&1 && echo 1 || echo 0)
 
-# Nightly workflow
+# Nightly Test Suite workflow
 nightly=$(gh run list --repo kubestellar/console --workflow "Nightly Test Suite" --limit 1 \
   --json conclusion --jq '.[0].conclusion // "none"' 2>/dev/null || echo "none")
 nightly_ok=$( [ "$nightly" = "success" ] && echo 1 || echo 0 )
+
+# Release workflow
+release=$(gh run list --repo kubestellar/console --workflow "Release" --limit 1 \
+  --json conclusion --jq '.[0].conclusion // "none"' 2>/dev/null || echo "none")
+release_ok=$( [ "$release" = "success" ] && echo 1 || echo 0 )
 
 # Weekly workflow
 weekly=$(gh run list --repo kubestellar/console --workflow "Weekly Coverage Review" --limit 1 \
@@ -31,5 +36,5 @@ vllm_ok=-1
 pokprod_ok=-1
 
 cat <<EOF
-{"ci":${ci:-0},"brew":$brew_ok,"helm":$helm_ok,"nightly":$nightly_ok,"weekly":$weekly_ok,"vllm":$vllm_ok,"pokprod":$pokprod_ok}
+{"ci":${ci:-0},"brew":$brew_ok,"helm":$helm_ok,"nightly":$nightly_ok,"release":$release_ok,"weekly":$weekly_ok,"vllm":$vllm_ok,"pokprod":$pokprod_ok}
 EOF
