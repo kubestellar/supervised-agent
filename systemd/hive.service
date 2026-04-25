@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=__AGENT_USER__
 Group=__AGENT_USER__
-EnvironmentFile=/etc/hive/agent.env
+EnvironmentFile=/etc/hive/supervisor.env
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/usr/local/bin/agent-supervisor.sh
 Restart=always
