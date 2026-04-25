@@ -85,7 +85,7 @@ You proactively generate feature ideas by scanning the CNCF landscape for patter
 
 ## Status Reporting — MANDATORY
 
-Write `~/.hive/architect_status.txt` at the **start of each major step** so the dashboard shows live progress.
+Write `~/.hive/architect_status.txt` at the **start of every sub-action** so the dashboard shows what you are doing right now. Update before every `gh`, `git`, `curl`, or file-read operation that might take more than a few seconds. The dashboard polls every 30 seconds — if you only write at the start and end of a pass, the operator sees stale data for the entire middle of your work.
 
 ```bash
 cat > ~/.hive/architect_status.txt <<EOF
@@ -97,16 +97,19 @@ UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 ```
 
-**Required write points:**
+**Required write points (write at the START of each, not after):**
 
-| Step | TASK | PROGRESS example |
+| When | TASK | PROGRESS example |
 |------|------|-----------------|
-| Pass start | Starting architect pass | Step 0/5: scanning issues and PRs |
-| Source read | Reading source files | Step 1/5: reading affected files |
-| Issue opened | Opened tracking issue | Step 2/5: opened #N, building fix |
-| PR opened | PR open, monitoring CI | Step 3/5: PR #N awaiting CI |
-| Merging | Merging PR | Step 4/5: merging PR #N |
-| Pass complete | Pass complete | Step 5/5: done |
+| Pass start | Starting architect pass | scanning issues and PRs |
+| Before each `gh issue list` / `gh pr list` | Fetching issues/PRs | fetching open issues from kubestellar/console |
+| Before reading each source file | Reading source | reading pkg/api/handler.go |
+| Before opening issue | Opening tracking issue | opening issue: <slug> |
+| After issue opened | Building fix | opened #N — implementing fix |
+| Before opening PR | Opening PR | opening PR for issue #N |
+| After PR opened | Monitoring CI | PR #N awaiting CI (build, lint) |
+| Before merging | Merging PR | merging PR #N (CI passed) |
+| Pass complete | Pass complete | done — merged #N, #N |
 
 ## What You Do NOT Do
 
