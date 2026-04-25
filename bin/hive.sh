@@ -694,6 +694,8 @@ cmd_status_json() {
        | xargs -I{} bash -c "TZ=\"$HIVE_TZ\" date -d \"{}\" \"+%-I:%M %p %Z\"" 2>/dev/null || echo "")
 
   # Repos
+  local STATUS_CACHE="/var/run/kick-governor/repo_cache"
+  mkdir -p "$STATUS_CACHE" 2>/dev/null || true
   local repos_json="["
   local first_repo=true
   for repo in ${HIVE_REPOS:-}; do
@@ -701,6 +703,9 @@ cmd_status_json() {
     rname="${repo##*/}"
     issues=$(gh issue list --repo "$repo" --state open --json number --jq 'length' 2>/dev/null || echo "-1")
     prs=$(   gh pr    list --repo "$repo" --state open --json number --jq 'length' 2>/dev/null || echo "-1")
+    # Fall back to cached values when rate limited
+    [[ "$issues" == "-1" ]] && issues=$(cat "$STATUS_CACHE/${rname}_issues" 2>/dev/null || echo "-1")
+    [[ "$prs"    == "-1" ]] && prs=$(   cat "$STATUS_CACHE/${rname}_prs"    2>/dev/null || echo "-1")
     [[ "$first_repo" == "false" ]] && repos_json+=","
     first_repo=false
     repos_json+="{\"name\":\"$rname\",\"full\":\"$repo\",\"issues\":$issues,\"prs\":$prs}"
