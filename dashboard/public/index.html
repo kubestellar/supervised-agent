@@ -52,14 +52,27 @@
     .value.copilot { color: var(--cyan); }
     .value.claude { color: var(--purple); }
     .doing { font-size: 0.75rem; color: var(--cyan); margin-top: 6px; word-break: break-word; white-space: pre-line; line-height: 1.5; min-height: 3.4em; }
-    /* Agent metric gauges */
-    .agent-gauges { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
-    .mini-gauge { flex: 1; min-width: 100px; }
-    .mini-gauge-label { font-size: 0.6rem; color: var(--muted); margin-bottom: 2px; }
-    .mini-gauge-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; position: relative; }
-    .mini-gauge-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
-    .mini-gauge-val { font-size: 0.65rem; color: var(--text); margin-top: 1px; }
+    /* Agent metric gauges — removed, replaced by health panel */
     .agent-actions { margin-top: 10px; display: flex; gap: 6px; }
+
+    /* Health status panel */
+    .health { margin-bottom: 24px; }
+    .health h2 { font-size: 0.95rem; margin-bottom: 8px; color: var(--muted); }
+    .health-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+    .health-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px 16px; display: flex; align-items: center; gap: 8px;
+      font-size: 0.8rem;
+    }
+    .health-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .health-dot.ok { background: #3fb950; }
+    .health-dot.fail { background: #f85149; }
+    .health-dot.unknown { background: #8b949e; }
+    .health-label { color: var(--text); }
+    .health-ci { font-weight: 700; }
+    .health-ci.good { color: #3fb950; }
+    .health-ci.warn { color: #d29922; }
+    .health-ci.bad { color: #f85149; }
     .btn {
       font-size: 0.7rem; padding: 3px 8px; border-radius: 4px;
       border: 1px solid var(--border); background: var(--surface);
@@ -202,32 +215,68 @@
       return Math.floor(sec / 3600) + 'h';
     }
 
-    let currentMetrics = {};
+    let currentAgentMetrics = {};
 
-    function miniGauge(label, value, target, unit) {
-      const pct = target > 0 ? Math.min(value / target * 100, 100) : (value === 0 ? 100 : 0);
-      const color = pct >= 90 ? '#3fb950' : pct >= 70 ? '#d29922' : '#f85149';
-      return `<div class="mini-gauge">
-        <div class="mini-gauge-label">${label}</div>
-        <div class="mini-gauge-bar"><div class="mini-gauge-fill" style="width:${pct}%;background:${color}"></div></div>
-        <div class="mini-gauge-val">${value}${unit} / ${target}${unit}</div>
-      </div>`;
+    function agentIndicators(name) {
+      const m = currentAgentMetrics[name];
+      if (!m) return '';
+
+      if (name === 'issue-scanner' || name === 'scanner') {
+        const items = m.items || [];
+        if (items.length === 0) return '<div class="agent-indicators"><span class="ind-empty">no active items</span></div>';
+        return `<div class="agent-indicators"><span class="ind-label">Working on:</span>
+          <div class="ind-tags">${items.map(n => `<a class="ind-tag" href="https://github.com/kubestellar/console/issues/${n}" target="_blank">#${n}</a>`).join('')}</div></div>`;
+      }
+
+      if (name === 'reviewer') {
+        const h = window._healthData || {};
+        const dots = [
+          { key: 'ci', label: 'CI', type: 'pct' },
+          { key: 'brew', label: 'Brew' },
+          { key: 'helm', label: 'Helm' },
+          { key: 'nightly', label: 'Nightly' },
+          { key: 'weekly', label: 'Weekly' },
+          { key: 'vllm', label: 'vLLM-d' },
+          { key: 'pokprod', label: 'PokProd' },
+        ];
+        return `<div class="agent-indicators"><div class="ind-dots">${dots.map(d => {
+          const v = h[d.key];
+          if (d.type === 'pct') {
+            const cls = v >= 90 ? 'good' : v >= 70 ? 'warn' : 'bad';
+            return `<span class="ind-dot-item"><span class="health-ci ${cls}">${v || 0}%</span><span class="ind-dlabel">${d.label}</span></span>`;
+          }
+          const dotCls = v === 1 ? 'ok' : v === 0 ? 'fail' : 'unknown';
+          return `<span class="ind-dot-item"><span class="health-dot ${dotCls}"></span><span class="ind-dlabel">${d.label}</span></span>`;
+        }).join('')}</div></div>`;
+      }
+
+      if (name === 'outreach') {
+        return `<div class="agent-indicators">
+          <span class="ind-stat"><span class="ind-num">${m.prsOpened || 0}</span> PRs</span>
+          <span class="ind-stat"><span class="ind-num">${m.reposTargeted || 0}</span> repos</span>
+          ${m.errors > 0 ? `<span class="ind-stat ind-err"><span class="ind-num">${m.errors}</span> errors</span>` : ''}
+        </div>`;
+      }
+
+      if (name === 'feature' || name === 'architect') {
+        const items = m.items || [];
+        const closed = m.closed || 0;
+        return `<div class="agent-indicators">
+          ${items.length > 0 ? `<span class="ind-label">Issues:</span><div class="ind-tags">${items.map(n => `<a class="ind-tag" href="https://github.com/kubestellar/console/issues/${n}" target="_blank">#${n}</a>`).join('')}</div>` : ''}
+          ${closed > 0 ? `<span class="ind-stat"><span class="ind-num">${closed}</span> closed</span>` : ''}
+        </div>`;
+      }
+
+      return '';
     }
 
-    function renderAgents(agents, metrics) {
-      currentMetrics = metrics || {};
+    function renderAgents(agents) {
       const el = document.getElementById('agents');
       const cards = agents.map(a => {
         const cls = a.state === 'stopped' ? 'stopped' : a.busy;
         const dotCls = a.state === 'stopped' ? 'stopped' : 'running';
         const doingEl = a.doing ? `<div class="doing">${esc(a.doing).replace(/\|/g, '\n')}</div>` : '';
-        // Metric gauges for agents that have them
-        let gaugesEl = '';
-        const m = currentMetrics[a.name];
-        if (m) {
-          const gs = Object.values(m).map(g => miniGauge(g.label, g.value, g.target, g.unit || '')).join('');
-          gaugesEl = `<div class="agent-gauges">${gs}</div>`;
-        }
+        const indEl = agentIndicators(a.name);
         return `<div class="agent-card ${cls}">
           <div class="agent-name"><span class="dot ${dotCls}"></span>${a.name}</div>
           <div class="agent-field"><span class="label">state</span><span class="value">${a.state}</span></div>
@@ -235,7 +284,7 @@
           <div class="agent-field"><span class="label">cadence</span><span class="value">${a.cadence}</span></div>
           <div class="agent-field"><span class="label">next kick</span><span class="value">${a.nextKick || '—'}</span></div>
           <div class="agent-field"><span class="label">busy</span><span class="value ${a.busy}">${a.busy}</span></div>
-          ${doingEl}${gaugesEl}
+          ${doingEl}${indEl}
           ${a.name !== 'supervisor' ? `<div class="agent-actions">
             <button class="btn" onclick="kick('${a.name}')">kick</button>
             <select class="btn backend-select" onchange="switchCli('${a.name}', this.value); this.selectedIndex=0">
@@ -249,6 +298,29 @@
         </div>`;
       });
       el.innerHTML = cards.join('');
+    }
+
+    function renderHealth(health) {
+      const el = document.getElementById('health');
+      if (!health || Object.keys(health).length === 0) { el.innerHTML = '<span style="color:var(--muted);font-size:0.8rem">Loading…</span>'; return; }
+      const items = [
+        { key: 'ci', label: 'CI Pass Rate', type: 'pct' },
+        { key: 'brew', label: 'Brew Formula' },
+        { key: 'helm', label: 'Helm Chart' },
+        { key: 'nightly', label: 'Nightly' },
+        { key: 'weekly', label: 'Weekly' },
+        { key: 'vllm', label: 'vLLM-d Deploy' },
+        { key: 'pokprod', label: 'PokProd Deploy' },
+      ];
+      el.innerHTML = items.map(it => {
+        const v = health[it.key];
+        if (it.type === 'pct') {
+          const cls = v >= 90 ? 'good' : v >= 70 ? 'warn' : 'bad';
+          return `<div class="health-item"><span class="health-ci ${cls}">${v}%</span><span class="health-label">${it.label}</span></div>`;
+        }
+        const dotCls = v === 1 ? 'ok' : v === 0 ? 'fail' : 'unknown';
+        return `<div class="health-item"><span class="health-dot ${dotCls}"></span><span class="health-label">${it.label}</span></div>`;
+      }).join('');
     }
 
     function renderGovernor(gov) {
@@ -334,7 +406,9 @@
     function render(data) {
       if (!data || data.error) return;
       document.getElementById('ts').textContent = new Date(data.timestamp).toLocaleTimeString();
-      renderAgents(data.agents || [], data.metrics || {});
+      currentAgentMetrics = data.agentMetrics || {};
+      window._healthData = data.health || {};
+      renderAgents(data.agents || []);
       renderGovernor(data.governor || {});
       renderRepos(data.repos || []);
       renderBeads(data.beads || {});

@@ -10,6 +10,35 @@ const REFRESH_MS = 5000;
 // Cache for status data
 let statusCache = null;
 let lastFetch = 0;
+let ciPassRate = 0;
+let healthChecks = {};
+let agentMetrics = {};
+
+// Fetch CI pass rate + binary health checks every 60s
+function fetchHealthChecks() {
+  execFile(path.join(__dirname, 'health-check.sh'), [], { timeout: 30000 }, (err, stdout) => {
+    if (!err && stdout.trim()) {
+      try {
+        const d = JSON.parse(stdout.trim());
+        ciPassRate = d.ci || 0;
+        healthChecks = d;
+      } catch (_) {}
+    }
+  });
+}
+fetchHealthChecks();
+setInterval(fetchHealthChecks, 60000);
+
+// Fetch per-agent metrics every 30s
+function fetchAgentMetrics() {
+  execFile(path.join(__dirname, 'agent-metrics.sh'), [], { timeout: 15000 }, (err, stdout) => {
+    if (!err && stdout.trim()) {
+      try { agentMetrics = JSON.parse(stdout.trim()); } catch (_) {}
+    }
+  });
+}
+fetchAgentMetrics();
+setInterval(fetchAgentMetrics, 30000);
 
 // Historical data — keep last 2 hours of snapshots (5s intervals = ~1440 points)
 const MAX_HISTORY = 1440;
@@ -26,21 +55,10 @@ function fetchStatus() {
       try {
         statusCache = JSON.parse(stdout);
         lastFetch = Date.now();
-        // Read agent metrics from /var/run/hive-metrics/
-        try {
-          const metricsDir = '/var/run/hive-metrics';
-          if (fs.existsSync(metricsDir)) {
-            statusCache.metrics = {};
-            for (const f of fs.readdirSync(metricsDir)) {
-              if (f.endsWith('.json')) {
-                const agent = f.replace('.json', '');
-                try {
-                  statusCache.metrics[agent] = JSON.parse(fs.readFileSync(path.join(metricsDir, f), 'utf8'));
-                } catch (_) {}
-              }
-            }
-          }
-        } catch (_) {}
+        // Build reviewer metrics from live data
+        statusCache.health = healthChecks;
+        statusCache.ciPassRate = ciPassRate;
+        statusCache.agentMetrics = agentMetrics;
         // Record snapshot for sparklines
         const snap = {
           t: lastFetch,
