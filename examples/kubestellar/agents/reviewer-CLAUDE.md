@@ -90,31 +90,53 @@ For straightforward instrumentation gaps (adding a GA4 event, custom dimension, 
 
 ## Code Coverage — maintain ≥91%
 
-**Every pass**, check current test coverage and actively work to raise it if below target.
+**Every pass**, check current test coverage. If below 91%, actively write tests and open PRs to raise it.
+
+### Step 1: Measure
 
 ```bash
-cd ~/.kubestellar-agents/reviewer/console
+cd /home/dev/kubestellar-console/web
 git checkout main && git pull --rebase origin main
-# Run tests with coverage
-npm run test:coverage 2>&1 | tail -20
+npm run test:coverage 2>&1 | tail -40
 ```
 
-**If coverage < 91%:**
-1. Identify the files with the lowest coverage (look for `Uncovered Line #s` in jest output)
-2. For each uncovered file, dispatch a fix agent to add tests:
-   ```bash
-   # Example: file src/components/SomeCard.tsx has 60% coverage
-   # Dispatch: "Add unit tests for src/components/SomeCard.tsx — coverage is 60%, target 91%"
-   ```
-3. File a bead if coverage has been below 91% for >2 consecutive passes:
-   ```bash
-   cd ~/reviewer-beads && bd add "coverage-gap" "Test coverage below 91% for <N> consecutive passes. Current: <X>%. Files needing tests: <list>"
-   ```
-4. Send high-priority ntfy: `"Coverage <X>% — below 91% target. Dispatching test additions for: <files>"`
+### Step 2: If coverage < 91%, write tests and open a PR
 
-**If coverage ≥ 91%:** Send simple ntfy: `"Coverage <X>% ✓"`. No action needed.
+1. Identify the files with the lowest coverage (look for `Uncovered Line #s` in the coverage report)
+2. Pick 2–5 files with the worst coverage that are easiest to test (utilities, hooks, small components)
+3. **Write the tests yourself** — create a feature branch, add test files, and verify they pass:
+   ```bash
+   git checkout -b coverage/increase-$(date +%s)
+   # Write tests for the identified files
+   # Run tests to verify they pass:
+   npm run test -- --run <path-to-new-test>
+   ```
+4. **Re-run coverage** to confirm improvement:
+   ```bash
+   npm run test:coverage 2>&1 | tail -20
+   ```
+5. **Open a PR** with the test additions:
+   ```bash
+   git add -A && git commit -s -m "🌱 Add tests to increase coverage toward 91% target"
+   cd /home/dev/kubestellar-console && unset GITHUB_TOKEN && gh pr create \
+     --title "🌱 Add tests to increase coverage toward 91% target" \
+     --body "Coverage was X%, target is 91%. Added tests for: <files>. New coverage: Y%."
+   ```
+6. Send ntfy: `"Coverage PR opened: X% → Y%. PR #<N>"`
 
-**Do NOT skip low coverage silently.** The target is ≥91%. If agents before you raised it, acknowledge the improvement in ntfy.
+### Step 3: If coverage ≥ 91%
+
+Send simple ntfy: `"Coverage <X>% ✓"`. No further action needed.
+
+### Rules
+
+- **Do NOT just report low coverage** — write tests and PR them.
+- **Do NOT skip silently.** Every pass must either confirm ≥91% or open a PR to move toward it.
+- **Re-run coverage after writing tests** to verify actual improvement before opening the PR.
+- File a bead if coverage has been below 91% for >2 consecutive passes:
+  ```bash
+  cd ~/reviewer-beads && bd add "coverage-gap" "Test coverage below 91% for <N> consecutive passes. Current: <X>%. Files needing tests: <list>"
+  ```
 
 ## Brew Formula Check — every pass
 
@@ -222,7 +244,7 @@ RESULTS=✓ GA4 clean (0 new errors), ✗ Coverage 88% (below 91% target)
 
 - ❌ Decide what to work on or what's a regression
 - ❌ Triage issues or read state.db
-- ❌ Write code directly (dispatch fix agents instead for GA4 gaps and error fixes)
+- ❌ Write code directly for GA4 gaps and error fixes (dispatch fix agents instead) — EXCEPTION: you MAY write test files directly for coverage improvement
 - ❌ Merge PRs (unless supervisor explicitly says to)
 
 ## ntfy Notifications
