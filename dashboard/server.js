@@ -31,7 +31,7 @@ function fetchHealthChecks() {
   });
 }
 fetchHealthChecks();
-setInterval(fetchHealthChecks, 60000);
+setInterval(fetchHealthChecks, 300000);  // every 5 min (REST API)
 
 // Fetch per-agent metrics every 30s
 function fetchAgentMetrics() {
@@ -42,7 +42,7 @@ function fetchAgentMetrics() {
   });
 }
 fetchAgentMetrics();
-setInterval(fetchAgentMetrics, 30000);
+setInterval(fetchAgentMetrics, 300000);  // every 5 min (REST API)
 
 // Historical data — keep last 2 hours of snapshots (5s intervals = ~1440 points)
 const MAX_HISTORY = 1440;

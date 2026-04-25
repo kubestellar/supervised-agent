@@ -142,31 +142,45 @@ secs_to_label() {
 
 # ── Queue depth measurement ──────────────────────────────────────────────────
 # Counts open issues that are not exempt from the actionable queue.
+# Uses REST API (separate 5000 req/hr pool) instead of GraphQL to avoid rate limits.
 
 count_actionable() {
   local repo="$1"
+  local owner="${repo%%/*}"
+  local name="${repo##*/}"
+  local cache_dir="$STATE_DIR/repo_cache"
+  mkdir -p "$cache_dir" 2>/dev/null || true
   unset GITHUB_TOKEN
   local issues prs
-  issues=$($GH_BIN issue list \
-    --repo "$repo" \
-    --state open \
-    --json number,labels \
-    --limit 200 \
-    2>/dev/null \
-  | jq --arg rx "$EXEMPT_LABEL_REGEX" \
-    '[.[] | select(.labels | map(.name) | any(test($rx; "i")) | not)] | length' \
-    2>/dev/null \
-  || echo 0)
-  prs=$($GH_BIN pr list \
-    --repo "$repo" \
-    --state open \
-    --json number,labels \
-    --limit 200 \
-    2>/dev/null \
-  | jq --arg rx "$EXEMPT_LABEL_REGEX" \
-    '[.[] | select(.labels | map(.name) | any(test($rx; "i")) | not)] | length' \
-    2>/dev/null \
-  || echo 0)
+
+  # REST API: list open issues (excludes PRs), filter out exempt labels client-side
+  local issues_json
+  issues_json=$($GH_BIN api "repos/${repo}/issues?state=open&per_page=100" --paginate 2>/dev/null)
+  if [ -n "$issues_json" ]; then
+    issues=$(echo "$issues_json" | jq --arg rx "$EXEMPT_LABEL_REGEX" \
+      '[.[] | select(.pull_request == null) | select(.labels | map(.name) | any(test($rx; "i")) | not)] | length' 2>/dev/null || echo "-1")
+  else
+    issues="-1"
+  fi
+
+  # REST API: list open PRs, filter out exempt labels
+  local prs_json
+  prs_json=$($GH_BIN api "repos/${repo}/pulls?state=open&per_page=100" --paginate 2>/dev/null)
+  if [ -n "$prs_json" ]; then
+    prs=$(echo "$prs_json" | jq --arg rx "$EXEMPT_LABEL_REGEX" \
+      '[.[] | select(.labels | map(.name) | any(test($rx; "i")) | not)] | length' 2>/dev/null || echo "-1")
+  else
+    prs="-1"
+  fi
+
+  # Fall back to cached values when API fails
+  [[ "$issues" == "-1" ]] && issues=$(cat "$cache_dir/${name}_actionable_issues" 2>/dev/null || echo "0")
+  [[ "$prs"    == "-1" ]] && prs=$(   cat "$cache_dir/${name}_actionable_prs"    2>/dev/null || echo "0")
+
+  # Cache successful results
+  [[ "$issues" != "-1" ]] && echo "$issues" > "$cache_dir/${name}_actionable_issues"
+  [[ "$prs"    != "-1" ]] && echo "$prs"    > "$cache_dir/${name}_actionable_prs"
+
   echo "${issues} ${prs}"
 }
 
