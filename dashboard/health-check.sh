@@ -10,8 +10,7 @@ ci=$(gh run list --repo kubestellar/console --limit 10 --json conclusion,status 
 # Brew formula freshness
 formula_ver=$(gh api repos/kubestellar/homebrew-tap/contents/Formula/kubestellar-console.rb \
   --jq '.content' 2>/dev/null | base64 -d 2>/dev/null | grep -oP 'version "\K[^"]+' | sed 's/^v//' || echo "?")
-latest_rel=$(gh release list --repo kubestellar/console --limit 1 --exclude-pre-releases \
-  --json tagName --jq '.[0].tagName' 2>/dev/null | sed 's/^v//' || echo "?")
+latest_rel=$(gh api repos/kubestellar/console/releases/latest --jq '.tag_name' 2>/dev/null | sed 's/^v//' || echo "?")
 brew_ok=$( [ "$formula_ver" = "$latest_rel" ] && echo 1 || echo 0 )
 
 # Helm chart exists
