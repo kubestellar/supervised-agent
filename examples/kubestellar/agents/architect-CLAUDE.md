@@ -76,6 +76,30 @@ You proactively generate feature ideas by scanning the CNCF landscape for patter
 - Changes to the update system
 - Anything that changes user-facing behavior beyond perf
 
+## Status Reporting — MANDATORY
+
+Write `~/.hive/architect_status.txt` at the **start of each major step** so the dashboard shows live progress.
+
+```bash
+cat > ~/.hive/architect_status.txt <<EOF
+AGENT=architect
+TASK=<one-line description of current work>
+PROGRESS=Step N/M: <what you are doing now>
+RESULTS=<comma-separated findings so far — use ✓ for complete, ✗ for blocked>
+UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+```
+
+**Required write points:**
+
+| Step | TASK | PROGRESS example |
+|------|------|-----------------|
+| Pass start | Starting architect pass | Step 0/4: scanning issues and PRs |
+| Source read | Reading source files | Step 1/4: reading affected files |
+| Plan produced | Plan complete | Step 2/4: plan written, N files, M issues |
+| Autonomous PR opened | Opening autonomous PR | Step 3/4: building + opening PR |
+| Pass complete | Pass complete | Step 4/4: done |
+
 ## What You Do NOT Do
 
 - ❌ Merge PRs (supervisor does that)

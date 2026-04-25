@@ -190,6 +190,27 @@
     .tl-busy { color: #d29922; }
     .tl-surge { color: #f85149; }
 
+    /* Governor cadence matrix table */
+    .gov-matrix { margin-top: 14px; width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+    .gov-matrix th { color: var(--muted); font-weight: 600; padding: 3px 8px; text-align: center; border-bottom: 1px solid var(--border); }
+    .gov-matrix th.mode-active { border-radius: 4px 4px 0 0; padding: 4px 10px; font-weight: 700; }
+    .gov-matrix th.mode-idle  { color: #238636; }
+    .gov-matrix th.mode-quiet { color: #1f6feb; }
+    .gov-matrix th.mode-busy  { color: #d29922; }
+    .gov-matrix th.mode-surge { color: #f85149; }
+    .gov-matrix th.mode-active.mode-idle  { background: rgba(35,134,54,0.15); }
+    .gov-matrix th.mode-active.mode-quiet { background: rgba(31,111,235,0.15); }
+    .gov-matrix th.mode-active.mode-busy  { background: rgba(210,153,34,0.15); }
+    .gov-matrix th.mode-active.mode-surge { background: rgba(248,81,73,0.15); }
+    .gov-matrix td { padding: 3px 8px; text-align: center; color: var(--muted); border-bottom: 1px solid rgba(48,54,61,0.5); }
+    .gov-matrix td:first-child { text-align: left; color: var(--text); font-weight: 600; min-width: 72px; }
+    .gov-matrix td.col-active { font-weight: 700; color: var(--text); }
+    .gov-matrix td.col-active.mode-idle  { background: rgba(35,134,54,0.08); color: #3fb950; }
+    .gov-matrix td.col-active.mode-quiet { background: rgba(31,111,235,0.08); color: #58a6ff; }
+    .gov-matrix td.col-active.mode-busy  { background: rgba(210,153,34,0.08); color: #d29922; }
+    .gov-matrix td.col-active.mode-surge { background: rgba(248,81,73,0.08); color: #f85149; }
+    .gov-matrix td.paused { color: #484f58; font-style: italic; }
+
     /* Timeline strip */
     .gov-timeline { margin-top: 10px; }
     .gov-timeline-label { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--muted); margin-bottom: 2px; }
@@ -468,7 +489,7 @@
       }).join('');
     }
 
-    function renderGovernor(gov) {
+    function renderGovernor(gov, cadenceMatrix) {
       const el = document.getElementById('governor');
       const cls = gov.active ? 'active' : 'dead';
       el.className = `governor ${cls}`;
@@ -476,6 +497,8 @@
       const prsSpark = sparkSvg(getHistorySeries('govPrs'), '#bc8cff');
       const totalSpark = sparkSvg(getHistorySeries('govTotal'), '#3fb950');
       const total = (gov.issues || 0) + (gov.prs || 0);
+      const currentMode = gov.mode || 'idle';
+      const modes = ['idle', 'quiet', 'busy', 'surge'];
 
       // Gauge bar — thresholds: idle≤2, quiet≤10, busy≤20, surge>20
       const maxQ = 30;
@@ -522,7 +545,35 @@
             <span class="tl-busy">busy</span>
             <span class="tl-surge">surge</span>
           </div>
-        </div>`;
+        </div>
+        ${renderCadenceMatrix(cadenceMatrix, currentMode, modes)}`;
+    }
+
+    function renderCadenceMatrix(matrix, currentMode, modes) {
+      if (!matrix || !matrix.length) return '';
+      const agentOrder = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+      const rows = agentOrder.map(aname => {
+        const row = matrix.find(r => r.agent === aname);
+        if (!row) return '';
+        const cells = modes.map(m => {
+          const val = row[m] || '?';
+          const isActive = m === currentMode;
+          const isPaused = val === 'paused';
+          const colCls = isActive ? `col-active mode-${m}` : '';
+          const pausedCls = isPaused ? ' paused' : '';
+          return `<td class="${colCls}${pausedCls}">${isPaused ? '—' : val}</td>`;
+        }).join('');
+        return `<tr><td>${aname}</td>${cells}</tr>`;
+      }).join('');
+      const headers = modes.map(m => {
+        const isActive = m === currentMode;
+        const cls = `mode-${m}${isActive ? ' mode-active' : ''}`;
+        return `<th class="${cls}">${m}${isActive ? ' ◀' : ''}</th>`;
+      }).join('');
+      return `<table class="gov-matrix">
+        <thead><tr><th></th>${headers}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
     }
 
     function renderRepos(repos) {
@@ -556,7 +607,7 @@
       currentAgentMetrics = data.agentMetrics || {};
       window._healthData = data.health || {};
       renderAgents(data.agents || []);
-      renderGovernor(data.governor || {});
+      renderGovernor(data.governor || {}, data.cadenceMatrix || []);
       renderRepos(data.repos || []);
       renderBeads(data.beads || {});
       // summaries are merged into a.liveSummary server-side and pushed via SSE — no extra fetch
