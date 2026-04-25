@@ -494,27 +494,23 @@ cmd_status() {
     local s="${SESSIONS[$i]}" label="${LABELS[$i]}"
     local cli cadence busy_flag next_kick
     cadence=$(cat "${GOV_STATE}/cadence_${label}" 2>/dev/null || echo "?")
-    # Calculate next kick
+    # Calculate next kick — show absolute time in ET
     next_kick="—"
     local _lk _cs _cs_secs
     _lk=$(cat "${GOV_STATE}/last_kick_${label}" 2>/dev/null || echo "")
     _cs=$(cat "${GOV_STATE}/cadence_${label}" 2>/dev/null || echo "")
     _cs_secs=$(_label_to_secs "$_cs")
     if [[ "$_cs_secs" -gt 0 && -n "$_lk" ]]; then
-      local _next=$(( _lk + _cs_secs )) _now=$(date +%s) _rem
+      local _next=$(( _lk + _cs_secs )) _now=$(date +%s)
       if [[ $_next -le $_now ]]; then
+        # Overdue — next governor tick (every 5 min aligned)
         local _min=$(date +%-M) _sec=$(date +%-S)
         local _til=$(( (5 - (_min % 5)) * 60 - _sec ))
         [[ $_til -le 0 ]] && _til=$((5 * 60 + _til))
-        if   [[ $_til -lt 120 ]];  then next_kick="${YLW}<${_til}s${RST}"
-        else next_kick="${YLW}<$(( _til / 60 ))m${RST}"
-        fi
+        local _abs_next=$(( _now + _til ))
+        next_kick="${YLW}$(TZ=America/New_York date -d @$_abs_next '+%-I:%M %p')${RST}"
       else
-        _rem=$(( _next - _now ))
-        if   [[ $_rem -lt 120 ]];  then next_kick="${_rem}s"
-        elif [[ $_rem -lt 3600 ]]; then next_kick="$(( _rem / 60 ))m"
-        else                            next_kick="$(( _rem / 3600 ))h"
-        fi
+        next_kick="$(TZ=America/New_York date -d @$_next '+%-I:%M %p')"
       fi
     elif [[ "$cadence" == "paused" ]]; then next_kick="paused"
     fi
@@ -530,12 +526,12 @@ cmd_status() {
       else
         cli=$(grep "^AGENT_CLI=" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
       fi
-      # Detect login required
+      # Detect login required — only check footer (last 5 lines) to avoid
+      # false positives from pane content mentioning "not logged in"
       local needs_login="false"
-      if echo "$pane" | grep -qiE "Not logged in|Run /login|Please run /login"; then
+      if echo "$pane_tail" | grep -qE "Not logged in|Run /login|Please run /login"; then
         needs_login="true"
       fi
-      # Detect busy: check recent lines for active tool spinners.
       # Copilot uses ◐ ◑ ◒ ◓ ◉ ● ◎ ○; Claude uses ⏺; ↳ = sub-task.
       # Copilot renders spinner ABOVE the ❯ prompt, so we scan the last ~10 lines
       # for spinner characters or "Esc to cancel" — not just the final line.
@@ -664,9 +660,10 @@ cmd_status_json() {
       # Claude Code footer may show "Claude Opus 4.6" or just "Opus 4.6"
       model=$(echo "$pane" | grep -oE 'Claude [A-Za-z]+ [0-9.]+|Opus [0-9.]+|Sonnet [0-9.]+|Haiku [0-9.]+|GPT-[0-9.]+|Gemini [^ ]+' | tail -1 || echo "")
       model=${model:-"?"}
-      # Detect login required
+      # Detect login required — only check footer (last 5 lines) to avoid
+      # false positives from pane content mentioning "not logged in"
       local needs_login="false"
-      if echo "$pane" | grep -qiE "Not logged in|Run /login|Please run /login"; then
+      if echo "$pane_tail" | grep -qE "Not logged in|Run /login|Please run /login"; then
         needs_login="true"
       fi
       # Strip prompt, separator lines, and status bar to detect actual work output
@@ -692,19 +689,14 @@ cmd_status_json() {
     if [[ "$_cs_secs" -gt 0 && -n "$_lk" ]]; then
       local _next=$(( _lk + _cs_secs )) _now=$(date +%s)
       if [[ $_next -le $_now ]]; then
-        # Overdue — show time until next governor tick (every 5 min)
+        # Overdue — next governor tick (every 5 min aligned)
         local _min=$(date +%-M) _sec=$(date +%-S)
         local _til=$(( (5 - (_min % 5)) * 60 - _sec ))
         [[ $_til -le 0 ]] && _til=$((5 * 60 + _til))
-        if   [[ $_til -lt 120 ]];  then nk="<${_til}s"
-        else nk="<$(( _til / 60 ))m"
-        fi
+        local _abs_next=$(( _now + _til ))
+        nk="$(TZ=America/New_York date -d @$_abs_next '+%-I:%M %p')"
       else
-        local _rem=$(( _next - _now ))
-        if   [[ $_rem -lt 120 ]];  then nk="${_rem}s"
-        elif [[ $_rem -lt 3600 ]]; then nk="$(( _rem / 60 ))m"
-        else                            nk="$(( _rem / 3600 ))h"
-        fi
+        nk="$(TZ=America/New_York date -d @$_next '+%-I:%M %p')"
       fi
     elif [[ "$cadence" == "paused" ]]; then nk="paused"
     fi
