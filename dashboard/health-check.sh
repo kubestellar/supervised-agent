@@ -54,9 +54,20 @@ for wf in "Perf — React commits per navigation" "Performance TTFI Gate"; do
 done
 hourly_ok=$hourly_worst
 
-# Deploy checks (placeholder — no endpoints configured yet)
-vllm_ok=-1
-pokprod_ok=-1
+# Deploy checks — from latest "Build and Deploy KC" workflow jobs
+deploy_jobs=$(gh run list --repo kubestellar/console --workflow "Build and Deploy KC" --limit 1 \
+  --json databaseId --jq '.[0].databaseId' 2>/dev/null || echo "")
+if [ -n "$deploy_jobs" ]; then
+  vllm_result=$(gh run view "$deploy_jobs" --repo kubestellar/console --json jobs \
+    --jq '.jobs[] | select(.name == "deploy-vllm-d") | .conclusion' 2>/dev/null || echo "none")
+  pokprod_result=$(gh run view "$deploy_jobs" --repo kubestellar/console --json jobs \
+    --jq '.jobs[] | select(.name == "deploy-pok-prod") | .conclusion' 2>/dev/null || echo "none")
+  vllm_ok=$( [ "$vllm_result" = "success" ] && echo 1 || echo 0 )
+  pokprod_ok=$( [ "$pokprod_result" = "success" ] && echo 1 || echo 0 )
+else
+  vllm_ok=-1
+  pokprod_ok=-1
+fi
 
 cat <<EOF
 {"ci":${ci:-0},"brew":$brew_ok,"helm":$helm_ok,"nightly":$nightly_ok,"nightlyCompliance":$nightly_compliance_ok,"nightlyDashboard":$nightly_dashboard_ok,"nightlyGhaw":$nightly_ghaw_ok,"nightlyPlaywright":$nightly_playwright_ok,"nightlyRel":$nightly_rel_ok,"weekly":$weekly_ok,"weeklyRel":$weekly_rel_ok,"hourly":$hourly_ok,"vllm":$vllm_ok,"pokprod":$pokprod_ok}
