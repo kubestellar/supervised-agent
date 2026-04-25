@@ -8,15 +8,19 @@ agent_status=$(hive status --json 2>/dev/null)
 
 # Extract live summary/doing for each agent
 scanner_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "scanner") | .doing' 2>/dev/null || echo "")
+scanner_model=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "scanner") | .model' 2>/dev/null || echo "?")
 reviewer_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "reviewer") | .doing' 2>/dev/null || echo "")
+reviewer_model=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "reviewer") | .model' 2>/dev/null || echo "?")
 architect_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "architect") | .doing' 2>/dev/null || echo "")
+architect_model=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "architect") | .model' 2>/dev/null || echo "?")
 outreach_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "outreach") | .doing' 2>/dev/null || echo "")
+outreach_model=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "outreach") | .model' 2>/dev/null || echo "?")
 
-# Build agent JSON with live summaries
-scanner_json=$(jq -n --arg doing "$scanner_doing" '{doing: $doing}')
-reviewer_json=$(jq -n --arg doing "$reviewer_doing" '{doing: $doing}')
-architect_json=$(jq -n --arg doing "$architect_doing" '{doing: $doing}')
-outreach_json=$(jq -n --arg doing "$outreach_doing" '{doing: $doing}')
+# Build agent JSON with live summaries and model
+scanner_json=$(jq -n --arg doing "$scanner_doing" --arg model "$scanner_model" '{doing: $doing, model: $model}')
+reviewer_json=$(jq -n --arg doing "$reviewer_doing" --arg model "$reviewer_model" '{doing: $doing, model: $model}')
+architect_json=$(jq -n --arg doing "$architect_doing" --arg model "$architect_model" '{doing: $doing, model: $model}')
+outreach_json=$(jq -n --arg doing "$outreach_doing" --arg model "$outreach_model" '{doing: $doing, model: $model}')
 
 # ── Reviewer: health checks come from health-check.sh separately ──
 

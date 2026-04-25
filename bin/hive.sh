@@ -636,9 +636,9 @@ cmd_status_json() {
   local agents_json="["
   for i in "${!SESSIONS[@]}"; do
     local s="${SESSIONS[$i]}" label="${LABELS[$i]}"
-    local cli cadence state busy doing
+    local cli cadence state busy doing model
     cadence=$(cat "${GOV_STATE}/cadence_${label}" 2>/dev/null || echo "?")
-    state="stopped"; cli="?"; busy="idle"; doing=""
+    state="stopped"; cli="?"; busy="idle"; doing=""; model="?"
 
     if tmux has-session -t "$s" 2>/dev/null; then
       state="running"
@@ -653,8 +653,8 @@ cmd_status_json() {
         cli=$(grep "^AGENT_CLI=" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
       fi
       local recent_lines
-      # Extract model from anywhere in pane (usually status bar)
-      model=$(echo "$pane" | grep -oP '(Claude \S+ [\d.]+|GPT-[\d.]+|Gemini \S+)' | tail -1)
+      # Extract model from anywhere in pane
+      model=$(echo "$pane" | grep -o 'Claude [^ ]* [0-9.]*\|GPT-[0-9.]*\|Gemini [^ ]*' | tail -1 || echo "")
       model=${model:-"?"}
       # Strip prompt, separator lines, and status bar to detect actual work output
       recent_lines=$(echo "$pane" | grep -vE '^[─━═]+$|^❯|^\s*$|^ / commands|^[[:space:]]*~/' | tail -15)
@@ -696,7 +696,7 @@ cmd_status_json() {
     elif [[ "$cadence" == "paused" ]]; then nk="paused"
     fi
     [[ $i -gt 0 ]] && agents_json+=","
-    agents_json+="{\"name\":\"$label\",\"session\":\"$s\",\"state\":\"$state\",\"cli\":\"$cli\",\"cadence\":\"$cadence\",\"busy\":\"$busy\",\"doing\":\"$doing\",\"nextKick\":\"$nk\"}"
+    agents_json+="{\"name\":\"$label\",\"session\":\"$s\",\"state\":\"$state\",\"cli\":\"$cli\",\"model\":\"$model\",\"cadence\":\"$cadence\",\"busy\":\"$busy\",\"doing\":\"$doing\",\"nextKick\":\"$nk\"}"
   done
   agents_json+="]"
 
