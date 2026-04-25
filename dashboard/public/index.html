@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🐝 Hive Dashboard</title>
+  <title>🐝 KubeStellar Hive Dashboard</title>
   <style>
     :root {
       --bg: #0d1117; --surface: #161b22; --border: #30363d;
@@ -18,7 +18,7 @@
       padding: 24px; min-height: 100vh;
     }
     h1 { font-size: 1.4rem; margin-bottom: 20px; display: flex; align-items: center; }
-    h1 span.bee { font-size: 1.6rem; }
+    h1 span.bee { font-size: 1.6rem; margin-right: 8px; }
     .timestamp { color: var(--muted); font-size: 0.8rem; margin-left: 12px; }
     .header-spacer { flex: 1; }
     .widget-dl {
@@ -271,7 +271,7 @@
     <span class="dot-live">●</span> live
   </div>
 
-  <h1><span class="bee">🐝</span> Hive Dashboard <span class="timestamp" id="ts"></span>
+  <h1><span class="bee">🐝</span> KubeStellar Hive Dashboard <span class="timestamp" id="ts"></span>
     <a href="/api/widget" class="widget-dl" title="Download Übersicht widget">⬇ Widget</a>
   </h1>
 
@@ -507,8 +507,8 @@
       const modeColor = modeColors[gov.mode] || '#8b949e';
 
       // Timeline strip from history
-      const modes = historyData.map(s => s.govMode || 'unknown');
-      const ticks = modes.map(m => `<div class="tick tick-${m}"></div>`).join('');
+      const historyModes = historyData.map(s => s.govMode || 'unknown');
+      const ticks = historyModes.map(m => `<div class="tick tick-${m}"></div>`).join('');
       const firstTime = historyData.length > 0 ? new Date(historyData[0].t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
       const lastTime = historyData.length > 0 ? new Date(historyData[historyData.length-1].t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
 
