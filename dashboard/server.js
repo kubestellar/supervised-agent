@@ -7,8 +7,10 @@ const app = express();
 app.use(express.json());
 const PORT = process.env.HIVE_DASHBOARD_PORT || 3001;
 const REFRESH_MS = 5000;
-const HISTORY_DIR = '/var/run/hive-metrics/history';
+const METRICS_DIR = '/var/run/hive-metrics';
+const HISTORY_DIR = path.join(METRICS_DIR, 'history');
 const HISTORY_FILE = path.join(HISTORY_DIR, 'daily.json');
+const AGENT_METRICS_CACHE_FILE = path.join(METRICS_DIR, 'agent-metrics-cache.json');
 try { fs.mkdirSync(HISTORY_DIR, { recursive: true }); } catch (_) {}
 const PERSIST_INTERVAL_MS = 15 * 60 * 1000; // 15 min
 const MAX_PERSISTENT_POINTS = 30 * 24 * 4; // 30 days at 15-min intervals = 2880
@@ -19,6 +21,7 @@ let lastFetch = 0;
 let ciPassRate = 0;
 let healthChecks = {};
 let agentMetrics = {};
+try { agentMetrics = JSON.parse(fs.readFileSync(AGENT_METRICS_CACHE_FILE, 'utf8')); } catch (_) {}
 let summariesCache = {};
 let activityCache = {};
 
@@ -50,11 +53,21 @@ fetchTokens();
 const TOKEN_REFRESH_MS = 60000;
 setInterval(fetchTokens, TOKEN_REFRESH_MS);
 
-// Fetch per-agent metrics every 30s
+// Fetch per-agent metrics every 5 min — cache to disk so rate-limit failures don't blank indicators
 function fetchAgentMetrics() {
-  execFile(path.join(__dirname, 'agent-metrics.sh'), [], { timeout: 15000 }, (err, stdout) => {
+  execFile(path.join(__dirname, 'agent-metrics.sh'), [], { timeout: 30000 }, (err, stdout) => {
     if (!err && stdout.trim()) {
-      try { agentMetrics = JSON.parse(stdout.trim()); } catch (_) {}
+      try {
+        const parsed = JSON.parse(stdout.trim());
+        agentMetrics = parsed;
+        try { fs.writeFileSync(AGENT_METRICS_CACHE_FILE, stdout.trim()); } catch (_) {}
+      } catch (_) {}
+    } else if (!Object.keys(agentMetrics).length) {
+      try {
+        const cached = fs.readFileSync(AGENT_METRICS_CACHE_FILE, 'utf8');
+        agentMetrics = JSON.parse(cached);
+        console.log('agent-metrics.sh failed, loaded cached metrics from disk');
+      } catch (_) {}
     }
   });
 }
