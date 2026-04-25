@@ -386,7 +386,7 @@
           <div class="agent-field"><span class="label">cli</span><span class="value ${a.cli}">${a.cli}</span></div>
           <div class="agent-field"><span class="label">cadence</span><span class="value">${a.cadence}</span></div>
           <div class="agent-field"><span class="label">next kick</span><span class="value">${a.nextKick || '—'}</span></div>
-          <div class="agent-field"><span class="label">busy</span><span class="value ${a.busy}">${a.busy}</span></div>
+          <div class="agent-field"><span class="label">state</span><span class="value ${a.busy}">${a.busy}</span></div>
           ${doingEl}${indEl}
           ${a.name !== 'supervisor' ? `<div class="agent-actions">
             <button class="btn" onclick="kick('${a.name}')">kick</button>
