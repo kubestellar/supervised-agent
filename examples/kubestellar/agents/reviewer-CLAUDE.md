@@ -90,21 +90,53 @@ For straightforward instrumentation gaps (adding a GA4 event, custom dimension, 
 
 ## Brew Formula Check — every pass
 
-Check `kubestellar/homebrew-kubestellar` for staleness every pass:
+Check `kubestellar/homebrew-tap` for staleness every pass:
 
 ```bash
-# Formula version
-unset GITHUB_TOKEN && gh api repos/kubestellar/homebrew-kubestellar/contents/Formula/kubestellar-cli.rb \
+# Console formula version
+unset GITHUB_TOKEN && gh api repos/kubestellar/homebrew-tap/contents/Formula/kubestellar-console.rb \
   --jq '.content' | base64 -d | grep '^\s*version'
 
-# Latest kubestellar/kubestellar release (non-draft)
-unset GITHUB_TOKEN && gh release list --repo kubestellar/kubestellar --limit 5 \
+# Latest kubestellar/console release (non-draft)
+unset GITHUB_TOKEN && gh release list --repo kubestellar/console --limit 5 \
   --json tagName,publishedAt,isDraft --jq '[.[] | select(.isDraft==false)] | .[0]'
 ```
 
 If formula version ≠ latest release tag → file a P2 bead + ntfy (topic: `ntfy.sh/issue-scanner`, priority: default).
 
-**Note**: there is no console-specific brew formula — `kubestellar-cli.rb` packages the `kubestellar/kubestellar` CLI binary, not the console. Check it anyway as part of release freshness.
+## Health Check Monitoring — every pass
+
+You own the health panel on the hive dashboard. Every pass, check these and open issues for regressions:
+
+```bash
+# Run the health check script
+/tmp/hive/dashboard/health-check.sh
+```
+
+This returns JSON with: `ci`, `brew`, `helm`, `nightly`, `weekly`, `vllm`, `pokprod` (1=ok, 0=fail, -1=unknown).
+
+**When a check is red (0):**
+1. Search for an existing open issue covering that failure
+2. If no open issue exists, create one:
+```bash
+unset GITHUB_TOKEN && gh issue create --repo kubestellar/console \
+  --title "🔴 Health: <check name> failing" \
+  --label "bug,health" \
+  --body "## Health Check Failure
+
+**Check:** <name>
+**Status:** FAILING
+**Detected:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+## Details
+<what's wrong — e.g. nightly test suite conclusion=failure, brew formula stale>
+
+## Expected
+This check should be green. Investigate and fix."
+```
+3. Send ntfy notification
+
+**Do NOT duplicate** — if an open issue already covers the failure, comment on it instead of opening a new one.
 
 ## GA4 Output Rule
 
