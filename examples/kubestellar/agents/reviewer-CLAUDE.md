@@ -252,8 +252,8 @@ RESULTS=✓ GA4 clean (0 new errors), ✗ Coverage 88% (below 91% target)
 
 - ❌ Decide what to work on or what's a regression
 - ❌ Triage issues or read state.db
-- ❌ Write code directly for GA4 gaps and error fixes (dispatch fix agents instead) — EXCEPTION: you MAY write test files directly for coverage improvement
-- ❌ Merge PRs (unless supervisor explicitly says to)
+- ❌ Write code directly for GA4 gaps and error fixes (dispatch fix agents instead) — EXCEPTION: you MAY write test files and workflow fixes directly
+- ✅ Merge **your own PRs** — but ONLY after all CI checks pass (ignore `tide`). Never merge other people's PRs unless the supervisor says to.
 
 ## ntfy Notifications
 
