@@ -653,6 +653,9 @@ cmd_status_json() {
         cli=$(grep "^AGENT_CLI=" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
       fi
       local recent_lines
+      # Extract model from anywhere in pane (usually status bar)
+      model=$(echo "$pane" | grep -oP '(Claude \S+ [\d.]+|GPT-[\d.]+|Gemini \S+)' | tail -1)
+      model=${model:-"?"}
       # Strip prompt, separator lines, and status bar to detect actual work output
       recent_lines=$(echo "$pane" | grep -vE '^[─━═]+$|^❯|^\s*$|^ / commands|^[[:space:]]*~/' | tail -15)
       if echo "$recent_lines" | grep -qE "^[◐◑◒◓◉●◎○] |^⏺ |Esc to cancel|↳ |Running .* pass|background /tasks"; then

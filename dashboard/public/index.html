@@ -320,17 +320,21 @@
       if (!m) return '';
 
       if (name === 'issue-scanner' || name === 'scanner') {
+        const doing = m.doing || '';
         const pairs = m.pairs || [];
-        if (pairs.length === 0) return '<div class="agent-indicators"><span class="ind-empty">no active fixes</span></div>';
+        const doingHtml = doing ? `<div class="ind-summary">${esc(doing)}</div>` : '';
+        if (pairs.length === 0) return doingHtml + '<div class="agent-indicators"><span class="ind-empty">no active fixes</span></div>';
         const rows = pairs.map(p => `<div class="ind-pair">
           <a class="ind-tag ind-issue" href="https://github.com/kubestellar/console/issues/${p.issue}" target="_blank">⊙ #${p.issue}</a>
           <span class="ind-arrow">→</span>
           <a class="ind-tag ind-pr" href="https://github.com/kubestellar/console/pull/${p.pr}" target="_blank">⎇ #${p.pr}</a>
         </div>`).join('');
-        return `<div class="agent-indicators"><span class="ind-label">Fixes (${pairs.length}):</span>${rows}</div>`;
+        return doingHtml + `<div class="agent-indicators"><span class="ind-label">Fixes (${pairs.length}):</span>${rows}</div>`;
       }
 
       if (name === 'reviewer') {
+        const doing = m.doing || '';
+        const doingHtml = doing ? `<div class="ind-summary">${esc(doing)}</div>` : '';
         const h = window._healthData || {};
         const groups = [
           { label: 'Artifacts', items: [
@@ -360,21 +364,21 @@
           const dotCls = v === 1 ? 'ok' : v === 0 ? 'fail' : 'unknown';
           return `<span class="ind-dot-item"><span class="health-dot ${dotCls}"></span><span class="ind-dlabel">${d.label}</span></span>`;
         };
-        return `<div class="agent-indicators">${groups.map(g =>
+        return doingHtml + `<div class="agent-indicators">${groups.map(g =>
           `<div class="ind-group"><span class="ind-group-label">${g.label}</span><div class="ind-dots">${g.items.map(renderItem).join('')}</div></div>`
         ).join('')}</div>`;
       }
 
       if (name === 'outreach') {
-        const summary = (m.summary || '').trim();
+        const doing = m.doing || '';
+        const doingHtml = doing ? `<div class="ind-summary">${esc(doing)}</div>` : '';
         const stars = m.stars || 0;
         const forks = m.forks || 0;
         const contribs = m.contributors || 0;
         const adopters = m.adopters || 0;
         const acmm = m.acmm || 0;
         const starSpark = sparkSvg((window._trendData || []).map(s => s.stars || 0), '#e3b341');
-        return `<div class="agent-indicators">
-          ${summary && summary !== 'no summary yet' ? `<div class="ind-summary">${esc(summary)}</div>` : ''}
+        return doingHtml + `<div class="agent-indicators">
           <div class="ind-group"><span class="ind-group-label">GROWTH</span><div class="ind-dots">
             <span class="ind-dot-item"><span class="ind-num">⭐ ${stars}</span><span class="ind-dlabel">stars ${starSpark}</span></span>
             <span class="ind-dot-item"><span class="ind-num">🍴 ${forks}</span><span class="ind-dlabel">forks</span></span>
@@ -388,11 +392,11 @@
       }
 
       if (name === 'feature' || name === 'architect') {
-        const summary = (m.summary || '').trim();
+        const doing = m.doing || '';
+        const doingHtml = doing ? `<div class="ind-summary">${esc(doing)}</div>` : '';
         const prs = m.prs || 0;
         const closed = m.closed || 0;
-        return `<div class="agent-indicators">
-          ${summary ? `<div class="ind-summary">${esc(summary)}</div>` : ''}
+        return doingHtml + `<div class="agent-indicators">
           <div class="ind-row">
             ${prs > 0 ? `<span class="ind-stat"><span class="ind-num">${prs}</span> PRs</span>` : ''}
             ${closed > 0 ? `<span class="ind-stat"><span class="ind-num">${closed}</span> closed</span>` : ''}

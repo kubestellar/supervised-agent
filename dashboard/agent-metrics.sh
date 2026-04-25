@@ -1,20 +1,22 @@
 #!/bin/bash
-# Per-agent metrics for dashboard — outputs JSON
-# Uses REST API (not GraphQL) to avoid rate limit exhaustion
+
 set +e
 unset GITHUB_TOKEN
 
-# ── Scanner: map issues → fix PRs from branch names ──
-# REST API: get open PRs with fix/ prefix
-scanner_json="[]"
-fix_prs=$(gh api "repos/kubestellar/console/pulls?state=open&per_page=100" \
-  --jq '.[] | select(.head.ref | startswith("fix/")) | "\(.number) \(.head.ref)"' 2>/dev/null || echo "")
-if [ -n "$fix_prs" ]; then
-  scanner_json=$(echo "$fix_prs" | while read -r pr branch; do
-    issue=$(echo "$branch" | grep -oP '\d+$' || echo "")
-    [ -n "$issue" ] && echo "{\"issue\":$issue,\"pr\":$pr}"
-  done | jq -s '.')
-fi
+# Get live agent status (includes doing field with live spinner updates)
+agent_status=$(hive status --json 2>/dev/null)
+
+# Extract live summary/doing for each agent
+scanner_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "scanner") | .doing' 2>/dev/null || echo "")
+reviewer_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "reviewer") | .doing' 2>/dev/null || echo "")
+architect_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "architect") | .doing' 2>/dev/null || echo "")
+outreach_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "outreach") | .doing' 2>/dev/null || echo "")
+
+# Build agent JSON with live summaries
+scanner_json=$(jq -n --arg doing "$scanner_doing" '{doing: $doing}')
+reviewer_json=$(jq -n --arg doing "$reviewer_doing" '{doing: $doing}')
+architect_json=$(jq -n --arg doing "$architect_doing" '{doing: $doing}')
+outreach_json=$(jq -n --arg doing "$outreach_doing" '{doing: $doing}')
 
 # ── Reviewer: health checks come from health-check.sh separately ──
 
@@ -29,34 +31,26 @@ contributors=$(gh api repos/kubestellar/console/contributors?per_page=1 -i 2>/de
 adopters_total=$(gh api repos/kubestellar/console/contents/ADOPTERS.MD \
   --jq '.content' 2>/dev/null | base64 -d 2>/dev/null | grep -cP '^\|.*\|.*\|' || echo 0)
 adopters_total=$(( adopters_total > 2 ? adopters_total - 2 : 0 ))
-# ACMM badges adopted (from BADGE_PARTICIPANTS in leaderboard page.tsx, updated by CI)
+
+# ACMM badges adopted
 acmm_count=$(unset GITHUB_TOKEN && gh api repos/kubestellar/docs/contents/src/app/%5Blocale%5D/acmm-leaderboard/page.tsx \
   --jq '.content' 2>/dev/null | base64 -d 2>/dev/null \
   | sed -n '/BADGE_PARTICIPANTS = new Set/,/\]);/p' \
   | grep -cP '^\s+"[a-zA-Z]' || echo 0)
 acmm_count=${acmm_count:-0}
 
-# Read agent-authored summary
-outreach_summary=$(cat /var/run/hive-metrics/outreach_summary.txt 2>/dev/null || echo "")
-outreach_summary=${outreach_summary:-"no summary yet"}
-outreach_summary_json=$(echo "$outreach_summary" | head -1 | head -c 120 | jq -Rs '.')
-
-# ── Architect: exec summary from status file + PR/proposal counts ──
+# ── Architect: PR counts from tmux (live doing is summary) ──
 architect_lines=$(tmux capture-pane -t feature -p -S -500 2>/dev/null)
 architect_prs=$(echo "$architect_lines" | grep -oP 'pull/\d+' | sort -u | wc -l)
 architect_prs=${architect_prs:-0}
 architect_closed=$(echo "$architect_lines" | grep -ciP 'closed|resolved|stale')
 architect_closed=${architect_closed:-0}
-# Read agent-authored summary (agents write this themselves each pass)
-architect_summary=$(cat /var/run/hive-metrics/architect_summary.txt 2>/dev/null || echo "")
-architect_summary=${architect_summary:-"no summary yet"}
-architect_summary_json=$(echo "$architect_summary" | head -1 | head -c 120 | jq -Rs '.')
 
-cat <<EOF
+cat <<OUT
 {
-  "scanner": {"pairs": $scanner_json},
-  "reviewer": {},
-  "outreach": {"stars": ${stars:-0}, "forks": ${forks:-0}, "contributors": ${contributors:-0}, "adopters": $adopters_total, "acmm": ${acmm_count:-0}, "summary": $outreach_summary_json},
-  "architect": {"prs": $architect_prs, "closed": $architect_closed, "summary": $architect_summary_json}
+  "scanner": $scanner_json,
+  "reviewer": $reviewer_json,
+  "architect": $(jq -n --argjson json "$architect_json" --arg prs "$architect_prs" --arg closed "$architect_closed" '$json | .prs = ($prs|tonumber) | .closed = ($closed|tonumber)'),
+  "outreach": $(jq -n --argjson json "$outreach_json" --argjson stars "$stars" --argjson forks "$forks" --argjson contribs "$contributors" --argjson adopters "$adopters_total" --argjson acmm "$acmm_count" '$json | .stars = $stars | .forks = $forks | .contributors = $contribs | .adopters = $adopters | .acmm = $acmm')
 }
-EOF
+OUT
