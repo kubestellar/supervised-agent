@@ -219,6 +219,8 @@
     .ind-dots { display: flex; flex-wrap: wrap; gap: 8px; }
     .ind-dot-item { display: flex; align-items: center; gap: 3px; }
     .ind-dlabel { font-size: 0.6rem; color: var(--muted); }
+    .ind-group { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+    .ind-group-label { font-size: 0.6rem; color: var(--muted); font-weight: 600; min-width: 52px; text-transform: uppercase; letter-spacing: 0.5px; }
     .ind-stat { display: inline-flex; align-items: baseline; gap: 3px; margin-right: 10px; }
     .ind-num { font-weight: 700; font-size: 0.9rem; color: var(--text); }
     .ind-err { color: #f85149; }
@@ -330,18 +332,26 @@
 
       if (name === 'reviewer') {
         const h = window._healthData || {};
-        const dots = [
-          { key: 'ci', label: 'CI', type: 'pct' },
-          { key: 'brew', label: 'Brew' },
-          { key: 'helm', label: 'Helm' },
-          { key: 'nightly', label: 'Nightly Tests' },
-          { key: 'nightlyRel', label: 'Nightly Rel' },
-          { key: 'weekly', label: 'Weekly Tests' },
-          { key: 'weeklyRel', label: 'Weekly Rel' },
-          { key: 'vllm', label: 'vLLM-d' },
-          { key: 'pokprod', label: 'PokProd' },
+        const groups = [
+          { label: 'Artifacts', items: [
+            { key: 'brew', label: 'Brew' },
+            { key: 'helm', label: 'Helm' },
+          ]},
+          { label: 'Tests', items: [
+            { key: 'ci', label: 'CI', type: 'pct' },
+            { key: 'nightly', label: 'Nightly' },
+            { key: 'weekly', label: 'Weekly' },
+          ]},
+          { label: 'Releases', items: [
+            { key: 'nightlyRel', label: 'Nightly' },
+            { key: 'weeklyRel', label: 'Weekly' },
+          ]},
+          { label: 'Deploys', items: [
+            { key: 'vllm', label: 'vLLM-d' },
+            { key: 'pokprod', label: 'PokProd' },
+          ]},
         ];
-        return `<div class="agent-indicators"><div class="ind-dots">${dots.map(d => {
+        const renderItem = d => {
           const v = h[d.key];
           if (d.type === 'pct') {
             const cls = v >= 90 ? 'good' : v >= 70 ? 'warn' : 'bad';
@@ -349,7 +359,10 @@
           }
           const dotCls = v === 1 ? 'ok' : v === 0 ? 'fail' : 'unknown';
           return `<span class="ind-dot-item"><span class="health-dot ${dotCls}"></span><span class="ind-dlabel">${d.label}</span></span>`;
-        }).join('')}</div></div>`;
+        };
+        return `<div class="agent-indicators">${groups.map(g =>
+          `<div class="ind-group"><span class="ind-group-label">${g.label}</span><div class="ind-dots">${g.items.map(renderItem).join('')}</div></div>`
+        ).join('')}</div>`;
       }
 
       if (name === 'outreach') {
