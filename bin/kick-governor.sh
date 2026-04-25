@@ -372,18 +372,25 @@ compute_budget_state() {
   local used=0 burn_hourly=0
 
   if [[ -f "$TOKEN_COLLECTOR_JSON" ]]; then
+    # Count only billable tokens (input + output). Cache read is free/discounted.
     read -r used burn_hourly <<< "$(python3 -c "
 import json
 try:
     with open('$TOKEN_COLLECTOR_JSON') as f:
         d = json.load(f)
     weekly = d.get('weekly', {})
-    used = weekly.get('totalTokens', 0)
-    hourly = d.get('hourlyBurnRate', {}).get('total', 0)
-    if used == 0 and hourly == 0:
-        ba = d.get('byAgent', {})
-        for stats in ba.values():
-            used += stats.get('input', 0) + stats.get('output', 0) + stats.get('cacheRead', 0)
+    used = weekly.get('billableTokens', 0)
+    if used == 0:
+        wt = weekly.get('totals', {})
+        used = wt.get('input', 0) + wt.get('output', 0)
+    hourly = d.get('hourlyBurnRate', {}).get('billable', 0)
+    if hourly == 0:
+        hb = d.get('hourlyBurnRate', {})
+        total_hr = hb.get('total', 0)
+        wt = weekly.get('totals', {})
+        wall = wt.get('input', 0) + wt.get('output', 0) + wt.get('cacheRead', 0)
+        ratio = (wt.get('input', 0) + wt.get('output', 0)) / wall if wall > 0 else 0.01
+        hourly = int(total_hr * ratio)
     print(used, hourly)
 except Exception:
     print(0, 0)

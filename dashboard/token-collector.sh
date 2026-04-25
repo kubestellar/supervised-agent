@@ -235,12 +235,15 @@ for aname, astats in by_agent.items():
     total = astats["input"] + astats["output"] + astats["cacheRead"]
     astats["avgPerSession"] = total // s if s > 0 else 0
 
-# Compute hourly burn rate per agent
+# Compute hourly burn rate per agent (all tokens and billable-only)
 hourly_rates = {}
+hourly_billable = {}
 for aname, hstats in hourly_by_agent.items():
     hourly_rates[aname] = hstats["input"] + hstats["output"] + hstats["cacheRead"]
+    hourly_billable[aname] = hstats["input"] + hstats["output"]
 
 weekly_total_tokens = weekly_totals["input"] + weekly_totals["output"] + weekly_totals["cacheRead"]
+weekly_billable_tokens = weekly_totals["input"] + weekly_totals["output"]
 
 result = {
     "timestamp": int(time.time() * 1000),
@@ -253,12 +256,15 @@ result = {
     "weekly": {
         "totals": weekly_totals,
         "totalTokens": weekly_total_tokens,
+        "billableTokens": weekly_billable_tokens,
         "byAgent": dict(weekly_by_agent),
         "resetDay": budget_reset_day,
     },
     "hourlyBurnRate": {
         "total": sum(hourly_rates.values()),
+        "billable": sum(hourly_billable.values()),
         "byAgent": hourly_rates,
+        "byAgentBillable": hourly_billable,
     },
 }
 

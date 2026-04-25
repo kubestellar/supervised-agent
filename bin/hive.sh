@@ -539,7 +539,7 @@ cmd_status() {
       pane=$(tmux capture-pane -t "$s" -p 2>/dev/null || echo "")
       pane_tail=$(echo "$pane" | tail -5)
       # Detect CLI
-      if echo "$pane_tail" | grep -q "bypass permissions\|claude doctor\|Claude Code v"; then
+      if echo "$pane_tail" | grep -q "bypass permissions\|claude doctor\|Claude Code v\|Claude Opus\|Claude Sonnet\|Claude Haiku"; then
         cli="claude"
       elif echo "$pane_tail" | grep -q "ctrl+q enqueue\|/ commands.*help"; then
         cli="copilot"
@@ -668,7 +668,7 @@ cmd_status_json() {
       local pane pane_tail
       pane=$(tmux capture-pane -t "$s" -p 2>/dev/null || echo "")
       pane_tail=$(echo "$pane" | tail -5)
-      if echo "$pane_tail" | grep -q "bypass permissions\|claude doctor\|Claude Code v"; then
+      if echo "$pane_tail" | grep -q "bypass permissions\|claude doctor\|Claude Code v\|Claude Opus\|Claude Sonnet\|Claude Haiku"; then
         cli="claude"
       elif echo "$pane_tail" | grep -q "ctrl+q enqueue\|/ commands.*help"; then
         cli="copilot"
