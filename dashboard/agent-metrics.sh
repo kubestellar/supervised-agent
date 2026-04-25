@@ -29,9 +29,9 @@ contributors=$(gh api repos/kubestellar/console/contributors?per_page=1 -i 2>/de
 adopters_total=$(gh api repos/kubestellar/console/contents/ADOPTERS.MD \
   --jq '.content' 2>/dev/null | base64 -d 2>/dev/null | grep -cP '^\|.*\|.*\|' || echo 0)
 adopters_total=$(( adopters_total > 2 ? adopters_total - 2 : 0 ))
-marketplace=$(gh api repos/kubestellar/console-marketplace/contents/registry.json \
-  --jq '.content' 2>/dev/null | base64 -d 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
-brew_formulas=$(gh api repos/kubestellar/homebrew-tap/contents/Formula --jq 'length' 2>/dev/null || echo 0)
+# ACMM badge outreach count
+acmm_count=$(gh api "search/issues?q=ACMM+badge+author:clubanderson" --jq '.total_count' 2>/dev/null || echo 0)
+acmm_count=${acmm_count:-0}
 
 # Read agent-authored summary
 outreach_summary=$(cat /var/run/hive-metrics/outreach_summary.txt 2>/dev/null || echo "")
@@ -53,7 +53,7 @@ cat <<EOF
 {
   "scanner": {"pairs": $scanner_json},
   "reviewer": {},
-  "outreach": {"stars": ${stars:-0}, "forks": ${forks:-0}, "contributors": ${contributors:-0}, "adopters": $adopters_total, "marketplace": ${marketplace:-0}, "brewFormulas": ${brew_formulas:-0}, "summary": $outreach_summary_json},
+  "outreach": {"stars": ${stars:-0}, "forks": ${forks:-0}, "contributors": ${contributors:-0}, "adopters": $adopters_total, "acmm": ${acmm_count:-0}, "summary": $outreach_summary_json},
   "architect": {"prs": $architect_prs, "closed": $architect_closed, "summary": $architect_summary_json}
 }
 EOF

@@ -371,8 +371,7 @@
         const forks = m.forks || 0;
         const contribs = m.contributors || 0;
         const adopters = m.adopters || 0;
-        const mktplace = m.marketplace || 0;
-        const brew = m.brewFormulas || 0;
+        const acmm = m.acmm || 0;
         const starSpark = sparkSvg((window._trendData || []).map(s => s.stars || 0), '#e3b341');
         return `<div class="agent-indicators">
           ${summary && summary !== 'no summary yet' ? `<div class="ind-summary">${esc(summary)}</div>` : ''}
@@ -383,8 +382,7 @@
           </div></div>
           <div class="ind-group"><span class="ind-group-label">ADOPTION</span><div class="ind-dots">
             <span class="ind-dot-item"><span class="ind-num">${adopters}</span><span class="ind-dlabel">adopters</span></span>
-            <span class="ind-dot-item"><span class="ind-num">${mktplace}</span><span class="ind-dlabel">marketplace</span></span>
-            <span class="ind-dot-item"><span class="ind-num">${brew}</span><span class="ind-dlabel">brew formulas</span></span>
+            <span class="ind-dot-item"><span class="ind-num">${acmm}</span><span class="ind-dlabel">ACMM badges</span></span>
           </div></div>
         </div>`;
       }
