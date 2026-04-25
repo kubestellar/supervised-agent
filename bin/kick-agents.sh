@@ -66,6 +66,7 @@ declare -A AGENT_MODEL_OVERRIDE=(
   [scanner-copilot]=claude-opus-4.6
   [scanner-claude]=claude-opus-4-6
 )
+declare -A MODEL_SWITCHED=()
 
 get_current_backend() {
   local agent="$1"
@@ -269,6 +270,14 @@ kick() {
     return
   fi
 
+  # After model switch, wait for CLI to finish starting up
+  if [[ "${MODEL_SWITCHED[$agent]:-}" == "1" ]]; then
+    local MODEL_SWITCH_STARTUP_WAIT=30
+    log "MODEL SWITCH $agent — waiting ${MODEL_SWITCH_STARTUP_WAIT}s for CLI startup"
+    sleep "$MODEL_SWITCH_STARTUP_WAIT"
+    MODEL_SWITCHED[$agent]=0
+  fi
+
   if ! session_idle "$session"; then
     # Also check if session is stuck on a rate limit
     local pane_text
@@ -424,8 +433,9 @@ apply_model_if_changed() {
   BACKEND_MODEL[$gov_backend]="$gov_model"
   AGENT_MODEL_OVERRIDE["${agent}-${gov_backend}"]="$gov_model"
 
-  log "MODEL SWITCH $agent — relaunched with ${gov_backend}:${gov_model}"
-  return 1
+  log "MODEL SWITCH $agent — relaunched with ${gov_backend}:${gov_model}, will inject kick prompt after startup"
+  MODEL_SWITCHED[$agent]=1
+  return 0
 }
 
 _now_et=$(TZ=America/New_York date '+%Y-%m-%d %I:%M %p %Z')
