@@ -499,7 +499,7 @@ cmd_status() {
       # Copilot uses ◐ ◑ ◒ ◓ ◉ ● ◎ ○; Claude uses ⏺; ↳ = sub-task.
       # Copilot renders spinner ABOVE the ❯ prompt, so we scan the last ~10 lines
       # for spinner characters or "Esc to cancel" — not just the final line.
-      local pane_body doing task_ctx log_age_str log_file recent_lines
+      local pane_body doing task_ctx recent_lines
       pane_body=$(echo "$pane" | tail -30)
       recent_lines=$(echo "$pane" | tail -10)
       local queued_tasks
@@ -519,12 +519,6 @@ cmd_status() {
         busy_flag="${CYN}queued(${queued_tasks})${RST}"
       else
         busy_flag="idle"
-      fi
-      # Show log staleness so stalls are visible at a glance
-      log_file=$(grep "^AGENT_LOG_FILE=" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null \
-                 | cut -d= -f2 | tr -d '"' || echo "")
-      if [[ -n "$log_file" && -f "$log_file" ]]; then
-        : # log age removed — busy/doing is sufficient
       fi
       printf "  ${GRN}%-12s${RST}  %-8s  %-8s  %-8s  %b\n" "$label" "running" "$cli" "$cadence" "$busy_flag"
     else
@@ -607,9 +601,9 @@ cmd_status_json() {
   local agents_json="["
   for i in "${!SESSIONS[@]}"; do
     local s="${SESSIONS[$i]}" label="${LABELS[$i]}"
-    local cli cadence state busy doing log_age_sec
+    local cli cadence state busy doing
     cadence=$(cat "${GOV_STATE}/cadence_${label}" 2>/dev/null || echo "?")
-    state="stopped"; cli="?"; busy="idle"; doing=""; log_age_sec=-1
+    state="stopped"; cli="?"; busy="idle"; doing=""
 
     if tmux has-session -t "$s" 2>/dev/null; then
       state="running"
@@ -635,17 +629,12 @@ cmd_status_json() {
           | cut -c1-120 \
           | paste -sd '|' || true)
       fi
-      local log_file
-      log_file=$(grep "^AGENT_LOG_FILE=" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null \
-                 | cut -d= -f2 | tr -d '"' || echo "")
-      if [[ -n "$log_file" && -f "$log_file" ]]; then
-        log_age_sec=$(( $(date +%s) - $(stat -c %Y "$log_file" 2>/dev/null || echo 0) ))
       fi
     fi
     # Escape doing for JSON
     doing=$(echo "$doing" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g' | tr -d '\n')
     [[ $i -gt 0 ]] && agents_json+=","
-    agents_json+="{\"name\":\"$label\",\"session\":\"$s\",\"state\":\"$state\",\"cli\":\"$cli\",\"cadence\":\"$cadence\",\"busy\":\"$busy\",\"doing\":\"$doing\",\"logAgeSec\":$log_age_sec}"
+    agents_json+="{\"name\":\"$label\",\"session\":\"$s\",\"state\":\"$state\",\"cli\":\"$cli\",\"cadence\":\"$cadence\",\"busy\":\"$busy\",\"doing\":\"$doing\"}"
   done
   agents_json+="]"
 

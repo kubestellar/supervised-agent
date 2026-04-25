@@ -11,6 +11,10 @@ const REFRESH_MS = 5000;
 let statusCache = null;
 let lastFetch = 0;
 
+// Historical data — keep last 2 hours of snapshots (5s intervals = ~1440 points)
+const MAX_HISTORY = 1440;
+const history = [];
+
 function fetchStatus() {
   return new Promise((resolve) => {
     execFile('hive', ['status', '--json'], { timeout: 30000 }, (err, stdout) => {
@@ -22,6 +26,24 @@ function fetchStatus() {
       try {
         statusCache = JSON.parse(stdout);
         lastFetch = Date.now();
+        // Record snapshot for sparklines
+        const snap = {
+          t: lastFetch,
+          govIssues: statusCache.governor?.issues || 0,
+          govPrs: statusCache.governor?.prs || 0,
+          beadsWorkers: statusCache.beads?.workers || 0,
+          beadsSupervisor: statusCache.beads?.supervisor || 0,
+          repos: {},
+          agents: {},
+        };
+        for (const r of (statusCache.repos || [])) {
+          snap.repos[r.name] = { issues: r.issues || 0, prs: r.prs || 0 };
+        }
+        for (const a of (statusCache.agents || [])) {
+          snap.agents[a.name] = { busy: a.busy === 'working' ? 1 : 0 };
+        }
+        history.push(snap);
+        if (history.length > MAX_HISTORY) history.shift();
         resolve(statusCache);
       } catch (e) {
         console.error('JSON parse error:', e.message);
@@ -42,6 +64,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/status', async (_req, res) => {
   const data = statusCache || await fetchStatus();
   res.json(data || { error: 'no data yet' });
+});
+
+// History API — downsample to ~120 points for sparklines
+app.get('/api/history', (_req, res) => {
+  const step = Math.max(1, Math.floor(history.length / 120));
+  const sampled = history.filter((_, i) => i % step === 0 || i === history.length - 1);
+  res.json(sampled);
 });
 
 // SSE stream

@@ -97,6 +97,11 @@
     .repo-stat .num { font-weight: 700; font-size: 1rem; }
     .repo-stat .label { color: var(--muted); font-size: 0.7rem; }
 
+    /* Sparklines */
+    .sparkline { display: inline-block; vertical-align: middle; margin-left: 6px; }
+    .sparkline svg { display: block; }
+    .spark-row { display: flex; align-items: center; gap: 6px; }
+
     /* Beads */
     .beads { display: flex; gap: 24px; font-size: 0.85rem; }
     .bead-stat .num { font-weight: 700; font-size: 1.1rem; }
@@ -143,6 +148,45 @@
   </div>
 
   <script>
+    // ── Sparkline helper ──
+    let historyData = [];
+    const SPARK_W = 80, SPARK_H = 20;
+
+    function sparkSvg(values, color) {
+      if (!values || values.length < 2) return '';
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const range = max - min || 1;
+      const pts = values.map((v, i) => {
+        const x = (i / (values.length - 1)) * SPARK_W;
+        const y = SPARK_H - ((v - min) / range) * (SPARK_H - 2) - 1;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      });
+      return `<span class="sparkline"><svg width="${SPARK_W}" height="${SPARK_H}" viewBox="0 0 ${SPARK_W} ${SPARK_H}">` +
+        `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>` +
+        `<circle cx="${pts[pts.length-1].split(',')[0]}" cy="${pts[pts.length-1].split(',')[1]}" r="2" fill="${color}"/>` +
+        `</svg></span>`;
+    }
+
+    function getHistorySeries(key) {
+      return historyData.map(s => {
+        const keys = key.split('.');
+        let v = s;
+        for (const k of keys) v = v?.[k];
+        return v ?? 0;
+      });
+    }
+
+    async function fetchHistory() {
+      try {
+        const r = await fetch('/api/history');
+        historyData = await r.json();
+      } catch (e) { /* ignore */ }
+    }
+    // Fetch history on load, then every 30s
+    fetchHistory();
+    setInterval(fetchHistory, 30000);
+
     function formatAge(sec) {
       if (sec < 0) return '—';
       if (sec < 120) return sec + 's';
@@ -182,34 +226,42 @@
       const el = document.getElementById('governor');
       const cls = gov.active ? 'active' : 'dead';
       el.className = `governor ${cls}`;
+      const issuesSpark = sparkSvg(getHistorySeries('govIssues'), '#58a6ff');
+      const prsSpark = sparkSvg(getHistorySeries('govPrs'), '#bc8cff');
       el.innerHTML = `
         <div class="gov-title">Governor</div>
         <div class="gov-grid">
           <div class="gov-stat"><div class="label">timer</div><div class="val ${cls}">${gov.active ? '● active' : '⚠ DEAD'}</div></div>
           <div class="gov-stat"><div class="label">mode</div><div class="val">${gov.mode}</div></div>
-          <div class="gov-stat"><div class="label">issues</div><div class="val">${gov.issues}</div></div>
-          <div class="gov-stat"><div class="label">PRs</div><div class="val">${gov.prs}</div></div>
+          <div class="gov-stat"><div class="label">issues</div><div class="spark-row"><span class="val">${gov.issues}</span>${issuesSpark}</div></div>
+          <div class="gov-stat"><div class="label">PRs</div><div class="spark-row"><span class="val">${gov.prs}</span>${prsSpark}</div></div>
           <div class="gov-stat"><div class="label">next kick</div><div class="val">${gov.nextKick || '—'}</div></div>
         </div>`;
     }
 
     function renderRepos(repos) {
       const el = document.getElementById('repos');
-      el.innerHTML = repos.map(r => `
+      el.innerHTML = repos.map(r => {
+        const iSpark = sparkSvg(historyData.map(s => s.repos?.[r.name]?.issues ?? 0), '#58a6ff');
+        const pSpark = sparkSvg(historyData.map(s => s.repos?.[r.name]?.prs ?? 0), '#bc8cff');
+        return `
         <div class="repo-card">
           <div class="repo-name">${r.name}</div>
           <div class="repo-stats">
-            <div class="repo-stat"><div class="num">${r.issues >= 0 ? r.issues : '?'}</div><div class="label">issues</div></div>
-            <div class="repo-stat"><div class="num">${r.prs >= 0 ? r.prs : '?'}</div><div class="label">PRs</div></div>
+            <div class="repo-stat"><div class="spark-row"><span class="num">${r.issues >= 0 ? r.issues : '?'}</span>${iSpark}</div><div class="label">issues</div></div>
+            <div class="repo-stat"><div class="spark-row"><span class="num">${r.prs >= 0 ? r.prs : '?'}</span>${pSpark}</div><div class="label">PRs</div></div>
           </div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
     }
 
     function renderBeads(beads) {
       const el = document.getElementById('beads');
+      const wSpark = sparkSvg(getHistorySeries('beadsWorkers'), '#39d2c0');
+      const sSpark = sparkSvg(getHistorySeries('beadsSupervisor'), '#d29922');
       el.innerHTML = `
-        <div class="bead-stat"><div class="num">${beads.workers >= 0 ? beads.workers : '?'}</div><div class="label">workers</div></div>
-        <div class="bead-stat"><div class="num">${beads.supervisor >= 0 ? beads.supervisor : '?'}</div><div class="label">supervisor</div></div>`;
+        <div class="bead-stat"><div class="spark-row"><span class="num">${beads.workers >= 0 ? beads.workers : '?'}</span>${wSpark}</div><div class="label">workers</div></div>
+        <div class="bead-stat"><div class="spark-row"><span class="num">${beads.supervisor >= 0 ? beads.supervisor : '?'}</span>${sSpark}</div><div class="label">supervisor</div></div>`;
     }
 
     function render(data) {
@@ -252,6 +304,20 @@
           render(data);
           conn.className = 'connection live';
           conn.innerHTML = '<span class="dot-live">●</span> live';
+          // Append to local history for instant sparkline updates
+          const snap = {
+            t: Date.now(),
+            govIssues: data.governor?.issues || 0,
+            govPrs: data.governor?.prs || 0,
+            beadsWorkers: data.beads?.workers || 0,
+            beadsSupervisor: data.beads?.supervisor || 0,
+            repos: {},
+            agents: {},
+          };
+          for (const r of (data.repos || [])) snap.repos[r.name] = { issues: r.issues || 0, prs: r.prs || 0 };
+          for (const a of (data.agents || [])) snap.agents[a.name] = { busy: a.busy === 'working' ? 1 : 0 };
+          historyData.push(snap);
+          if (historyData.length > 200) historyData.shift();
         } catch (err) {
           console.error('SSE parse error:', err);
         }
