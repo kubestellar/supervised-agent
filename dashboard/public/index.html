@@ -87,10 +87,10 @@
     /* Repos */
     .repos { margin-bottom: 24px; }
     .repos h2 { font-size: 0.95rem; margin-bottom: 8px; color: var(--muted); }
-    .repo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    .repo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
     .repo-card {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 6px; padding: 12px;
+      border-radius: 6px; padding: 12px; overflow: hidden;
     }
     .repo-name { font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
     .repo-stats { display: flex; gap: 16px; font-size: 0.8rem; }
@@ -98,9 +98,9 @@
     .repo-stat .label { color: var(--muted); font-size: 0.7rem; }
 
     /* Sparklines */
-    .sparkline { display: inline-block; vertical-align: middle; margin-left: 6px; }
+    .sparkline { display: inline-block; vertical-align: middle; margin-left: 6px; flex-shrink: 0; }
     .sparkline svg { display: block; }
-    .spark-row { display: flex; align-items: center; gap: 6px; }
+    .spark-row { display: flex; align-items: center; gap: 6px; overflow: hidden; }
 
     /* Beads */
     .beads { display: flex; gap: 24px; font-size: 0.85rem; }
