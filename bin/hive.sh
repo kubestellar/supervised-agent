@@ -541,13 +541,13 @@ cmd_status() {
 
       if [[ "$needs_login" == "true" ]]; then
         busy_flag="${RED}⚠ NOT LOGGED IN${RST}"
-      elif echo "$recent_lines" | grep -qE "^[◐◑◒◓◉●◎○] |^⏺ |Esc to cancel|↳ "; then
+      elif echo "$recent_lines" | grep -qE "^[◐◑◒◓◉●◎○✻✶✸✹✢✽·*] |^⏺ |Esc to cancel|↳ |agent still running|Scampering|Evaporating|Perambulating|Puttering|Sautéed"; then
         # Spinner or "Esc to cancel" found in recent output — actively working
         busy_flag="${YLW}working${RST}"
         doing=$(echo "$pane_body" \
-          | grep -E "^[◐◑◒◓◉●◎○] |^⏺ |Esc to cancel" \
+          | grep -E "^[◐◑◒◓◉●◎○✻✶✸✹✢✽·*] |^⏺ |Esc to cancel|agent still running" \
           | tail -1 \
-          | sed 's/^[◐◑◒◓◉●◎○⏺] //' \
+          | sed 's/^[◐◑◒◓◉●◎○⏺✻✶✸✹✢✽·*] //' \
           | sed 's/ (Esc to cancel.*//' \
           | cut -c1-60 || true)
         [[ -n "$doing" ]] && busy_flag="${YLW}working${RST}  ${CYN}${doing}${RST}"
@@ -666,12 +666,12 @@ cmd_status_json() {
       fi
       # Strip prompt, separator lines, and status bar to detect actual work output
       recent_lines=$(echo "$pane" | grep -vE '^[─━═]+$|^❯|^\s*$|^ / commands|^[[:space:]]*~/' | tail -15)
-      if echo "$recent_lines" | grep -qE "^[◐◑◒◓◉●◎○] |^⏺ |Esc to cancel|↳ |Running .* pass|background /tasks"; then
+      if echo "$recent_lines" | grep -qE "^[◐◑◒◓◉●◎○✻✶✸✹✢✽·*] |^⏺ |Esc to cancel|↳ |Running .* pass|background /tasks|agent still running|Scampering|Evaporating|Perambulating|Puttering|Sautéed"; then
         busy="working"
         doing=$(echo "$recent_lines" \
-          | grep -E "^[◐◑◒◓◉●◎○] |^⏺ |Esc to cancel" \
+          | grep -E "^[◐◑◒◓◉●◎○✻✶✸✹✢✽·*] |^⏺ |Esc to cancel|agent still running" \
           | tail -3 \
-          | sed 's/^[◐◑◒◓◉●◎○⏺] //' \
+          | sed 's/^[◐◑◒◓◉●◎○⏺✻✶✸✹✢✽·*] //' \
           | sed 's/ (Esc to cancel.*//' \
           | cut -c1-120 \
           | paste -sd '|' || true)
@@ -741,8 +741,43 @@ cmd_status_json() {
   beads_supervisor=$(cd "$BEADS_SUPERVISOR_DIR" 2>/dev/null && bd list --json 2>/dev/null \
      | python3 -c 'import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else len(d.get("items",[])))' 2>/dev/null || echo '-1')
 
+  # Cadence matrix — read from governor config
+  local _gov_env="/etc/hive/governor.env"
+  local _gov_script="/usr/local/bin/kick-governor.sh"
+  # Source defaults from governor script, then overlay env
+  local _cm=""
+  _cm=$(python3 -c "
+import re, os
+# Parse defaults from governor script
+defaults = {}
+for f in ['$_gov_script', '$_gov_env']:
+    try:
+        for line in open(f):
+            m = re.match(r'(?:export\s+)?CADENCE_(\w+)_(\w+)_SEC[=:].*?(\d+)', line.replace('\${','').replace(':-',':'))
+            if not m: m = re.match(r'CADENCE_(\w+)_(\w+)_SEC=\"?\\\$\{CADENCE_\w+:-(\d+)\}', line)
+            if not m: m = re.match(r'CADENCE_(\w+)_(\w+)_SEC.*:-(\d+)', line)
+            if m:
+                agent, mode, secs = m.group(1).lower(), m.group(2).lower(), int(m.group(3))
+                defaults[(agent, mode)] = secs
+    except: pass
+
+agents = ['supervisor','scanner','reviewer','architect','outreach']
+modes = ['surge','busy','quiet','idle']
+rows = []
+for a in agents:
+    cells = {}
+    for m in modes:
+        s = defaults.get((a, m), -1)
+        if s == 0: cells[m] = 'paused'
+        elif s < 60: cells[m] = f'{s}s'
+        elif s < 3600: cells[m] = f'{s//60}m'
+        else: cells[m] = f'{s//3600}h'
+    rows.append('{\"agent\":\"' + a + '\",\"surge\":\"' + cells['surge'] + '\",\"busy\":\"' + cells['busy'] + '\",\"quiet\":\"' + cells['quiet'] + '\",\"idle\":\"' + cells['idle'] + '\"}')
+print('[' + ','.join(rows) + ']')
+" 2>/dev/null || echo "[]")
+
   cat <<ENDJSON
-{"timestamp":"$now","agents":$agents_json,"governor":{"mode":"$gov_mode","active":$([ "$gov_active" = "active" ] && echo true || echo false),"issues":$gov_qi,"prs":$gov_qp,"nextKick":"$gov_next"},"repos":$repos_json,"beads":{"workers":$beads_workers,"supervisor":$beads_supervisor}}
+{"timestamp":"$now","agents":$agents_json,"governor":{"mode":"$gov_mode","active":$([ "$gov_active" = "active" ] && echo true || echo false),"issues":$gov_qi,"prs":$gov_qp,"nextKick":"$gov_next"},"cadenceMatrix":$_cm,"repos":$repos_json,"beads":{"workers":$beads_workers,"supervisor":$beads_supervisor}}
 ENDJSON
 }
 
