@@ -37,7 +37,10 @@
     .agent-card.working { border-color: var(--yellow); }
     .agent-card.idle { border-color: var(--border); }
     .agent-card.stopped { border-color: var(--red); }
-    .agent-name { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+    .agent-name { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .agent-state { font-size: 0.75rem; font-weight: 400; }
+    .agent-state.working { color: var(--green); }
+    .agent-state.idle { color: var(--muted); }
     .agent-name .dot {
       display: inline-block; width: 8px; height: 8px;
       border-radius: 50%; margin-right: 6px;
@@ -382,11 +385,10 @@
         const doingEl = a.doing ? `<div class="doing">${esc(a.doing).replace(/\|/g, '\n')}</div>` : '';
         const indEl = agentIndicators(a.name);
         return `<div class="agent-card ${cls}">
-          <div class="agent-name"><span class="dot ${dotCls}"></span>${a.name}</div>
+          <div class="agent-name"><span class="dot ${dotCls}"></span>${a.name}<span class="agent-state ${a.busy}">${a.busy}</span></div>
           <div class="agent-field"><span class="label">cli</span><span class="value ${a.cli}">${a.cli}</span></div>
           <div class="agent-field"><span class="label">cadence</span><span class="value">${a.cadence}</span></div>
           <div class="agent-field"><span class="label">next kick</span><span class="value">${a.nextKick || '—'}</span></div>
-          <div class="agent-field"><span class="value ${a.busy}">${a.busy}</span></div>
           ${doingEl}${indEl}
           ${a.name !== 'supervisor' ? `<div class="agent-actions">
             <button class="btn" onclick="kick('${a.name}')">kick</button>
