@@ -109,7 +109,8 @@ setTimeout(persistSnapshot, 10000);
 
 function fetchStatus() {
   return new Promise((resolve) => {
-    execFile('hive', ['status', '--json'], { timeout: 30000 }, (err, stdout) => {
+    const hiveEnv = { ...process.env, HIVE_TZ: process.env.HIVE_TZ || 'America/New_York' };
+    execFile('hive', ['status', '--json'], { timeout: 30000, env: hiveEnv }, (err, stdout) => {
       if (err) {
         console.error('hive status --json failed:', err.message);
         resolve(statusCache); // return stale data
