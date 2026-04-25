@@ -7,8 +7,10 @@ const app = express();
 app.use(express.json());
 const PORT = process.env.HIVE_DASHBOARD_PORT || 3001;
 const REFRESH_MS = 5000;
-const HISTORY_DIR = '/var/run/hive-metrics/history';
+const METRICS_DIR = '/var/run/hive-metrics';
+const HISTORY_DIR = path.join(METRICS_DIR, 'history');
 const HISTORY_FILE = path.join(HISTORY_DIR, 'daily.json');
+const AGENT_METRICS_CACHE_FILE = path.join(METRICS_DIR, 'agent-metrics-cache.json');
 try { fs.mkdirSync(HISTORY_DIR, { recursive: true }); } catch (_) {}
 const PERSIST_INTERVAL_MS = 15 * 60 * 1000; // 15 min
 const MAX_PERSISTENT_POINTS = 30 * 24 * 4; // 30 days at 15-min intervals = 2880
@@ -19,6 +21,7 @@ let lastFetch = 0;
 let ciPassRate = 0;
 let healthChecks = {};
 let agentMetrics = {};
+try { agentMetrics = JSON.parse(fs.readFileSync(AGENT_METRICS_CACHE_FILE, 'utf8')); } catch (_) {}
 let summariesCache = {};
 let activityCache = {};
 let ghRateLimitsCache = { alerts: [] };
@@ -46,7 +49,6 @@ setInterval(fetchGhRateLimits, GH_RATE_REFRESH_MS);
 
 // Fetch CI pass rate + binary health checks every 60s
 function fetchHealthChecks() {
-  execFile(path.join(__dirname, 'health-check.sh'), [], { timeout: 30000 }, (err, stdout) => {
     if (!err && stdout.trim()) {
       try {
         const d = JSON.parse(stdout.trim());
@@ -62,7 +64,6 @@ setInterval(fetchHealthChecks, 300000);  // every 5 min (REST API)
 // Fetch token usage from JSONL session files every 60s
 let tokenCache = {};
 function fetchTokens() {
-  execFile(path.join(__dirname, 'token-collector.sh'), [], { timeout: 30000 }, (err, stdout) => {
     if (!err && stdout.trim()) {
       try { tokenCache = JSON.parse(stdout.trim()); } catch (_) {}
     }
@@ -72,11 +73,21 @@ fetchTokens();
 const TOKEN_REFRESH_MS = 60000;
 setInterval(fetchTokens, TOKEN_REFRESH_MS);
 
-// Fetch per-agent metrics every 30s
+// Fetch per-agent metrics every 5 min — cache to disk so rate-limit failures don't blank indicators
 function fetchAgentMetrics() {
   execFile(path.join(__dirname, 'agent-metrics.sh'), [], { timeout: 60000 }, (err, stdout) => {
     if (!err && stdout.trim()) {
-      try { agentMetrics = JSON.parse(stdout.trim()); } catch (_) {}
+      try {
+        const parsed = JSON.parse(stdout.trim());
+        agentMetrics = parsed;
+        try { fs.writeFileSync(AGENT_METRICS_CACHE_FILE, stdout.trim()); } catch (_) {}
+      } catch (_) {}
+    } else if (!Object.keys(agentMetrics).length) {
+      try {
+        const cached = fs.readFileSync(AGENT_METRICS_CACHE_FILE, 'utf8');
+        agentMetrics = JSON.parse(cached);
+        console.log('agent-metrics.sh failed, loaded cached metrics from disk');
+      } catch (_) {}
     }
   });
 }
@@ -159,7 +170,6 @@ setTimeout(persistSnapshot, 10000);
 function fetchStatus() {
   return new Promise((resolve) => {
     const hiveEnv = { ...process.env, HIVE_TZ: process.env.HIVE_TZ || 'America/New_York' };
-    execFile('hive', ['status', '--json'], { timeout: 30000, env: hiveEnv }, (err, stdout) => {
       if (err) {
         console.error('hive status --json failed:', err.message);
         resolve(statusCache); // return stale data
@@ -404,7 +414,6 @@ app.post('/api/kick/:agent', (req, res) => {
       });
     });
   } else {
-    execFile('hive', ['kick', agent], { timeout: 30000 }, (err, stdout) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ ok: true, output: stdout.trim() });
     });
@@ -421,7 +430,6 @@ app.post('/api/switch/:agent/:backend', (req, res) => {
   if (!allowedBackends.includes(backend)) {
     return res.status(400).json({ error: `invalid backend: ${backend}` });
   }
-  execFile('hive', ['switch', agent, backend], { timeout: 30000 }, (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ ok: true, output: stdout.trim() });
   });
@@ -433,7 +441,6 @@ app.post('/api/model/:agent/:model', (req, res) => {
   if (!allowedAgents.includes(agent)) {
     return res.status(400).json({ error: `invalid agent: ${agent}` });
   }
-  execFile('hive', ['model', agent, decodeURIComponent(model)], { timeout: 30000 }, (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ ok: true, output: stdout.trim() });
   });
