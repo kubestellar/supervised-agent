@@ -262,5 +262,11 @@ result = {
     },
 }
 
-print(json.dumps(result))
+output = json.dumps(result)
+print(output)
+try:
+    with open(os.environ.get('TOKEN_OUTPUT_FILE', '/var/run/hive-metrics/tokens.json'), 'w') as f:
+        f.write(output)
+except (OSError, IOError):
+    pass
 PYEOF

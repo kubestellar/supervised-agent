@@ -508,8 +508,8 @@ optimize_model_assignment() {
     local cost_weight
     cost_weight=$(get_cost_weight "$backend" "$model")
     local prev_backend prev_model
-    prev_backend=$(grep '^BACKEND=' "$STATE_DIR/model_${agent}" 2>/dev/null | cut -d= -f2)
-    prev_model=$(grep '^MODEL=' "$STATE_DIR/model_${agent}" 2>/dev/null | cut -d= -f2)
+    prev_backend=$(grep '^BACKEND=' "$STATE_DIR/model_${agent}" 2>/dev/null | cut -d= -f2 || true)
+    prev_model=$(grep '^MODEL=' "$STATE_DIR/model_${agent}" 2>/dev/null | cut -d= -f2 || true)
 
     cat > "$STATE_DIR/model_${agent}" <<MODELEOF
 BACKEND=$backend
