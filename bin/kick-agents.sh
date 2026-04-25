@@ -361,16 +361,22 @@ If you find a bug or improvement idea, file a beads issue for the scanner — do
 Fork under clubanderson account for all external PRs to third-party repos. \
 Send ntfy for every new listing secured. One outreach per project — never spam. $BEADS_SYNC"
 
-SUPERVISOR_MSG="MONITORING PASS — do all of the following right now: \
-1. Check every agent session for questions, stalls, or errors: \
+_now_et=$(TZ=America/New_York date '+%Y-%m-%d %H:%M %Z')
+_next_et=$(TZ=America/New_York date -d '+15 minutes' '+%H:%M %Z' 2>/dev/null || TZ=America/New_York date -v+15M '+%H:%M %Z' 2>/dev/null || echo "~15min")
+SUPERVISOR_MSG="MONITORING PASS — Pass started: ${_now_et} | Next run: ~${_next_et}
+
+Do all of the following right now:
+1. Record pass start time at the TOP of your monitoring summary: \"Pass started: ${_now_et}\"
+2. Check every agent session for questions, stalls, or errors: \
    tmux capture-pane -t issue-scanner -p | tail -20 \
    tmux capture-pane -t reviewer -p | tail -20 \
    tmux capture-pane -t feature -p | tail -20 \
    tmux capture-pane -t outreach -p | tail -20 \
    If any agent has an unresolved question or idle prompt, respond immediately via tmux send-keys. \
-2. Check for AI-authored PRs with CI green across all kubestellar repos — merge any that are ready. \
-3. Check for rate-limited agents — switch their backend if needed (hive switch <agent> <backend>). \
-4. Run: bd dolt push"
+3. Check for AI-authored PRs with CI green across all kubestellar repos — merge any that are ready. \
+4. Check for rate-limited agents — switch their backend if needed (hive switch <agent> <backend>). \
+5. Run: bd dolt push
+6. After printing the monitoring summary table, add: \"Pass finished: \$(TZ=America/New_York date '+%Y-%m-%d %H:%M %Z') | Next run: ~${_next_et}\""
 
 case "$TARGET" in
   scanner)
