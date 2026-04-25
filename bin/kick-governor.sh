@@ -372,18 +372,25 @@ compute_budget_state() {
   local used=0 burn_hourly=0
 
   if [[ -f "$TOKEN_COLLECTOR_JSON" ]]; then
+    # Count only billable tokens (input + output). Cache read is free/discounted.
     read -r used burn_hourly <<< "$(python3 -c "
 import json
 try:
     with open('$TOKEN_COLLECTOR_JSON') as f:
         d = json.load(f)
     weekly = d.get('weekly', {})
-    used = weekly.get('totalTokens', 0)
-    hourly = d.get('hourlyBurnRate', {}).get('total', 0)
-    if used == 0 and hourly == 0:
-        ba = d.get('byAgent', {})
-        for stats in ba.values():
-            used += stats.get('input', 0) + stats.get('output', 0) + stats.get('cacheRead', 0)
+    used = weekly.get('billableTokens', 0)
+    if used == 0:
+        wt = weekly.get('totals', {})
+        used = wt.get('input', 0) + wt.get('output', 0)
+    hourly = d.get('hourlyBurnRate', {}).get('billable', 0)
+    if hourly == 0:
+        hb = d.get('hourlyBurnRate', {})
+        total_hr = hb.get('total', 0)
+        wt = weekly.get('totals', {})
+        wall = wt.get('input', 0) + wt.get('output', 0) + wt.get('cacheRead', 0)
+        ratio = (wt.get('input', 0) + wt.get('output', 0)) / wall if wall > 0 else 0.01
+        hourly = int(total_hr * ratio)
     print(used, hourly)
 except Exception:
     print(0, 0)
@@ -434,8 +441,10 @@ optimize_model_assignment() {
   projected_pct=$(compute_budget_state)
 
   declare -A assignments
+  declare -A override_reasons
   for agent in "${agents[@]}"; do
     assignments[$agent]=$(get_model_selection "$agent" "$mode")
+    override_reasons[$agent]=""
   done
 
   if (( projected_pct > TOKEN_BUDGET_SAFETY_PCT )); then
@@ -449,6 +458,7 @@ optimize_model_assignment() {
         local copilot_model
         copilot_model=$(convert_model_notation "$model" "copilot")
         assignments[$agent]="copilot:${copilot_model}"
+        override_reasons[$agent]="budget_downgrade"
         log "  budget override: $agent -> copilot (was $backend)"
       fi
     done
@@ -462,11 +472,13 @@ optimize_model_assignment() {
           *opus*)
             local new_model="${model/opus/sonnet}"
             assignments[$agent]="${backend}:${new_model}"
+            override_reasons[$agent]="budget_downgrade"
             log "  budget override: $agent opus->sonnet"
             ;;
           *sonnet*)
             local new_model="${model/sonnet/haiku}"
             assignments[$agent]="${backend}:${new_model}"
+            override_reasons[$agent]="budget_downgrade"
             log "  budget override: $agent sonnet->haiku"
             ;;
         esac
@@ -480,6 +492,7 @@ optimize_model_assignment() {
         local copilot_model
         copilot_model=$(convert_model_notation "$model" "copilot")
         assignments[$agent]="copilot:${copilot_model}"
+        override_reasons[$agent]="budget_critical"
       done
       log "  BUDGET CRITICAL: all agents -> copilot"
     fi
@@ -515,7 +528,7 @@ optimize_model_assignment() {
 BACKEND=$backend
 MODEL=$model
 COST_WEIGHT=$cost_weight
-REASON=${mode}_mode
+REASON=${override_reasons[$agent]:-${mode}_mode}
 PREV_BACKEND=${prev_backend:-}
 PREV_MODEL=${prev_model:-}
 UPDATED=$(date -Iseconds)

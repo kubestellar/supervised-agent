@@ -581,7 +581,7 @@
         return `<div class="agent-card ${cls}">
           <div class="agent-name"><span class="dot ${dotCls}"></span>${a.name}</div>
           <div class="agent-field"><span class="label">cli</span><span class="value ${a.cli}">${a.cli}</span></div>
-          <div class="agent-field"><span class="label">model</span><span class="value">${a.model || ''} ${a.govBackend ? modelChip(a.govBackend, a.govModel) : ''}</span></div>
+          <div class="agent-field"><span class="label">model</span><span class="value">${a.model || ''} ${a.govBackend ? modelChip(a.govBackend, a.govModel, a.govReason) : ''}</span></div>
           <div class="agent-field"><span class="label">interval</span><span class="value">${a.cadence}</span></div>
           <div class="agent-field"><span class="label">next run</span><span class="value">${a.nextKick || '—'}</span></div>
           ${agentTokenRow(a.name, a.cadence)}
@@ -725,7 +725,7 @@
           return `<td class="${colCls}${pausedCls}">${isPaused ? '—' : val}</td>`;
         }).join('');
         const agentData = agents.find(a => a.name === aname);
-        const mChip = agentData && agentData.govBackend ? modelChip(agentData.govBackend, agentData.govModel) : '';
+        const mChip = agentData && agentData.govBackend ? modelChip(agentData.govBackend, agentData.govModel, agentData.govReason) : '';
         return `<tr><td>${aname}</td>${cells}<td>${mChip}</td></tr>`;
       }).join('');
       const headers = modes.map(m => {
@@ -775,22 +775,41 @@
       if (!budget || !budget.BUDGET_WEEKLY) return '';
       const PCT_SAFE = 50;
       const PCT_WARN = 85;
-      const pct = budget.PROJECTED_PCT || 0;
       const used = budget.BUDGET_USED || 0;
       const weekly = budget.BUDGET_WEEKLY;
-      const fillCls = pct < PCT_SAFE ? 'safe' : pct < PCT_WARN ? 'warning' : 'danger';
+      const pctUsed = budget.BUDGET_PCT_USED || 0;
+      const projPct = budget.PROJECTED_PCT || 0;
       const burnRate = budget.BURN_RATE_HOURLY || 0;
       const hoursLeft = budget.HOURS_REMAINING || 0;
+      const HOURS_PER_DAY = 24;
+      const dailyRate = burnRate * HOURS_PER_DAY;
+      const usedFillCls = pctUsed < PCT_SAFE ? 'safe' : pctUsed < PCT_WARN ? 'warning' : 'danger';
+      const projFillCls = projPct < PCT_SAFE ? 'safe' : projPct < PCT_WARN ? 'warning' : 'danger';
+
+      let govAction = '';
+      if (projPct > PCT_WARN) {
+        govAction = '<span style="color:var(--red)">Governor downgrading models to stay within budget</span>';
+      } else if (projPct > PCT_SAFE) {
+        govAction = '<span style="color:var(--yellow)">Governor may downgrade non-priority agents if burn increases</span>';
+      } else {
+        govAction = '<span style="color:var(--green)">Budget healthy — governor using preferred models</span>';
+      }
+
       return `<div class="budget-bar">
         <div class="budget-bar-label">
-          <span>Token Budget: ${fmtTokens(used)} / ${fmtTokens(weekly)} (${budget.BUDGET_PCT_USED || 0}% used)</span>
-          <span>Projected: ${pct}% · ${fmtTokens(burnRate)}/hr · ${hoursLeft}h left</span>
+          <span>Used: ${fmtTokens(used)} / ${fmtTokens(weekly)} (${pctUsed}%)</span>
+          <span>${hoursLeft}h until reset</span>
         </div>
-        <div class="budget-bar-track"><div class="budget-bar-fill ${fillCls}" style="width:${Math.min(pct, 100)}%"></div></div>
+        <div class="budget-bar-track"><div class="budget-bar-fill ${usedFillCls}" style="width:${Math.min(pctUsed, 100)}%"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--muted);margin-top:4px">
+          <span>Burn: ${fmtTokens(burnRate)}/hr · ${fmtTokens(dailyRate)}/day</span>
+          <span>Projected: ${fmtTokens(used + burnRate * hoursLeft)} (${projPct}%)</span>
+        </div>
+        <div style="font-size:0.68rem;margin-top:3px">${govAction}</div>
       </div>`;
     }
 
-    function modelChip(backend, model) {
+    function modelChip(backend, model, reason) {
       if (!backend || backend === 'unknown') return '';
       const isFree = backend === 'copilot' || backend === 'goose';
       let tier = 'sonnet';
@@ -799,7 +818,10 @@
       else if (model && model.includes('opus')) tier = 'opus';
       const shortModel = model ? model.replace(/^claude-/, '').replace(/-\d+-\d+$/, m => m.replace(/-/g, '.').slice(0, 4)) : '?';
       const label = isFree ? `${backend}` : shortModel;
-      return `<span class="model-chip ${tier}" title="${backend}:${model}">${label}</span>`;
+      const isBudgetOverride = reason && (reason.includes('budget_downgrade') || reason.includes('budget_critical'));
+      const overrideIcon = isBudgetOverride ? ' ⬇' : '';
+      const overrideTitle = isBudgetOverride ? ` (${reason})` : '';
+      return `<span class="model-chip ${tier}" title="${backend}:${model}${overrideTitle}">${label}${overrideIcon}</span>`;
     }
 
     function buildCadenceAdvisor(byAgent) {
