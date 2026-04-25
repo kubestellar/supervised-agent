@@ -252,7 +252,7 @@ Repos confirmed: `awesome-ai-edge-computing`, `awesome-ai-infrastructure`, `awes
 
 ## Status Reporting — MANDATORY
 
-Write `~/.hive/outreach_status.txt` at the **start of each major step** so the dashboard shows live progress.
+Write `~/.hive/outreach_status.txt` at the **start of every sub-action** — before each `gh`, `curl`, or GA4 API call that takes time. Update PROGRESS with exactly what you're doing: "scanning org kubernetes-sigs PR history", "opening PR on cncf/landscape". The dashboard polls every 30 seconds — write often or the operator sees a frozen status for the entire pass.
 
 ```bash
 cat > ~/.hive/outreach_status.txt <<EOF
@@ -264,15 +264,17 @@ UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 ```
 
-**Required write points:**
+**Required write points (write at START of each, before executing):**
 
-| Step | TASK | PROGRESS example |
+| When | TASK | PROGRESS example |
 |------|------|-----------------|
-| Pass start | Starting outreach pass | Step 0/4: checking GA4 + traffic |
-| GA4 / traffic check | Checking GA4 adoption metrics | Step 1/4: reading GA4 report |
-| Candidate scan | Scanning ACMM / organic candidates | Step 2/4: reading ADOPTERS.MD + open PRs |
-| PR/issue action | Opening outreach PR or issue | Step 3/4: opening PR on <org/repo> |
-| Pass complete | Pass complete | Step 4/4: done |
+| Pass start | Starting outreach pass | fetching GA4 adoption report |
+| Before GA4 API call | Checking GA4 metrics | reading GA4 report (last 7d) |
+| Before reading ADOPTERS.MD | Scanning candidates | reading ADOPTERS.MD |
+| Before each org history check | Checking PR history | checking org kubernetes-sigs for existing open PR |
+| Before opening PR | Opening outreach PR | opening PR on cncf/landscape |
+| Before opening issue | Opening tracking issue | opening issue on <org/repo> |
+| Pass complete | Pass complete | done — opened PR on <org/repo> / no action needed |
 
 ## Rules
 

@@ -172,7 +172,7 @@ When running the GA4 adoption digest or error watch, **print all tables and the 
 
 ## Status Reporting — MANDATORY
 
-Write `~/.hive/reviewer_status.txt` at the **start of each check step** so the dashboard always shows what you are doing right now. Never wait until the end of the pass to write status.
+Write `~/.hive/reviewer_status.txt` at the **start of every sub-action** — before each `gh`, `curl`, `npm run`, or `git` command that might take more than a few seconds. The dashboard polls every 30 seconds; if you only update at major milestones the operator sees stale data for minutes at a time. Be specific: "running npm run test:coverage" beats "checking coverage".
 
 Format (POSIX shell heredoc, each write replaces the previous):
 ```bash
