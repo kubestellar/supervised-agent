@@ -494,21 +494,19 @@ cmd_status() {
     local s="${SESSIONS[$i]}" label="${LABELS[$i]}"
     local cli cadence busy_flag next_kick
     cadence=$(cat "${GOV_STATE}/cadence_${label}" 2>/dev/null || echo "?")
-    # Calculate next kick — show absolute time in ET
+    # Calculate next kick — show absolute time in ET, aligned to 5-min governor ticks
     next_kick="—"
     local _lk _cs _cs_secs
     _lk=$(cat "${GOV_STATE}/last_kick_${label}" 2>/dev/null || echo "")
     _cs=$(cat "${GOV_STATE}/cadence_${label}" 2>/dev/null || echo "")
     _cs_secs=$(_label_to_secs "$_cs")
     if [[ "$_cs_secs" -gt 0 && -n "$_lk" ]]; then
-      local _next=$(( _lk + _cs_secs )) _now=$(date +%s)
+      local _raw_next=$(( _lk + _cs_secs )) _now=$(date +%s)
+      # Round up to next 5-min boundary (governor tick alignment)
+      local _next=$(( ((_raw_next + 299) / 300) * 300 ))
+      [[ $_next -le $_now ]] && _next=$(( ((_now + 299) / 300) * 300 ))
       if [[ $_next -le $_now ]]; then
-        # Overdue — next governor tick (every 5 min aligned)
-        local _min=$(date +%-M) _sec=$(date +%-S)
-        local _til=$(( (5 - (_min % 5)) * 60 - _sec ))
-        [[ $_til -le 0 ]] && _til=$((5 * 60 + _til))
-        local _abs_next=$(( _now + _til ))
-        next_kick="${YLW}$(TZ=America/New_York date -d @$_abs_next '+%-I:%M %p')${RST}"
+        next_kick="${YLW}$(TZ=America/New_York date -d @$_next '+%-I:%M %p')${RST}"
       else
         next_kick="$(TZ=America/New_York date -d @$_next '+%-I:%M %p')"
       fi
