@@ -76,16 +76,16 @@ This script:
 
 ### Manual dispatch (when scripting isn't practical)
 
-**CRITICAL — ALWAYS send text and Enter as TWO SEPARATE calls. No exceptions.**
+**CRITICAL — ALWAYS send text and Enter as SEPARATE calls. Send Enter TWICE to guarantee delivery. No exceptions. Agents WILL get stuck if Enter is missing.**
 
 ```bash
-# CORRECT — two separate calls
+# CORRECT — text first, then Enter twice (second Enter is a no-op safety net)
 tmux send-keys -t <session> "your message here"
 tmux send-keys -t <session> Enter
-
-# WRONG — combined in one call; Enter frequently gets lost with long messages
-tmux send-keys -t <session> "your message here" Enter
+tmux send-keys -t <session> Enter
 ```
+
+**NEVER combine text and Enter in one call.** `tmux send-keys -t session "text" Enter` silently drops the Enter on long messages, leaving the agent stuck with text in its input box and no way to recover without operator intervention.
 
 After every dispatch, verify the session started processing:
 ```bash
@@ -132,7 +132,12 @@ hive stop [all|agent]                # Stop agent
 | `outreach` | `claude-sonnet-4-6` |
 | Agent tool subagents | `claude-sonnet-4-6` (default from global settings) |
 
-To change a session's model: `tmux send-keys -t <session> "/model <model-id>" Enter`
+To change a session's model:
+```bash
+tmux send-keys -t <session> "/model <model-id>"
+tmux send-keys -t <session> Enter
+tmux send-keys -t <session> Enter
+```
 
 ## Repos Under Management
 
@@ -250,7 +255,9 @@ The `issue-scanner` session (Opus 4.6) runs EXECUTOR MODE — no self-scheduling
 
 To give scanner a work order:
 ```bash
-tmux send-keys -t issue-scanner "Work on #NNNN, #NNNN — oldest first. Dispatch fix agents, merge green PRs." Enter
+tmux send-keys -t issue-scanner "Work on #NNNN, #NNNN — oldest first. Dispatch fix agents, merge green PRs."
+tmux send-keys -t issue-scanner Enter
+tmux send-keys -t issue-scanner Enter
 ```
 
 ## Reviewer Session — What It Does
@@ -285,7 +292,9 @@ The `reviewer` session (Sonnet 4.6) handles post-merge work:
 
 Reviewer is NOT a /loop — send it work orders when needed:
 ```bash
-tmux send-keys -t reviewer "Run a full reviewer pass: check coverage, CI health, release freshness, post-merge diff on PRs #N #N #N. Write results to reviewer_log.md." Enter
+tmux send-keys -t reviewer "Run a full reviewer pass: check coverage, CI health, release freshness, post-merge diff on PRs #N #N #N. Write results to reviewer_log.md."
+tmux send-keys -t reviewer Enter
+tmux send-keys -t reviewer Enter
 ```
 
 If reviewer is idle and merges happened recently, kick it with the list of merged PR numbers.
