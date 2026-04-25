@@ -57,8 +57,12 @@ load_conf() {
   SLACK_WEBHOOK="${SLACK_WEBHOOK:-}"
   DISCORD_WEBHOOK="${DISCORD_WEBHOOK:-}"
   SUPERVISOR_CLI="${SUPERVISOR_CLI:-copilot}"
-  SUPERVISOR_WORKDIR="${SUPERVISOR_WORKDIR:-/home/dev/kubestellar-console}"
-  BEADS_SUPERVISOR_DIR="${BEADS_SUPERVISOR_DIR:-/home/dev/kubestellar-console}"
+  SUPERVISOR_WORKDIR="${SUPERVISOR_WORKDIR:-/home/dev/hive-supervisor}"
+  BEADS_SUPERVISOR_DIR="${BEADS_SUPERVISOR_DIR:-/home/dev/supervisor-beads}"
+  BEADS_SCANNER_DIR="${BEADS_SCANNER_DIR:-/home/dev/scanner-beads}"
+  BEADS_REVIEWER_DIR="${BEADS_REVIEWER_DIR:-/home/dev/reviewer-beads}"
+  BEADS_FEATURE_DIR="${BEADS_FEATURE_DIR:-/home/dev/feature-beads}"
+  BEADS_OUTREACH_DIR="${BEADS_OUTREACH_DIR:-/home/dev/outreach-beads}"
   BEADS_WORKER_DIR="${BEADS_WORKER_DIR:-/home/dev/scanner-beads}"
   AGENT_USER="${AGENT_USER:-dev}"
   HIVE_BACKENDS="${HIVE_BACKENDS:-copilot}"           # space-separated: copilot claude gemini goose
@@ -395,17 +399,35 @@ kick_agents() {
   hdr "Kicking agents"
   sleep 4  # let sessions initialise
 
-  local msg="STARTUP: read your beads (cd $BEADS_WORKER_DIR && bd list --json). Resume any in_progress item. For new work: bd ready --json. Read your policy file from memory. Report status."
+  # Per-agent beads dirs — each agent reads and writes only its own ledger.
+  declare -A AGENT_BEADS_DIR
+  AGENT_BEADS_DIR["issue-scanner"]="${BEADS_SCANNER_DIR:-/home/${AGENT_USER:-dev}/scanner-beads}"
+  AGENT_BEADS_DIR["reviewer"]="${BEADS_REVIEWER_DIR:-/home/${AGENT_USER:-dev}/reviewer-beads}"
+  AGENT_BEADS_DIR["feature"]="${BEADS_FEATURE_DIR:-/home/${AGENT_USER:-dev}/feature-beads}"
+  AGENT_BEADS_DIR["outreach"]="${BEADS_OUTREACH_DIR:-/home/${AGENT_USER:-dev}/outreach-beads}"
+
+  # Expected model substring — must be visible in pane before kick is safe to send.
+  # Copilot shows "claude-opus-4.6" in bottom-right; Claude Code shows "Opus 4.6".
+  local expected_model="4.6"
 
   for session in issue-scanner reviewer feature outreach; do
-    if tmux has-session -t "$session" 2>/dev/null; then
-      tmux send-keys -t "$session" "$msg" 2>/dev/null || true
-      sleep 0.3
-      tmux send-keys -t "$session" Enter 2>/dev/null || true
-      ok "$session kicked"
-    else
+    if ! tmux has-session -t "$session" 2>/dev/null; then
       warn "$session session not ready yet — governor will kick on next cycle"
+      continue
     fi
+    # Verify model before sending work — skip if wrong model is running
+    local pane
+    pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
+    if ! echo "$pane" | grep -qF "$expected_model"; then
+      warn "$session: expected model $expected_model not visible in pane — skipping kick (check AGENT_LAUNCH_CMD)"
+      continue
+    fi
+    local bdir="${AGENT_BEADS_DIR[$session]}"
+    local msg="STARTUP: read your beads (cd ${bdir} && bd list --json). Resume any in_progress item. For new work: bd ready --json. Read your policy file from memory. Report status."
+    tmux send-keys -t "$session" "$msg" 2>/dev/null || true
+    sleep 0.3
+    tmux send-keys -t "$session" Enter 2>/dev/null || true
+    ok "$session kicked (model $expected_model confirmed, beads: $bdir)"
   done
 }
 
@@ -425,8 +447,8 @@ start_supervisor() {
 
   local launch_cmd
   case "$cli" in
-    copilot) launch_cmd="/usr/bin/copilot --allow-all" ;;
-    claude)  launch_cmd="/usr/bin/claude --dangerously-skip-permissions" ;;
+    copilot) launch_cmd="/usr/bin/copilot --allow-all --model claude-opus-4.6" ;;
+    claude)  launch_cmd="/usr/bin/claude --dangerously-skip-permissions --model opus-4-6" ;;
     *)       die "Unknown CLI: $cli. Use --copilot or --claude" ;;
   esac
 
@@ -864,7 +886,7 @@ cmd_switch() {
   local launch_cmd
   case "$backend" in
     copilot) launch_cmd="/usr/bin/copilot --allow-all --model claude-opus-4.6" ;;
-    claude)  launch_cmd="/usr/bin/claude --dangerously-skip-permissions --model claude-opus-4.6" ;;
+    claude)  launch_cmd="/usr/bin/claude --dangerously-skip-permissions --model opus-4-6" ;;
     gemini)  launch_cmd="/usr/bin/gemini --yolo" ;;
     goose)   launch_cmd="/usr/bin/goose --no-confirm" ;;
     *) die "Unknown backend: $backend (valid: copilot claude gemini goose)" ;;
