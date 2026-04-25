@@ -29,8 +29,11 @@ contributors=$(gh api repos/kubestellar/console/contributors?per_page=1 -i 2>/de
 adopters_total=$(gh api repos/kubestellar/console/contents/ADOPTERS.MD \
   --jq '.content' 2>/dev/null | base64 -d 2>/dev/null | grep -cP '^\|.*\|.*\|' || echo 0)
 adopters_total=$(( adopters_total > 2 ? adopters_total - 2 : 0 ))
-# ACMM badge outreach count
-acmm_count=$(gh api "search/issues?q=ACMM+badge+author:clubanderson" --jq '.total_count' 2>/dev/null || echo 0)
+# ACMM badges adopted (from BADGE_PARTICIPANTS in leaderboard page.tsx, updated by CI)
+acmm_count=$(unset GITHUB_TOKEN && gh api repos/kubestellar/docs/contents/src/app/%5Blocale%5D/acmm-leaderboard/page.tsx \
+  --jq '.content' 2>/dev/null | base64 -d 2>/dev/null \
+  | sed -n '/BADGE_PARTICIPANTS = new Set/,/\]);/p' \
+  | grep -cP '^\s+"[a-zA-Z]' || echo 0)
 acmm_count=${acmm_count:-0}
 
 # Read agent-authored summary
