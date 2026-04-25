@@ -314,6 +314,7 @@
     }
 
     let currentAgentMetrics = {};
+    let currentSummaries = {};
 
     function agentIndicators(name) {
       const m = currentAgentMetrics[name];
@@ -412,7 +413,16 @@
       const cards = agents.map(a => {
         const cls = a.state === 'stopped' ? 'stopped' : a.busy;
         const dotCls = a.state === 'stopped' ? 'stopped' : 'running';
-        const doingEl = a.doing ? `<div class="doing">${esc(a.doing).replace(/\|/g, '\n')}</div>` : '';
+        // Use comprehensive summary instead of doing spinner
+        const summary = currentSummaries[a.name] || {};
+        let summaryEl = '';
+        if (summary.task) {
+          const parts = [];
+          if (summary.task) parts.push(summary.task);
+          if (summary.progress) parts.push(`▫ ${summary.progress}`);
+          if (summary.results) parts.push(`✓ ${summary.results}`);
+          summaryEl = parts.length > 0 ? `<div class="doing">${esc(parts.join('\n'))}</div>` : '';
+        }
         const indEl = agentIndicators(a.name);
         return `<div class="agent-card ${cls}">
           <div class="agent-name"><span class="dot ${dotCls}"></span>${a.name}</div>
@@ -421,7 +431,7 @@
           <div class="agent-field"><span class="label">interval</span><span class="value">${a.cadence}</span></div>
           <div class="agent-field"><span class="label">next run</span><span class="value">${a.nextKick || '—'}</span></div>
           <div class="agent-state ${a.busy}">${a.busy}</div>
-          ${doingEl}${indEl}
+          ${summaryEl}${indEl}
           ${a.name !== 'supervisor' ? `<div class="agent-actions">
             <button class="btn" onclick="kick('${a.name}')">kick</button>
             <select class="btn backend-select" onchange="switchCli('${a.name}', this.value); this.selectedIndex=0">
@@ -563,6 +573,12 @@
       renderGovernor(data.governor || {});
       renderRepos(data.repos || []);
       renderBeads(data.beads || {});
+      // Fetch comprehensive summaries
+      fetch('/api/summaries').then(r => r.json()).then(d => {
+        currentSummaries = d.summaries || {};
+        // Re-render agents with updated summaries
+        renderAgents(data.agents || []);
+      }).catch(() => {});
     }
 
     function esc(s) {
