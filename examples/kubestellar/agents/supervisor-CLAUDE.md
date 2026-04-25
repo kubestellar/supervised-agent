@@ -143,9 +143,38 @@ To change a session's model: `tmux send-keys -t <session> "/model <model-id>" En
 | `kubestellar/kubestellar-mcp` | 0 |
 | `kubestellar/console-marketplace` | exempt (CNCF card stubs) |
 
+## Issue Priority Order — ALWAYS work in this sequence
+
+1. **P0 — Broken builds from merged PRs** (`kind/regression` or build check failing on `main`). Stop everything else. Fix immediately. A broken `main` blocks all other work.
+2. **P0 — `Build and Deploy KC` workflow failures** — any failed run of this workflow on `kubestellar/console`. Check:
+   ```bash
+   unset GITHUB_TOKEN && gh run list --repo kubestellar/console --workflow "Build and Deploy KC" --limit 5 --json databaseId,conclusion,status,headBranch,createdAt --jq '.[] | select(.conclusion=="failure")'
+   ```
+   Any failure → P0 bead, high ntfy, dispatch fix agent immediately before scanning other issues.
+3. **P1 — CI check failures on open PRs** (build, dco, coverage-gate, fullstack-smoke, ts-null-safety red).
+4. **P2 — Open issues by age** (oldest first, target ≤30min issue-to-merged-PR).
+
+**Never start P2 work if any P0 or P1 is unresolved.**
+
+## PR Grouping — batch related fixes into one PR
+
+When dispatching fix agents, group issues that share a root cause or touch the same file/component into a **single PR**. One PR per logical fix — not one PR per issue. Examples:
+
+- 3 issues all failing because the same hook returns `undefined` → one PR fixing the hook, `Fixes #A, Fixes #B, Fixes #C`
+- 2 type errors in the same component → one PR
+- Unrelated issues in different files → separate PRs
+
+**How to decide:**
+```
+Same root cause OR same file/component → one PR
+Different root causes AND different files → separate PRs
+```
+
+Instruct the fix agent explicitly: "Fix issues #A, #B, and #C in one PR — they all share <root cause>. Include `Fixes #A, Fixes #B, Fixes #C` in the PR body."
+
 ## SLA — 30 Minutes Issue-to-Merged-PR
 
-Hard target. Every open issue on `kubestellar/console` should have a merged fix within 30 min of `createdAt`. Age is the primary sort key — always oldest first.
+Hard target. Every open issue on `kubestellar/console` should have a merged fix within 30 min of `createdAt`. Age is the primary sort key — always oldest first (after P0/P1 are clear).
 
 ## Skip List
 
