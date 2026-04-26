@@ -13,7 +13,7 @@ set -euo pipefail
 
 HIVE_VERSION="0.2.0"
 CONF="/etc/hive/hive.conf"
-ENV_DIR="/etc/hive"
+ENV_DIR="/etc/supervised-agent"
 REPO_DIR="/tmp/hive"
 LOG="/var/log/hive.log"
 
