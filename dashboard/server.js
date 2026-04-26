@@ -505,6 +505,56 @@ app.post('/api/model/:agent/:model', (req, res) => {
   });
 });
 
+// Pause / Resume agent
+const GOVERNOR_CADENCE_DIR = '/var/run/kick-governor';
+const PAUSE_BACKUP_SUFFIX = '.pre-pause';
+
+app.post('/api/pause/:agent', (req, res) => {
+  const agent = req.params.agent;
+  const allowed = ['scanner', 'reviewer', 'architect', 'outreach'];
+  if (!allowed.includes(agent)) {
+    return res.status(400).json({ error: `cannot pause ${agent}` });
+  }
+  const cadenceFile = path.join(GOVERNOR_CADENCE_DIR, `cadence_${agent}`);
+  try {
+    const current = fs.readFileSync(cadenceFile, 'utf8').trim();
+    if (current !== '0' && current !== 'paused') {
+      fs.writeFileSync(cadenceFile + PAUSE_BACKUP_SUFFIX, current);
+    }
+    fs.writeFileSync(cadenceFile, '0');
+  } catch (e) {
+    return res.status(500).json({ error: `failed to write cadence: ${e.message}` });
+  }
+  execFile('/usr/local/bin/hive', ['stop', agent], { timeout: 30000 }, (err) => {
+    if (err) console.error(`pause stop error for ${agent}:`, err.message);
+    res.json({ ok: true, output: `${agent} paused` });
+  });
+});
+
+app.post('/api/resume/:agent', (req, res) => {
+  const agent = req.params.agent;
+  const allowed = ['scanner', 'reviewer', 'architect', 'outreach'];
+  if (!allowed.includes(agent)) {
+    return res.status(400).json({ error: `cannot resume ${agent}` });
+  }
+  const cadenceFile = path.join(GOVERNOR_CADENCE_DIR, `cadence_${agent}`);
+  const backupFile = cadenceFile + PAUSE_BACKUP_SUFFIX;
+  try {
+    let restored = '30min';
+    if (fs.existsSync(backupFile)) {
+      restored = fs.readFileSync(backupFile, 'utf8').trim() || '30min';
+      fs.unlinkSync(backupFile);
+    }
+    fs.writeFileSync(cadenceFile, restored);
+  } catch (e) {
+    return res.status(500).json({ error: `failed to restore cadence: ${e.message}` });
+  }
+  execFile('/usr/local/bin/hive', ['kick', agent], { timeout: 30000 }, (err, stdout) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ ok: true, output: `${agent} resumed` });
+  });
+});
+
 // Token usage
 app.get('/api/tokens', (_req, res) => {
   res.json(tokenCache || { error: 'no data yet' });

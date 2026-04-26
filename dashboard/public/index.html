@@ -46,6 +46,7 @@
     .agent-state { text-align: right; font-size: 0.75rem; font-weight: 600; margin-top: 6px; }
     .agent-state.working { color: var(--green); }
     .agent-state.idle { color: var(--muted); }
+    .agent-state.paused { color: #f85149; }
     .agent-name { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
     .agent-name .dot {
       display: inline-block; width: 8px; height: 8px;
@@ -77,6 +78,13 @@
     }
     .kick-prompt:focus { border-color: var(--accent); }
     .kick-prompt::placeholder { color: var(--muted); }
+    .btn-toggle { cursor: pointer; font-size: 0.7rem; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); transition: all 0.2s; }
+    .btn-toggle:hover { border-color: var(--accent); color: var(--text); }
+    .btn-toggle.paused { background: rgba(248,81,73,0.15); border-color: #f85149; color: #f85149; }
+    .btn-toggle.running { background: rgba(63,185,80,0.15); border-color: #3fb950; color: #3fb950; }
+    .agent-card.paused { border-color: #f85149; opacity: 0.7; }
+    .agent-card.paused .agent-state { color: #f85149; }
+    .pause-badge { display: inline-block; font-size: 0.6rem; background: rgba(248,81,73,0.15); color: #f85149; border: 1px solid rgba(248,81,73,0.3); border-radius: 3px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }
 
     /* Health status panel */
     .health { margin-bottom: 24px; }
@@ -666,8 +674,11 @@
       });
       const cards = agents.map(a => {
         const needsLogin = a.needsLogin === true;
-        const cls = needsLogin ? 'needs-login' : (a.state === 'stopped' ? 'stopped' : a.busy);
+        const isPaused = a.state === 'stopped' || a.cadence === 'paused';
+        const cls = needsLogin ? 'needs-login' : isPaused ? 'paused' : (a.state === 'stopped' ? 'stopped' : a.busy);
         const dotCls = a.state === 'stopped' ? 'stopped' : 'running';
+        const canToggle = a.name !== 'supervisor';
+        const toggleBtn = canToggle ? `<button class="btn-toggle ${isPaused ? 'paused' : 'running'}" onclick="toggleAgent('${a.name}', ${isPaused})">${isPaused ? '▶ resume' : '⏸ pause'}</button>` : '';
         // liveSummary is pushed via SSE every 5s — no separate fetch needed
         let summaryEl = '';
         if (a.liveSummary) {
@@ -685,14 +696,14 @@
         }
         const indEl = agentIndicators(a.name);
         return `<div class="agent-card ${cls}">
-          <div class="agent-name"><span class="dot ${dotCls}"></span>${a.name} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a></div>
+          <div class="agent-name"><span class="dot ${dotCls}"></span>${a.name} ${toggleBtn} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a></div>
           <div class="agent-field"><span class="label">cli</span><span class="value ${a.cli}">${a.cli}</span></div>
           <div class="agent-field"><span class="label">model</span><span class="value">${a.model || ''} ${a.govBackend ? modelChip(a.govBackend, a.govModel, a.govReason) : ''}</span></div>
-          <div class="agent-field"><span class="label">interval</span><span class="value">${a.cadence}</span></div>
-          <div class="agent-field"><span class="label">next run</span><span class="value">${a.nextKick || '—'}</span></div>
+          <div class="agent-field"><span class="label">interval</span><span class="value">${isPaused ? 'paused' : a.cadence}</span></div>
+          <div class="agent-field"><span class="label">next run</span><span class="value">${isPaused ? 'paused' : (a.nextKick || '—')}</span></div>
           ${agentTokenRow(a.name, a.cadence)}
           <div class="agent-field"><span class="label">restarts</span><span class="value${(a.restarts || 0) > 5 ? ' restart-high' : (a.restarts || 0) > 0 ? ' restart-warn' : ''}">${a.restarts || 0}<span class="restart-label">24h</span><span class="restart-spark">${restartSparkSvg(a.name)}</span></span></div>
-          <div class="agent-state ${a.busy}">${a.busy}</div>
+          <div class="agent-state ${isPaused ? 'paused' : a.busy}">${isPaused ? 'paused' : a.busy}</div>
           ${needsLogin ? '<div class="login-warning">⚠ NOT LOGGED IN — run /login</div>' : ''}
           ${summaryEl}${indEl}
           <div class="agent-actions">
@@ -834,9 +845,11 @@
           const dot = (isActive && isWorking) ? '<span class="active-dot"></span>' : '';
           return `<td class="${colCls}${pausedCls}">${dot}${isPaused ? '—' : val}</td>`;
         }).join('');
+        const agentPaused = agentData && (agentData.state === 'stopped' || agentData.cadence === 'paused');
         const nameDot = isWorking ? '<span class="agent-dot"></span>' : '';
+        const pauseBadge = agentPaused ? '<span class="pause-badge">paused</span>' : '';
         const mChip = agentData && agentData.govBackend ? modelChip(agentData.govBackend, agentData.govModel, agentData.govReason) : '';
-        return `<tr><td>${nameDot}${aname}</td>${cells}<td>${mChip}</td></tr>`;
+        return `<tr><td>${nameDot}${aname}${pauseBadge}</td>${cells}<td>${mChip}</td></tr>`;
       }).join('');
       const headers = modes.map(m => {
         const isActive = m === currentMode;
@@ -1183,6 +1196,14 @@
       const data = await res.json();
       if (!data.ok) { alert('Kick failed: ' + (data.error || 'unknown')); return; }
       if (input) input.value = '';
+    }
+
+    async function toggleAgent(agent, currentlyPaused) {
+      const action = currentlyPaused ? 'resume' : 'pause';
+      if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${agent}?`)) return;
+      const res = await fetch(`/api/${action}/${agent}`, { method: 'POST' });
+      const data = await res.json();
+      if (!data.ok) alert(`${action} failed: ` + (data.error || 'unknown'));
     }
 
     async function switchCli(agent, backend) {
