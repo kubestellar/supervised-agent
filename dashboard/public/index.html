@@ -571,7 +571,11 @@
         const contribs = m.contributors || 0;
         const adopters = m.adopters || 0;
         const acmm = m.acmm || 0;
+        const awOpen = m.awesomeOpen || 0;
+        const awMerged = m.awesomeMerged || 0;
         const starSpark = sparkSvg((window._trendData || []).map(s => s.stars || 0), '#e3b341');
+        const awOpenSpark = sparkSvg((window._trendData || []).map(s => s.awesomeOpen || 0), '#58a6ff');
+        const awMergedSpark = sparkSvg((window._trendData || []).map(s => s.awesomeMerged || 0), '#3fb950');
         return `<div class="agent-indicators">
           <div class="ind-group"><span class="ind-group-label">GROWTH</span><div class="ind-dots">
             <span class="ind-dot-item"><span class="ind-num">⭐ ${stars}</span><span class="ind-dlabel">stars ${starSpark}</span></span>
@@ -581,6 +585,10 @@
           <div class="ind-group"><span class="ind-group-label">ADOPTION</span><div class="ind-dots">
             <span class="ind-dot-item"><span class="ind-num">${adopters}</span><span class="ind-dlabel">adopters</span></span>
             <span class="ind-dot-item"><span class="ind-num">${acmm}</span><span class="ind-dlabel">ACMM badges</span></span>
+          </div></div>
+          <div class="ind-group"><span class="ind-group-label">AWESOME LISTS</span><div class="ind-dots">
+            <span class="ind-dot-item"><span class="ind-num">${awOpen}</span><span class="ind-dlabel">open ${awOpenSpark}</span></span>
+            <span class="ind-dot-item"><span class="ind-num">${awMerged}</span><span class="ind-dlabel">merged ${awMergedSpark}</span></span>
           </div></div>
         </div>`;
       }

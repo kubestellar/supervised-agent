@@ -157,6 +157,8 @@ function persistSnapshot() {
     adopters: am.outreach?.adoptersTotal || 0,
     adopterPrs: am.outreach?.adopterPending || 0,
     ciPassRate: ciPassRate || 0,
+    awesomeOpen: am.outreach?.awesomeOpen || 0,
+    awesomeMerged: am.outreach?.awesomeMerged || 0,
   };
   persistentHistory.push(snap);
   if (persistentHistory.length > MAX_PERSISTENT_POINTS) {
@@ -249,6 +251,8 @@ function fetchStatus() {
           ga4Errors: agentMetrics?.outreach?.ga4Errors || 0,
           adopters: agentMetrics?.outreach?.adoptersTotal || 0,
           adopterPrs: agentMetrics?.outreach?.adopterPending || 0,
+          awesomeOpen: agentMetrics?.outreach?.awesomeOpen || 0,
+          awesomeMerged: agentMetrics?.outreach?.awesomeMerged || 0,
           tokens: {},
           tokenTotal: 0,
           tokenInput: 0,
