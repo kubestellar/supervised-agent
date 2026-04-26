@@ -579,6 +579,12 @@ maybe_kick() {
   cadence=$(get_cadence "$agent" "$mode")
   elapsed=$(seconds_since_last_kick "$agent")
 
+  # Dashboard pause flag — survives governor ticks
+  if [[ -f "$STATE_DIR/paused_${agent}" ]]; then
+    log "SKIP ${agent} (mode=${mode} — DASHBOARD PAUSED)"
+    return
+  fi
+
   if [ "$cadence" -eq 0 ]; then
     log "SKIP ${agent} (mode=${mode} — PAUSED)"
     return
@@ -637,6 +643,10 @@ echo "$busy_pct"  > "$STATE_DIR/busyness_pct"
 
 # Write per-agent cadences for hive status to read
 for _agent in scanner reviewer architect outreach supervisor; do
+  if [[ -f "$STATE_DIR/paused_${_agent}" ]]; then
+    echo "paused" > "$STATE_DIR/cadence_${_agent}"
+    continue
+  fi
   _secs=$(get_cadence "$_agent" "$mode")
   if [ "$_secs" -eq 0 ]; then
     echo "paused"

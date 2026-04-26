@@ -505,9 +505,8 @@ app.post('/api/model/:agent/:model', (req, res) => {
   });
 });
 
-// Pause / Resume agent
+// Pause / Resume agent — uses a flag file that the governor respects
 const GOVERNOR_CADENCE_DIR = '/var/run/kick-governor';
-const PAUSE_BACKUP_SUFFIX = '.pre-pause';
 
 app.post('/api/pause/:agent', (req, res) => {
   const agent = req.params.agent;
@@ -515,15 +514,12 @@ app.post('/api/pause/:agent', (req, res) => {
   if (!allowed.includes(agent)) {
     return res.status(400).json({ error: `cannot pause ${agent}` });
   }
-  const cadenceFile = path.join(GOVERNOR_CADENCE_DIR, `cadence_${agent}`);
+  const pauseFlag = path.join(GOVERNOR_CADENCE_DIR, `paused_${agent}`);
   try {
-    const current = fs.readFileSync(cadenceFile, 'utf8').trim();
-    if (current !== '0' && current !== 'paused') {
-      fs.writeFileSync(cadenceFile + PAUSE_BACKUP_SUFFIX, current);
-    }
-    fs.writeFileSync(cadenceFile, '0');
+    fs.writeFileSync(pauseFlag, new Date().toISOString());
+    fs.writeFileSync(path.join(GOVERNOR_CADENCE_DIR, `cadence_${agent}`), 'paused');
   } catch (e) {
-    return res.status(500).json({ error: `failed to write cadence: ${e.message}` });
+    return res.status(500).json({ error: `failed to write pause flag: ${e.message}` });
   }
   execFile('/usr/local/bin/hive', ['stop', agent], { timeout: 30000 }, (err) => {
     if (err) console.error(`pause stop error for ${agent}:`, err.message);
@@ -537,17 +533,11 @@ app.post('/api/resume/:agent', (req, res) => {
   if (!allowed.includes(agent)) {
     return res.status(400).json({ error: `cannot resume ${agent}` });
   }
-  const cadenceFile = path.join(GOVERNOR_CADENCE_DIR, `cadence_${agent}`);
-  const backupFile = cadenceFile + PAUSE_BACKUP_SUFFIX;
+  const pauseFlag = path.join(GOVERNOR_CADENCE_DIR, `paused_${agent}`);
   try {
-    let restored = '30min';
-    if (fs.existsSync(backupFile)) {
-      restored = fs.readFileSync(backupFile, 'utf8').trim() || '30min';
-      fs.unlinkSync(backupFile);
-    }
-    fs.writeFileSync(cadenceFile, restored);
+    if (fs.existsSync(pauseFlag)) fs.unlinkSync(pauseFlag);
   } catch (e) {
-    return res.status(500).json({ error: `failed to restore cadence: ${e.message}` });
+    return res.status(500).json({ error: `failed to remove pause flag: ${e.message}` });
   }
   execFile('/usr/local/bin/hive', ['kick', agent], { timeout: 30000 }, (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -605,6 +595,11 @@ app.get('/api/model-advisor', (_req, res) => {
     try {
       const cf = path.join(GOVERNOR_STATE_DIR, `cadence_${agent}`);
       if (fs.existsSync(cf)) entry.cadence = fs.readFileSync(cf, 'utf8').trim();
+    } catch (_) {}
+
+    try {
+      const pf = path.join(GOVERNOR_STATE_DIR, `paused_${agent}`);
+      if (fs.existsSync(pf)) entry.paused = true;
     } catch (_) {}
 
     result.agents.push(entry);
