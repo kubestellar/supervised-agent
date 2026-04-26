@@ -169,10 +169,22 @@ next_run() {
 }
 
 check_rate_limit() {
-  # After a kick, wait and check if the session hit a rate limit.
+  # After a kick, wait and check if the session hit a CLAUDE/COPILOT CLI rate limit.
   # If so, parse the reset time and schedule a re-kick.
   # Error format: "You're out of extra usage · resets 3am (UTC)"
   #           or: "resets 12:30pm (UTC)"
+  #
+  # IMPORTANT DISTINCTION — two kinds of rate limits exist:
+  #   1. Claude/Copilot CLI usage limits (handled HERE) — the AI backend is exhausted.
+  #      Patterns: "You're out of extra usage", "out of extra usage", "resets Xam/pm".
+  #      Action: switch backend, schedule re-kick after reset.
+  #   2. GitHub API rate limits (handled by gh-rate-check.sh) — the gh CLI hit GitHub's
+  #      REST/GraphQL throttle. Patterns: "API rate limit exceeded", "secondary rate limit",
+  #      "403.*rate", "Resource not accessible".
+  #      Action: do NOT restart — agent should wait/retry/use cache. See GH_RATE_LIMIT_INSTRUCTIONS.
+  #
+  # The grep patterns below match ONLY category 1 (CLI limits).
+  # Category 2 is detected separately by /tmp/hive/bin/gh-rate-check.sh.
   local session="$1"
   local agent="$2"
   local delay_secs="${3:-30}"
@@ -182,9 +194,10 @@ check_rate_limit() {
     local pane_text
     pane_text=$($TMUX_BIN capture-pane -t "$session" -p 2>/dev/null || true)
 
-    # Check for actual rate limit / usage exhaustion messages.
-    # Match Claude/Copilot error phrases only — avoid false positives from the
-    # supervisor's own status table ("Rate limits │ No issues detected").
+    # Match Claude/Copilot CLI exhaustion messages ONLY.
+    # These patterns are specific to AI backend usage limits and will NOT match
+    # GitHub API rate limit messages ("API rate limit exceeded", "secondary rate limit", etc.).
+    # GitHub API limits are handled by gh-rate-check.sh and should not trigger a backend switch.
     local limit_line
     limit_line=$(echo "$pane_text" | grep -iE "you('re| are) out of|out of extra usage|extra usage.*resets|resets [0-9]+(:[0-9]+)?[aApP][mM]" | tail -1 || true)
 
@@ -291,11 +304,14 @@ kick() {
   fi
 
   if ! session_idle "$session"; then
-    # Also check if session is stuck on a rate limit
+    # Check if session is stuck on a Claude/Copilot CLI rate limit (NOT GitHub API rate limit).
+    # These patterns match AI backend exhaustion only. GitHub API rate limits
+    # ("API rate limit exceeded", "secondary rate limit") are detected by gh-rate-check.sh
+    # and should NOT trigger a backend switch — the agent should wait/retry instead.
     local pane_text
     pane_text=$($TMUX_BIN capture-pane -t "$session" -p 2>/dev/null || true)
     if echo "$pane_text" | grep -qiE "you('re| are) out of|out of extra usage|extra usage.*resets"; then
-      log "RATE-LIMITED $session — switching backend"
+      log "RATE-LIMITED $session — switching backend (CLI usage exhausted)"
       switch_backend "$session" "$agent"
       sleep 15
       /usr/local/bin/kick-agents.sh "$agent"
@@ -315,9 +331,19 @@ kick() {
   check_rate_limit "$session" "$agent" 60
 }
 
+# GitHub API rate limit handling instructions — included in every agent's kick message.
+# These are DIFFERENT from Claude/Copilot CLI usage limits. GitHub API limits should
+# never cause an agent restart — they should be worked around.
+GH_RATE_LIMIT_INSTRUCTIONS="GITHUB RATE LIMITS — if gh commands fail with rate limit errors \
+(API rate limit exceeded, secondary rate limit, 403 rate, Resource not accessible), \
+do NOT stop working. Strategies: (1) wait 60s and retry, (2) use 'gh api' with '--cache 1h' \
+for read operations, (3) switch from GraphQL to REST or vice versa, (4) continue with \
+non-GitHub work while waiting. NEVER treat a GitHub rate limit as a reason to stop your pass."
+
 PULL_INSTRUCTIONS="First: cd /tmp/hive && git pull --rebase origin main. Re-read your CLAUDE.md for any updated instructions. \
 HARD RULE — enforced before any other action: never touch any issue or PR that carries a label containing the word 'hold' (case-insensitive). \
-Do not comment on it, do not merge it, do not reference it in other PRs, do not create sub-issues from it. Treat it as if it does not exist."
+Do not comment on it, do not merge it, do not reference it in other PRs, do not create sub-issues from it. Treat it as if it does not exist. \
+$GH_RATE_LIMIT_INSTRUCTIONS"
 
 # Beads startup restore + end-of-pass sync.
 # Each agent has its own beads directory.

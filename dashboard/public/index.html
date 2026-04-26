@@ -341,9 +341,36 @@
     .health-ci.good { color: #3fb950; }
     .health-ci.warn { color: #d29922; }
     .health-ci.bad { color: #f85149; }
+
+    /* GitHub API rate limit alert bar */
+    .gh-rate-alert {
+      background: rgba(210,153,34,0.15); border: 1px solid rgba(210,153,34,0.4);
+      border-radius: 8px; padding: 10px 16px; margin-bottom: 16px;
+      display: none; /* hidden by default, shown via JS */
+    }
+    .gh-rate-alert.active { display: block; }
+    .gh-rate-alert-title {
+      font-size: 0.85rem; font-weight: 700; color: #d29922; margin-bottom: 6px;
+    }
+    .gh-rate-alert-item {
+      font-size: 0.75rem; color: var(--text); padding: 3px 0;
+      display: flex; align-items: baseline; gap: 8px;
+    }
+    .gh-rate-alert-agent {
+      font-weight: 700; color: #d29922; min-width: 70px;
+    }
+    .gh-rate-alert-age {
+      color: var(--muted); font-size: 0.65rem; white-space: nowrap;
+    }
+    .gh-rate-alert-msg {
+      color: var(--text); opacity: 0.85; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; flex: 1;
+    }
   </style>
 </head>
 <body>
+  <div class="gh-rate-alert" id="gh-rate-alert"></div>
+
   <div class="connection live" id="conn">
     <span class="dot-live">●</span> live
   </div>
@@ -1033,6 +1060,39 @@
       </div>`;
     }
 
+    function renderGhRateLimits(ghRateLimits) {
+      const el = document.getElementById('gh-rate-alert');
+      const alerts = (ghRateLimits && ghRateLimits.alerts) || [];
+      // Filter out expired alerts client-side
+      const now = Math.floor(Date.now() / 1000);
+      const GH_RATE_DEFAULT_TTL = 3600;
+      const active = alerts.filter(a => {
+        const ttl = a.ttl_seconds || GH_RATE_DEFAULT_TTL;
+        return now - (a.detected_epoch || 0) < ttl;
+      });
+      if (active.length === 0) {
+        el.className = 'gh-rate-alert';
+        el.innerHTML = '';
+        return;
+      }
+      el.className = 'gh-rate-alert active';
+      const SECONDS_PER_MINUTE = 60;
+      const MINUTES_PER_HOUR = 60;
+      const items = active.map(a => {
+        const ageSec = now - (a.detected_epoch || now);
+        let ageStr;
+        if (ageSec < SECONDS_PER_MINUTE) ageStr = ageSec + 's ago';
+        else if (ageSec < SECONDS_PER_MINUTE * MINUTES_PER_HOUR) ageStr = Math.floor(ageSec / SECONDS_PER_MINUTE) + 'm ago';
+        else ageStr = Math.floor(ageSec / (SECONDS_PER_MINUTE * MINUTES_PER_HOUR)) + 'h ago';
+        return `<div class="gh-rate-alert-item">
+          <span class="gh-rate-alert-agent">${esc(a.agent)}</span>
+          <span class="gh-rate-alert-age">${ageStr}</span>
+          <span class="gh-rate-alert-msg">${esc(a.message || 'GitHub API rate limited')}</span>
+        </div>`;
+      }).join('');
+      el.innerHTML = `<div class="gh-rate-alert-title">GitHub API Rate Limit (${active.length} agent${active.length > 1 ? 's' : ''})</div>${items}`;
+    }
+
     function render(data) {
       if (!data || data.error) return;
       const scrollY = window.scrollY;
@@ -1042,6 +1102,7 @@
       window._tokensByAgent = (data.tokens || {}).byAgent || {};
       window._lastAgents = data.agents || [];
       window._lastBudget = data.budget || {};
+      renderGhRateLimits(data.ghRateLimits || {});
       renderAgents(data.agents || []);
       renderGovernor(data.governor || {}, data.cadenceMatrix || [], data);
       renderTokens(data.tokens || {});

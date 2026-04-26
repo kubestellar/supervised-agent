@@ -21,6 +21,28 @@ let healthChecks = {};
 let agentMetrics = {};
 let summariesCache = {};
 let activityCache = {};
+let ghRateLimitsCache = { alerts: [] };
+
+// GitHub API rate limit alerts — read from gh-rate-check.sh output every 30s
+const GH_RATE_LIMITS_FILE = '/var/run/hive-metrics/gh_rate_limits.json';
+const GH_RATE_REFRESH_MS = 30000; // 30 seconds
+function fetchGhRateLimits() {
+  try {
+    if (fs.existsSync(GH_RATE_LIMITS_FILE)) {
+      const raw = fs.readFileSync(GH_RATE_LIMITS_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      // Prune expired alerts client-side as well
+      const now = Math.floor(Date.now() / 1000);
+      data.alerts = (data.alerts || []).filter(a => {
+        const ttl = a.ttl_seconds || 3600;
+        return now - (a.detected_epoch || 0) < ttl;
+      });
+      ghRateLimitsCache = data;
+    }
+  } catch (_) { /* file missing or malformed — keep stale cache */ }
+}
+fetchGhRateLimits();
+setInterval(fetchGhRateLimits, GH_RATE_REFRESH_MS);
 
 // Fetch CI pass rate + binary health checks every 60s
 function fetchHealthChecks() {
@@ -175,6 +197,8 @@ function fetchStatus() {
             }
           } catch (_) {}
         }
+        // GitHub API rate limit alerts
+        statusCache.ghRateLimits = ghRateLimitsCache;
         // Activity from JSONL tailing + tmux scraping — no stale status file fallback
         statusCache.summaries = summariesCache;
         for (const a of (statusCache.agents || [])) {
@@ -470,6 +494,11 @@ app.get('/api/model-advisor', (_req, res) => {
     result.agents.push(entry);
   }
   res.json(result);
+});
+
+// GitHub API rate limit alerts
+app.get('/api/gh-rate-limits', (_req, res) => {
+  res.json(ghRateLimitsCache || { alerts: [] });
 });
 
 // Comprehensive exec summaries (task + progress + results)
