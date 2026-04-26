@@ -79,6 +79,8 @@ outreach_tmp=$(mktemp -d)
 (c=$(gh api repos/kubestellar/console/contributors?per_page=1 -i 2>/dev/null | grep -oP 'page=\K\d+(?=>; rel="last")' || echo 0); [ "$c" = "0" ] && c=$(gh api repos/kubestellar/console/contributors --jq 'length' 2>/dev/null || echo 0); echo "$c" > "$outreach_tmp/contribs") &
 (a=$(gh api repos/kubestellar/console/contents/ADOPTERS.MD --jq '.content' 2>/dev/null | base64 -d 2>/dev/null | grep -cP '^\|.*\|.*\|' || echo 0); a=$(( a > 2 ? a - 2 : 0 )); echo "$a" > "$outreach_tmp/adopters") &
 (unset GITHUB_TOKEN; [ -n "$HIVE_GITHUB_TOKEN" ] && export GH_TOKEN="$HIVE_GITHUB_TOKEN"; gh api repos/kubestellar/docs/contents/src/app/%5Blocale%5D/acmm-leaderboard/page.tsx --jq '.content' 2>/dev/null | base64 -d 2>/dev/null | sed -n '/BADGE_PARTICIPANTS = new Set/,/\]);/p' | grep -cP '^\s+"[a-zA-Z]' > "$outreach_tmp/acmm" 2>/dev/null || echo 0 > "$outreach_tmp/acmm") &
+(gh api 'search/issues?q=author:clubanderson+type:pr+is:open+KubeStellar+in:title&per_page=100' --jq '[.items[] | select(.repository_url | test("awesome"))] | length' > "$outreach_tmp/awesome_open" 2>/dev/null || echo 0 > "$outreach_tmp/awesome_open") &
+(gh api 'search/issues?q=author:clubanderson+type:pr+is:closed+KubeStellar+in:title&per_page=100' --jq '[.items[] | select(.repository_url | test("awesome") and .pull_request.merged_at != null)] | length' > "$outreach_tmp/awesome_merged" 2>/dev/null || echo 0 > "$outreach_tmp/awesome_merged") &
 wait
 stars=$(cat "$outreach_tmp/stars" 2>/dev/null || echo 0)
 forks=$(cat "$outreach_tmp/forks" 2>/dev/null || echo 0)
@@ -86,6 +88,8 @@ contributors=$(cat "$outreach_tmp/contribs" 2>/dev/null || echo 0)
 adopters_total=$(cat "$outreach_tmp/adopters" 2>/dev/null || echo 0)
 acmm_count=$(cat "$outreach_tmp/acmm" 2>/dev/null || echo 0)
 acmm_count=${acmm_count:-0}
+awesome_open=$(cat "$outreach_tmp/awesome_open" 2>/dev/null || echo 0)
+awesome_merged=$(cat "$outreach_tmp/awesome_merged" 2>/dev/null || echo 0)
 rm -rf "$outreach_tmp"
 
 # ── Architect: PR counts from tmux (live doing is summary) ──
@@ -100,6 +104,6 @@ cat <<OUT
   "scanner": $scanner_json,
   "reviewer": $reviewer_json,
   "architect": $(jq -n --argjson json "$architect_json" --arg prs "$architect_prs" --arg closed "$architect_closed" '$json | .prs = ($prs|tonumber) | .closed = ($closed|tonumber)'),
-  "outreach": $(jq -n --argjson json "$outreach_json" --argjson stars "$stars" --argjson forks "$forks" --argjson contribs "$contributors" --argjson adopters "$adopters_total" --argjson acmm "$acmm_count" '$json | .stars = $stars | .forks = $forks | .contributors = $contribs | .adopters = $adopters | .acmm = $acmm')
+  "outreach": $(jq -n --argjson json "$outreach_json" --argjson stars "$stars" --argjson forks "$forks" --argjson contribs "$contributors" --argjson adopters "$adopters_total" --argjson acmm "$acmm_count" --argjson awOpen "$awesome_open" --argjson awMerged "$awesome_merged" '$json | .stars = $stars | .forks = $forks | .contributors = $contribs | .adopters = $adopters | .acmm = $acmm | .awesomeOpen = $awOpen | .awesomeMerged = $awMerged')
 }
 OUT
