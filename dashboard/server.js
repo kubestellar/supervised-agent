@@ -49,6 +49,7 @@ setInterval(fetchGhRateLimits, GH_RATE_REFRESH_MS);
 
 // Fetch CI pass rate + binary health checks every 60s
 function fetchHealthChecks() {
+  execFile(path.join(__dirname, 'health-check.sh'), [], { timeout: 30000 }, (err, stdout) => {
     if (!err && stdout.trim()) {
       try {
         const d = JSON.parse(stdout.trim());
@@ -64,6 +65,7 @@ setInterval(fetchHealthChecks, 300000);  // every 5 min (REST API)
 // Fetch token usage from JSONL session files every 60s
 let tokenCache = {};
 function fetchTokens() {
+  execFile(path.join(__dirname, 'token-collector.sh'), [], { timeout: 30000 }, (err, stdout) => {
     if (!err && stdout.trim()) {
       try { tokenCache = JSON.parse(stdout.trim()); } catch (_) {}
     }
