@@ -473,8 +473,9 @@ Send ntfy for every new listing secured. One outreach per project — never spam
 
 # ── Governor model integration ──────────────────────────────────────
 # Reads /var/run/kick-governor/model_<agent> written by the governor's
-# optimize_model_assignment(). If the model changed, restarts the agent
-# with the new backend/model and returns 1 (skip this kick cycle).
+# optimize_model_assignment(). Uses in-CLI /model command when possible
+# to avoid disrupting agent work. Only restarts when the backend binary
+# itself changes (e.g., claude → copilot).
 GOVERNOR_STATE_DIR="/var/run/kick-governor"
 
 apply_model_if_changed() {
@@ -496,8 +497,6 @@ apply_model_if_changed() {
     return 0
   fi
 
-  log "MODEL SWITCH $agent: ${cur_backend}:${cur_model} → ${gov_backend}:${gov_model} (governor)"
-
   if ! session_exists "$session"; then
     set_current_backend "$agent" "$gov_backend"
     BACKEND_MODEL[$gov_backend]="$gov_model"
@@ -505,10 +504,13 @@ apply_model_if_changed() {
     return 0
   fi
 
+  # Never interrupt a working agent — defer all model changes until idle
   if ! session_idle "$session"; then
-    log "MODEL SWITCH $agent — session busy, will apply on next kick"
+    log "MODEL DEFER $agent: ${cur_backend}:${cur_model} → ${gov_backend}:${gov_model} — agent busy, will apply when idle"
     return 0
   fi
+
+  log "MODEL SWITCH $agent: ${cur_backend}:${cur_model} → ${gov_backend}:${gov_model} (agent idle, restarting)"
 
   capture_handoff_state "$session" "$agent"
 
