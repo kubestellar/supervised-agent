@@ -9,8 +9,8 @@ const PORT = process.env.HIVE_DASHBOARD_PORT || 3001;
 const REFRESH_MS = 5000;
 const METRICS_DIR = '/var/run/hive-metrics';
 const HISTORY_DIR = path.join(METRICS_DIR, 'history');
-const HISTORY_FILE = path.join(HISTORY_DIR, 'daily.json');
 const AGENT_METRICS_CACHE_FILE = path.join(METRICS_DIR, 'agent-metrics-cache.json');
+const HISTORY_FILE = path.join(HISTORY_DIR, 'daily.json');
 try { fs.mkdirSync(HISTORY_DIR, { recursive: true }); } catch (_) {}
 const PERSIST_INTERVAL_MS = 15 * 60 * 1000; // 15 min
 const MAX_PERSISTENT_POINTS = 30 * 24 * 4; // 30 days at 15-min intervals = 2880
@@ -172,6 +172,7 @@ setTimeout(persistSnapshot, 10000);
 function fetchStatus() {
   return new Promise((resolve) => {
     const hiveEnv = { ...process.env, HIVE_TZ: process.env.HIVE_TZ || 'America/New_York' };
+    execFile('hive', ['status', '--json'], { timeout: 30000, env: hiveEnv }, (err, stdout) => {
       if (err) {
         console.error('hive status --json failed:', err.message);
         resolve(statusCache); // return stale data
@@ -416,6 +417,7 @@ app.post('/api/kick/:agent', (req, res) => {
       });
     });
   } else {
+    execFile('hive', ['kick', agent], { timeout: 30000 }, (err, stdout) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ ok: true, output: stdout.trim() });
     });
@@ -432,6 +434,7 @@ app.post('/api/switch/:agent/:backend', (req, res) => {
   if (!allowedBackends.includes(backend)) {
     return res.status(400).json({ error: `invalid backend: ${backend}` });
   }
+  execFile('hive', ['switch', agent, backend], { timeout: 30000 }, (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ ok: true, output: stdout.trim() });
   });
@@ -443,6 +446,7 @@ app.post('/api/model/:agent/:model', (req, res) => {
   if (!allowedAgents.includes(agent)) {
     return res.status(400).json({ error: `invalid agent: ${agent}` });
   }
+  execFile('hive', ['model', agent, decodeURIComponent(model)], { timeout: 30000 }, (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ ok: true, output: stdout.trim() });
   });
