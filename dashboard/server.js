@@ -18,6 +18,8 @@ const MAX_PERSISTENT_POINTS = 30 * 24 * 4; // 30 days at 15-min intervals = 2880
 // Cache for status data
 let statusCache = null;
 let lastFetch = 0;
+// Last known good beads values (bd timeout returns -1)
+let lastGoodBeads = { workers: 0, supervisor: 0 };
 let ciPassRate = 0;
 let healthChecks = {};
 let agentMetrics = {};
@@ -181,6 +183,13 @@ function fetchStatus() {
       try {
         statusCache = JSON.parse(stdout);
         lastFetch = Date.now();
+        // Replace -1 (bd timeout) with last known good beads values
+        if (statusCache.beads) {
+          if (statusCache.beads.workers >= 0) lastGoodBeads.workers = statusCache.beads.workers;
+          else statusCache.beads.workers = lastGoodBeads.workers;
+          if (statusCache.beads.supervisor >= 0) lastGoodBeads.supervisor = statusCache.beads.supervisor;
+          else statusCache.beads.supervisor = lastGoodBeads.supervisor;
+        }
         // Build reviewer metrics from live data
         statusCache.health = healthChecks;
         statusCache.ciPassRate = ciPassRate;
@@ -295,8 +304,8 @@ function fetchStatus() {
 setInterval(fetchStatus, REFRESH_MS);
 fetchStatus();
 
-// Slow refresh for repo data (GH API) — every 60s to avoid rate limiting
-const REPO_REFRESH_MS = 60000;
+// Slow refresh for repo data (GH API) — every 5min to reduce GH token spend
+const REPO_REFRESH_MS = 300000;
 function fetchRepoStatus() {
   const hiveEnv = { ...process.env, HIVE_TZ: process.env.HIVE_TZ || 'America/New_York' };
   execFile('/usr/local/bin/hive', ['status', '--json', '--repos'], { timeout: 30000, env: hiveEnv }, (err, stdout) => {
