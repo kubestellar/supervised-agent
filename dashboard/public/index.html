@@ -172,7 +172,7 @@
     .active-dot {
       display: inline-block; width: 6px; height: 6px; border-radius: 50%;
       background: var(--green); margin-right: 6px; vertical-align: middle;
-      animation: green-pulse 2.5s ease-in-out infinite;
+      animation: green-pulse 4s ease-in-out infinite;
     }
 
     /* Temperature gauge */
@@ -786,19 +786,19 @@
       const rows = agentOrder.map(aname => {
         const row = matrix.find(r => r.agent === aname);
         if (!row) return '';
+        const agentData = agents.find(a => a.name === aname);
+        const isWorking = agentData && agentData.busy === 'working';
         const cells = modes.map(m => {
           const val = row[m] || '?';
           const isActive = m === currentMode;
           const isPaused = val === 'paused';
           const colCls = isActive ? `col-active mode-${m}` : '';
           const pausedCls = isPaused ? ' paused' : '';
-          return `<td class="${colCls}${pausedCls}">${isPaused ? '—' : val}</td>`;
+          const dot = (isActive && isWorking) ? '<span class="active-dot"></span>' : '';
+          return `<td class="${colCls}${pausedCls}">${dot}${isPaused ? '—' : val}</td>`;
         }).join('');
-        const agentData = agents.find(a => a.name === aname);
         const mChip = agentData && agentData.govBackend ? modelChip(agentData.govBackend, agentData.govModel, agentData.govReason) : '';
-        const isActive = agentData && agentData.busy === 'working';
-        const dot = isActive ? '<span class="active-dot"></span>' : '';
-        return `<tr><td>${dot}${aname}</td>${cells}<td>${mChip}</td></tr>`;
+        return `<tr><td>${aname}</td>${cells}<td>${mChip}</td></tr>`;
       }).join('');
       const headers = modes.map(m => {
         const isActive = m === currentMode;
