@@ -674,7 +674,7 @@
       });
       const cards = agents.map(a => {
         const needsLogin = a.needsLogin === true;
-        const isPaused = a.state === 'stopped' || a.cadence === 'paused';
+        const isPaused = a.paused === true || a.state === 'stopped' || a.cadence === 'paused';
         const cls = needsLogin ? 'needs-login' : isPaused ? 'paused' : (a.state === 'stopped' ? 'stopped' : a.busy);
         const dotCls = a.state === 'stopped' ? 'stopped' : 'running';
         const canToggle = a.name !== 'supervisor';
@@ -836,16 +836,17 @@
         if (!row) return '';
         const agentData = agents.find(a => a.name === aname);
         const isWorking = agentData && agentData.busy === 'working';
+        const agentPaused = agentData && (agentData.paused === true || agentData.state === 'stopped' || agentData.cadence === 'paused');
         const cells = modes.map(m => {
           const val = row[m] || '?';
           const isActive = m === currentMode;
           const isPaused = val === 'paused';
+          const showPaused = isPaused || (isActive && agentPaused);
           const colCls = isActive ? `col-active mode-${m}` : '';
-          const pausedCls = isPaused ? ' paused' : '';
-          const dot = (isActive && isWorking) ? '<span class="active-dot"></span>' : '';
-          return `<td class="${colCls}${pausedCls}">${dot}${isPaused ? '—' : val}</td>`;
+          const pausedCls = showPaused ? ' paused' : '';
+          const dot = (isActive && isWorking && !agentPaused) ? '<span class="active-dot"></span>' : '';
+          return `<td class="${colCls}${pausedCls}">${dot}${showPaused ? '<span class="pause-badge">paused</span>' : val}</td>`;
         }).join('');
-        const agentPaused = agentData && (agentData.state === 'stopped' || agentData.cadence === 'paused');
         const nameDot = isWorking ? '<span class="agent-dot"></span>' : '';
         const pauseBadge = agentPaused ? '<span class="pause-badge">paused</span>' : '';
         const mChip = agentData && agentData.govBackend ? modelChip(agentData.govBackend, agentData.govModel, agentData.govReason) : '';
@@ -1200,7 +1201,6 @@
 
     async function toggleAgent(agent, currentlyPaused) {
       const action = currentlyPaused ? 'resume' : 'pause';
-      if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${agent}?`)) return;
       const res = await fetch(`/api/${action}/${agent}`, { method: 'POST' });
       const data = await res.json();
       if (!data.ok) alert(`${action} failed: ` + (data.error || 'unknown'));
