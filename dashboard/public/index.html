@@ -167,6 +167,14 @@
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
     .agent-card.working .agent-name { animation: pulse 2s ease-in-out infinite; }
 
+    /* Green pulsing dot for active agents in cadence matrix */
+    @keyframes green-pulse { 0%,100% { opacity: 1; box-shadow: 0 0 4px var(--green); } 50% { opacity: 0.3; box-shadow: none; } }
+    .active-dot {
+      display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green); margin-right: 6px; vertical-align: middle;
+      animation: green-pulse 2.5s ease-in-out infinite;
+    }
+
     /* Temperature gauge */
     .temp-gauge { margin: 12px 0 8px; }
     .temp-gauge-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
@@ -788,7 +796,9 @@
         }).join('');
         const agentData = agents.find(a => a.name === aname);
         const mChip = agentData && agentData.govBackend ? modelChip(agentData.govBackend, agentData.govModel, agentData.govReason) : '';
-        return `<tr><td>${aname}</td>${cells}<td>${mChip}</td></tr>`;
+        const isActive = agentData && agentData.busy === 'working';
+        const dot = isActive ? '<span class="active-dot"></span>' : '';
+        return `<tr><td>${dot}${aname}</td>${cells}<td>${mChip}</td></tr>`;
       }).join('');
       const headers = modes.map(m => {
         const isActive = m === currentMode;
