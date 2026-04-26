@@ -21,7 +21,7 @@ AGENT_TMUX_SESSION = {
     "supervisor": "supervisor",
     "scanner": "issue-scanner",
     "reviewer": "reviewer",
-    "architect": "feature",
+    "architect": "architect",
     "outreach": "outreach",
 }
 
