@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🐝 KubeStellar Hive Dashboard</title>
+  <style>
+    :root {
+      --bg: #0d1117; --surface: #161b22; --border: #30363d;
+      --text: #e6edf3; --muted: #8b949e; --green: #3fb950;
+      --yellow: #d29922; --red: #f85149; --blue: #58a6ff;
+      --cyan: #39d2c0; --purple: #bc8cff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+      background: var(--bg); color: var(--text);
+      padding: 24px; min-height: 100vh;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 20px; display: flex; align-items: center; }
+    h1 span.bee { font-size: 1.6rem; margin-right: 8px; }
+    .timestamp { color: var(--muted); font-size: 0.8rem; margin-left: 12px; }
+    .git-version { font-size: 0.65rem; color: var(--muted); margin-left: 10px; font-weight: 400; font-family: monospace; }
+    .git-version .git-behind { color: var(--yellow); font-weight: 600; }
+    .git-version .git-dirty { color: var(--yellow); }
+    .header-spacer { flex: 1; }
+    .widget-dl {
+      font-size: 0.75rem; color: var(--cyan); text-decoration: none;
+      border: 1px solid var(--cyan); border-radius: 6px; padding: 4px 10px;
+      transition: background 0.2s, color 0.2s; margin-left: auto; margin-right: auto;
+    }
+    .widget-dl:hover { background: var(--cyan); color: var(--bg); }
+
+    /* Agent cards */
+    .agents { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 24px; }
+    .agent-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px; transition: border-color 0.3s;
+      position: relative;
+    }
+    .agent-card.working { border-color: var(--yellow); }
+    .agent-card.idle { border-color: var(--border); }
+    .agent-card.stopped { border-color: var(--red); }
+    .agent-card.needs-login { border-color: #ef4444; }
+    .login-warning { background: rgba(239,68,68,0.15); color: #ef4444; font-size: 0.75rem; font-weight: 700; text-align: center; padding: 4px 8px; border-radius: 4px; margin-top: 6px; }
+    .agent-state { text-align: right; font-size: 0.75rem; font-weight: 600; margin-top: 6px; }
+    .agent-state.working { color: var(--green); }
+    .agent-state.idle { color: var(--muted); }
+    .agent-name { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+    .agent-name .dot {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; margin-right: 6px;
+    }
+    .dot.running { background: var(--green); }
+    .dot.stopped { background: var(--red); }
+    .agent-field { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 2px 0; }
+    .agent-field .label { color: var(--muted); }
+    .agent-field .value { text-align: right; }
+    .value.working { color: var(--yellow); }
+    .restart-label { font-size: 0.6rem; color: var(--muted); margin-left: 3px; }
+    .restart-warn { color: var(--yellow); }
+    .restart-high { color: var(--red); }
+    .restart-spark { display: inline-block; margin-left: 6px; vertical-align: middle; }
+    .value.idle { color: var(--muted); }
+    .value.copilot { color: var(--cyan); }
+    .value.claude { color: var(--purple); }
+    .doing { font-size: 0.75rem; color: var(--cyan); margin-top: 6px; word-break: break-word; white-space: pre-line; line-height: 1.5; min-height: 5.6em; }
+    .summary-age { display: inline-block; font-size: 0.6rem; font-style: normal; border-radius: 3px; padding: 1px 5px; margin-right: 5px; vertical-align: middle; white-space: nowrap; }
+    .summary-age.age-recent { background: rgba(210,153,34,0.15); color: #d29922; border: 1px solid rgba(210,153,34,0.3); }
+    .summary-age.age-stale  { background: rgba(248,81,73,0.15);  color: #f85149; border: 1px solid rgba(248,81,73,0.3); }
+    /* Agent metric gauges — removed, replaced by health panel */
+    .agent-actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .kick-prompt {
+      flex: 1 1 100%; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem;
+      font-family: inherit; outline: none; min-width: 0;
+    }
+    .kick-prompt:focus { border-color: var(--accent); }
+    .kick-prompt::placeholder { color: var(--muted); }
+
+    /* Health status panel */
+    .health { margin-bottom: 24px; }
+    .health h2 { font-size: 0.95rem; margin-bottom: 8px; color: var(--muted); }
+    .health-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+    .health-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px 16px; display: flex; align-items: center; gap: 8px;
+      font-size: 0.8rem;
+    }
+    .health-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .health-dot.ok { background: #3fb950; }
+    .health-dot.fail { background: #f85149; }
+    .health-dot.unknown { background: #8b949e; }
+    .health-label { color: var(--text); }
+    .health-ci { font-weight: 700; }
+    .health-ci.good { color: #3fb950; }
+    .health-ci.warn { color: #d29922; }
+    .health-ci.bad { color: #f85149; }
+    .btn {
+      font-size: 0.7rem; padding: 3px 8px; border-radius: 4px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--muted); cursor: pointer; font-family: inherit;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: var(--border); color: var(--text); }
+    .terminal-link {
+      font-size: 0.7rem; padding: 3px 8px; border-radius: 4px;
+      border: 1px solid var(--cyan); background: transparent;
+      color: var(--cyan); cursor: pointer; font-family: inherit;
+      text-decoration: none; transition: all 0.2s; display: inline-block;
+    }
+    .terminal-link:hover { background: var(--cyan); color: var(--bg); }
+    .backend-select {
+      appearance: none; -webkit-appearance: none;
+      background: var(--surface); color: var(--muted);
+      font-size: 0.7rem; padding: 3px 8px; border-radius: 4px;
+      border: 1px solid var(--border); cursor: pointer; font-family: inherit;
+    }
+    .backend-select:hover { background: var(--border); color: var(--text); }
+    .backend-select option { background: var(--surface); color: var(--text); }
+    .backend-select option:disabled { color: var(--muted); }
+
+    /* Governor */
+    .governor {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px; margin-bottom: 24px;
+    }
+    .governor.dead { border-color: var(--red); }
+    .governor.active { border-color: var(--green); }
+    .gov-title { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .gov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+    .gov-stat { font-size: 0.85rem; }
+    .gov-stat .label { color: var(--muted); font-size: 0.75rem; }
+    .gov-stat .val { font-size: 1.2rem; font-weight: 700; }
+    .gov-stat .val.active { color: var(--green); }
+    .gov-stat .val.dead { color: var(--red); }
+
+    /* Repos */
+    .repos { margin-bottom: 24px; }
+    .repos h2 { font-size: 0.95rem; margin-bottom: 8px; color: var(--muted); }
+    .repo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+    .repo-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px; overflow: hidden;
+    }
+    .repo-name { font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
+    .repo-stats { display: flex; gap: 16px; font-size: 0.8rem; }
+    .repo-stat .num { font-weight: 700; font-size: 1rem; }
+    .repo-stat .label { color: var(--muted); font-size: 0.7rem; }
+
+    /* Sparklines */
+    .sparkline { display: inline-block; vertical-align: middle; margin-left: 6px; flex-shrink: 0; }
+    .sparkline svg { display: block; }
+    .spark-row { display: flex; align-items: center; gap: 6px; overflow: hidden; }
+
+    /* Beads */
+    .beads { display: flex; gap: 24px; font-size: 0.85rem; }
+    .bead-stat .num { font-weight: 700; font-size: 1.1rem; }
+    .bead-stat .label { color: var(--muted); font-size: 0.75rem; }
+
+    /* Connection indicator */
+    .connection {
+      position: fixed; top: 8px; right: 12px;
+      font-size: 0.7rem; color: var(--muted);
+    }
+    .connection .dot-live { color: var(--green); }
+    .connection .dot-dead { color: var(--red); }
+
+    /* Slow blink for LIVE indicator */
+    @keyframes slow-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+    .connection.live { animation: slow-blink 3s ease-in-out infinite; }
+
+    /* Pulse animation for working agents */
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+    .agent-card.working .agent-name { animation: pulse 2s ease-in-out infinite; }
+
+    /* Temperature gauge */
+    .temp-gauge { margin: 12px 0 8px; }
+    .temp-gauge-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
+    .temp-gauge-track {
+      position: relative; height: 24px; border-radius: 12px; overflow: visible;
+      background: linear-gradient(to right, #238636 0%, #238636 7%, #1f6feb 7%, #1f6feb 33%, #d29922 33%, #d29922 67%, #f85149 67%, #f85149 100%);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .temp-gauge-glow {
+      position: absolute; top: 0; left: 0; height: 100%; border-radius: 12px;
+      background: linear-gradient(to right, rgba(35,134,54,0.25), rgba(248,81,73,0.25));
+      filter: blur(6px); pointer-events: none;
+    }
+    .temp-gauge-ticks {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 4px; font-size: 0.55rem; color: rgba(255,255,255,0.6); pointer-events: none;
+    }
+    .temp-gauge-needle {
+      position: absolute; top: -4px; width: 4px; height: 32px;
+      background: #fff; border-radius: 2px;
+      box-shadow: 0 0 8px rgba(255,255,255,0.8), 0 0 16px rgba(255,255,255,0.4);
+      transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 2;
+    }
+    .temp-gauge-needle::after {
+      content: attr(data-val); position: absolute; bottom: -16px; left: 50%;
+      transform: translateX(-50%); font-size: 0.75rem; font-weight: 700; color: #fff;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    }
+    .temp-gauge-labels {
+      display: flex; justify-content: space-between; margin-top: 4px;
+      font-size: 0.6rem; color: var(--muted);
+    }
+    .temp-gauge-labels span { text-align: center; }
+    .tl-idle { color: #238636; }
+    .tl-quiet { color: #1f6feb; }
+    .tl-busy { color: #d29922; }
+    .tl-surge { color: #f85149; }
+
+    /* Governor cadence matrix table */
+    .gov-matrix { margin-top: 14px; width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+    .gov-matrix th { color: var(--muted); font-weight: 600; padding: 3px 8px; text-align: center; border-bottom: 1px solid var(--border); }
+    .gov-matrix th.mode-active { border-radius: 4px 4px 0 0; padding: 4px 10px; font-weight: 700; }
+    .gov-matrix th.mode-idle  { color: #238636; }
+    .gov-matrix th.mode-quiet { color: #1f6feb; }
+    .gov-matrix th.mode-busy  { color: #d29922; }
+    .gov-matrix th.mode-surge { color: #f85149; }
+    .gov-matrix th.mode-active.mode-idle  { background: rgba(35,134,54,0.15); }
+    .gov-matrix th.mode-active.mode-quiet { background: rgba(31,111,235,0.15); }
+    .gov-matrix th.mode-active.mode-busy  { background: rgba(210,153,34,0.15); }
+    .gov-matrix th.mode-active.mode-surge { background: rgba(248,81,73,0.15); }
+    .gov-matrix td { padding: 3px 8px; text-align: center; color: var(--muted); border-bottom: 1px solid rgba(48,54,61,0.5); }
+    .gov-matrix td:first-child { text-align: left; color: var(--text); font-weight: 600; min-width: 72px; }
+    .gov-matrix td.col-active { font-weight: 700; color: var(--text); }
+    .gov-matrix td.col-active.mode-idle  { background: rgba(35,134,54,0.08); color: #3fb950; }
+    .gov-matrix td.col-active.mode-quiet { background: rgba(31,111,235,0.08); color: #58a6ff; }
+    .gov-matrix td.col-active.mode-busy  { background: rgba(210,153,34,0.08); color: #d29922; }
+    .gov-matrix td.col-active.mode-surge { background: rgba(248,81,73,0.08); color: #f85149; }
+    .gov-matrix td.paused { color: #484f58; font-style: italic; }
+    @keyframes cadence-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .gov-matrix td.col-active.agent-working { animation: cadence-pulse 2.5s ease-in-out infinite; }
+
+    /* Timeline strip */
+    .gov-timeline { margin-top: 10px; }
+    .gov-timeline-label { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--muted); margin-bottom: 2px; }
+    .gov-timeline-strip { display: flex; height: 6px; border-radius: 3px; overflow: hidden; }
+    .gov-timeline-strip .tick { flex: 1; min-width: 1px; }
+    .tick-idle { background: #238636; }
+    .tick-quiet { background: #1f6feb; }
+    .tick-busy { background: #d29922; }
+    .tick-surge { background: #f85149; }
+    .tick-unknown { background: #484f58; }
+    .gov-timeline-legend { display: flex; gap: 12px; font-size: 0.6rem; margin-top: 3px; }
+
+    /* Agent indicators */
+    .agent-indicators { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 0.75rem; }
+    .ind-label { color: var(--muted); font-size: 0.65rem; }
+    .ind-empty { color: var(--muted); font-style: italic; font-size: 0.7rem; }
+    .ind-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+    .ind-tag {
+      background: rgba(31,111,235,0.15); color: #58a6ff; border: 1px solid rgba(31,111,235,0.3);
+      border-radius: 4px; padding: 1px 6px; font-size: 0.65rem; text-decoration: none;
+    }
+    .ind-tag:hover { background: rgba(31,111,235,0.3); }
+    .ind-pair { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
+    .ind-issue { background: rgba(35,134,54,0.15); color: #3fb950; border-color: rgba(35,134,54,0.3); }
+    .ind-issue:hover { background: rgba(35,134,54,0.3); }
+    .ind-pr { background: rgba(138,99,210,0.15); color: #bc8cff; border-color: rgba(138,99,210,0.3); }
+    .ind-pr:hover { background: rgba(138,99,210,0.3); }
+    .ind-merged { background: rgba(63,185,80,0.15); color: #3fb950; border-color: rgba(63,185,80,0.3); }
+    .ind-merged:hover { background: rgba(63,185,80,0.3); }
+    .ind-arrow { color: var(--muted); font-size: 0.7rem; }
+    .ind-dots { display: flex; flex-wrap: wrap; gap: 8px; }
+    .ind-dot-item { display: flex; align-items: center; gap: 3px; }
+    .ind-dlabel { font-size: 0.6rem; color: var(--muted); }
+    .ind-group { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+    .ind-group-label { font-size: 0.6rem; color: var(--muted); font-weight: 600; min-width: 52px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .ind-stat { display: inline-flex; align-items: baseline; gap: 3px; margin-right: 10px; }
+    .ind-num { font-weight: 700; font-size: 0.9rem; color: var(--text); }
+    .ind-err { color: #f85149; }
+    .ind-err .ind-num { color: #f85149; }
+    .ind-warn { color: #d29922; }
+    .ind-warn .ind-num { color: #d29922; }
+    .ind-ok { color: #3fb950; }
+    .ind-ok .ind-num { color: #3fb950; }
+    .ind-row { display: flex; flex-wrap: wrap; gap: 12px; }
+    .ind-summary { font-size: 0.7rem; color: var(--text); margin-bottom: 4px; line-height: 1.4; opacity: 0.85; }
+
+    /* Token usage panel */
+    .token-panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px;
+    }
+    .token-title { font-size: 1rem; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .token-title .lookback { font-size: 0.7rem; color: var(--muted); font-weight: 400; }
+    .token-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .token-stat { text-align: left; }
+    .token-stat .tval { font-size: 1.3rem; font-weight: 700; }
+    .token-stat .tlabel { font-size: 0.65rem; color: var(--muted); }
+    .token-models { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .token-model-chip {
+      background: rgba(188,140,255,0.1); border: 1px solid rgba(188,140,255,0.25);
+      border-radius: 6px; padding: 6px 10px; font-size: 0.72rem;
+    }
+    .token-model-chip .mname { color: var(--purple); font-weight: 600; }
+    .token-model-chip .mcount { color: var(--muted); margin-left: 6px; }
+    .token-sessions { font-size: 0.7rem; color: var(--muted); }
+    .token-sessions summary { cursor: pointer; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+    .token-session-row { display: flex; gap: 8px; padding: 2px 0; align-items: baseline; }
+    .token-session-row .sid { color: var(--cyan); font-family: monospace; min-width: 90px; }
+    .token-session-row .sagent { font-weight: 600; min-width: 70px; font-size: 0.65rem; }
+    .token-session-row .sagent.a-scanner { color: #58a6ff; }
+    .token-session-row .sagent.a-reviewer { color: #3fb950; }
+    .token-session-row .sagent.a-architect { color: #bc8cff; }
+    .token-session-row .sagent.a-outreach { color: #39d2c0; }
+    .token-session-row .sagent.a-supervisor { color: #d29922; }
+    .token-session-row .sagent.a-unknown { color: var(--muted); font-style: italic; }
+    .token-session-row .smodel { color: var(--purple); min-width: 120px; }
+    .token-session-row .stokens { color: var(--text); font-weight: 600; min-width: 80px; text-align: right; }
+    .token-session-row .smsgs { color: var(--muted); min-width: 50px; }
+    .token-session-row .sproj { color: var(--muted); font-size: 0.65rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Cadence advisor */
+    .advisor-section { margin: 12px 0; padding: 12px; background: rgba(88,166,255,0.05); border: 1px solid rgba(88,166,255,0.15); border-radius: 6px; }
+    .advisor-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 6px; }
+    .advisor-total { font-size: 0.8rem; margin-bottom: 10px; }
+    .advisor-bars { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+    .advisor-bar-row { display: flex; align-items: center; gap: 8px; font-size: 0.72rem; }
+    .advisor-agent { min-width: 70px; color: var(--text); font-weight: 600; }
+    .advisor-bar-track { flex: 1; height: 10px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+    .advisor-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+    .advisor-pct { min-width: 30px; text-align: right; color: var(--muted); }
+    .advisor-burn { min-width: 80px; text-align: right; color: var(--muted); font-size: 0.65rem; }
+    .advisor-tips { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .advisor-tip { font-size: 0.72rem; color: var(--text); padding: 4px 8px; background: rgba(210,153,34,0.08); border-left: 2px solid var(--yellow); border-radius: 0 4px 4px 0; }
+    .advisor-tip b { color: var(--cyan); }
+
+    /* Budget bar */
+    .budget-bar { margin: 8px 0; }
+    .budget-bar-label { font-size: 0.72rem; color: var(--muted); margin-bottom: 3px; display: flex; justify-content: space-between; }
+    .budget-bar-track { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+    .budget-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+    .budget-bar-fill.safe { background: var(--green); }
+    .budget-bar-fill.warning { background: var(--yellow); }
+    .budget-bar-fill.danger { background: var(--red); }
+
+    /* Model chip on agent cards */
+    .model-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; }
+    .model-chip.free { background: rgba(63,185,80,0.12); color: var(--green); }
+    .model-chip.haiku { background: rgba(88,166,255,0.12); color: var(--blue); }
+    .model-chip.sonnet { background: rgba(210,153,34,0.12); color: var(--yellow); }
+    .model-chip.opus { background: rgba(248,81,73,0.12); color: var(--red); }
+
+    /* Health dots (reused inside reviewer indicators) */
+    .health-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+    .health-dot.ok { background: #3fb950; }
+    .health-dot.fail { background: #f85149; }
+    .health-dot.unknown { background: #8b949e; }
+    .health-ci { font-weight: 700; font-size: 0.7rem; }
+    .health-ci.good { color: #3fb950; }
+    .health-ci.warn { color: #d29922; }
+    .health-ci.bad { color: #f85149; }
+
+    /* GitHub API rate limit alert bar */
+    .gh-rate-alert {
+      background: rgba(210,153,34,0.15); border: 1px solid rgba(210,153,34,0.4);
+      border-radius: 8px; padding: 10px 16px; margin-bottom: 16px;
+      display: none; /* hidden by default, shown via JS */
+    }
+    .gh-rate-alert.active { display: block; }
+    .gh-rate-alert-title {
+      font-size: 0.85rem; font-weight: 700; color: #d29922; margin-bottom: 6px;
+    }
+    .gh-rate-alert-item {
+      font-size: 0.75rem; color: var(--text); padding: 3px 0;
+      display: flex; align-items: baseline; gap: 8px;
+    }
+    .gh-rate-alert-agent {
+      font-weight: 700; color: #d29922; min-width: 70px;
+    }
+    .gh-rate-alert-age {
+      color: var(--muted); font-size: 0.65rem; white-space: nowrap;
+    }
+    .gh-rate-alert-msg {
+      color: var(--text); opacity: 0.85; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="gh-rate-alert" id="gh-rate-alert"></div>
+
+  <div class="connection live" id="conn">
+    <span class="dot-live">●</span> live
+  </div>
+
+  <h1><span class="bee">🐝</span> KubeStellar Hive Dashboard <span class="timestamp" id="ts"></span>
+    <span class="git-version" id="git-version"></span>
+    <a href="/api/widget" class="widget-dl" title="Download Übersicht widget">⬇ Widget</a>
+  </h1>
+
+  <div class="governor" id="governor"></div>
+
+  <div class="token-usage" id="token-panel" style="margin-bottom: 24px;"></div>
+
+  <div class="repos">
+    <h2>Repositories</h2>
+    <div class="repo-grid" id="repos"></div>
+  </div>
+
+  <div style="margin-top: 16px; margin-bottom: 24px;">
+    <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 8px;">Beads</h2>
+    <div class="beads" id="beads"></div>
+  </div>
+
+  <div class="agents" id="agents"></div>
+
+  <script>
+    // ── Sparkline helper ──
+    let historyData = [];
+    const SPARK_W = 80, SPARK_H = 20;
+
+    function sparkSvg(rawValues, color) {
+      if (!rawValues || rawValues.length < 2) return '';
+      // Fill zero gaps: if a value is 0 but neighbors are non-zero, carry forward
+      const values = [...rawValues];
+      for (let i = 1; i < values.length; i++) {
+        if (values[i] === 0 && values[i - 1] > 0) {
+          values[i] = values[i - 1];
+        }
+      }
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const range = max - min || 1;
+      const pts = values.map((v, i) => {
+        const x = (i / (values.length - 1)) * SPARK_W;
+        const y = SPARK_H - ((v - min) / range) * (SPARK_H - 2) - 1;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      });
+      return `<span class="sparkline"><svg width="${SPARK_W}" height="${SPARK_H}" viewBox="0 0 ${SPARK_W} ${SPARK_H}">` +
+        `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>` +
+        `<circle cx="${pts[pts.length-1].split(',')[0]}" cy="${pts[pts.length-1].split(',')[1]}" r="2" fill="${color}"/>` +
+        `</svg></span>`;
+    }
+
+    function getHistorySeries(key) {
+      return historyData.map(s => {
+        const keys = key.split('.');
+        let v = s;
+        for (const k of keys) v = v?.[k];
+        return v ?? 0;
+      });
+    }
+
+    function restartSparkSvg(agentName) {
+      const series = historyData
+        .map(s => s.agents?.[agentName]?.restarts)
+        .filter(v => v != null);
+      if (series.length < 2 || Math.max(...series) === 0) return '';
+      return sparkSvg(series, '#f85149');
+    }
+
+    async function fetchHistory() {
+      try {
+        const r = await fetch('/api/history');
+        historyData = await r.json();
+      } catch (e) { /* ignore */ }
+    }
+    // Fetch history on load, then every 30s
+    fetchHistory();
+    setInterval(fetchHistory, 30000);
+
+    function formatAge(sec) {
+      if (sec < 0) return '—';
+      if (sec < 120) return sec + 's';
+      if (sec < 3600) return Math.floor(sec / 60) + 'm';
+      return Math.floor(sec / 3600) + 'h';
+    }
+
+    let currentAgentMetrics = {};
+
+    function agentIndicators(name) {
+      const m = currentAgentMetrics[name];
+      if (!m) return '';
+
+      if (name === 'issue-scanner' || name === 'scanner') {
+        const pairs = m.pairs || [];
+        if (pairs.length === 0) return '<div class="agent-indicators"><span class="ind-empty">no active fixes</span></div>';
+        const openPairs = pairs.filter(p => p.state !== 'merged');
+        const mergedPairs = pairs.filter(p => p.state === 'merged');
+        const renderPair = (p) => {
+          const issueLabel = p.issueTitle ? `⊙ #${p.issue} — ${esc(p.issueTitle.length > 48 ? p.issueTitle.slice(0, 48) + '…' : p.issueTitle)}` : `⊙ #${p.issue}`;
+          const issueTip = p.issueTitle ? esc(p.issueTitle) : '';
+          const prIcon = p.state === 'merged' ? '✓' : '⎇';
+          const prCls = p.state === 'merged' ? 'ind-pr ind-merged' : 'ind-pr';
+          const prTip = p.prTitle ? esc(p.prTitle) : '';
+          return `<div class="ind-pair">
+          <a class="ind-tag ind-issue" href="https://github.com/kubestellar/console/issues/${p.issue}" target="_blank" title="${issueTip}">${issueLabel}</a>
+          <span class="ind-arrow">→</span>
+          <a class="ind-tag ${prCls}" href="https://github.com/kubestellar/console/pull/${p.pr}" target="_blank" title="${prTip}">${prIcon} #${p.pr}</a>
+        </div>`;
+        };
+        let html = '';
+        if (openPairs.length > 0) html += `<div class="agent-indicators"><span class="ind-label">In progress (${openPairs.length}):</span>${openPairs.map(renderPair).join('')}</div>`;
+        if (mergedPairs.length > 0) html += `<div class="agent-indicators"><span class="ind-label">Merged today (${mergedPairs.length}):</span>${mergedPairs.map(renderPair).join('')}</div>`;
+        if (!html) html = '<div class="agent-indicators"><span class="ind-empty">no active fixes</span></div>';
+        return html;
+      }
+
+      if (name === 'reviewer') {
+        const h = window._healthData || {};
+        const cov = m.coverage || 0;
+        const covTarget = m.coverageTarget || 91;
+        const covCls = cov >= covTarget ? 'ind-ok' : cov >= covTarget - 10 ? 'ind-warn' : 'ind-err';
+        const covBar = `<div class="agent-indicators"><div class="ind-group"><span class="ind-group-label">COVERAGE</span><div class="ind-dots">
+          <span class="ind-dot-item"><span class="ind-num ${covCls}">${cov}%</span><span class="ind-dlabel">current</span></span>
+          <span class="ind-dot-item"><span class="ind-dlabel">goal: ${covTarget}%</span></span>
+          <span class="ind-dot-item" style="flex:1;max-width:120px">
+            <div style="background:var(--border);border-radius:3px;height:6px;width:100%;position:relative">
+              <div style="background:${cov >= covTarget ? 'var(--green)' : cov >= covTarget - 10 ? 'var(--yellow)' : 'var(--red)'};height:100%;border-radius:3px;width:${Math.min(cov / covTarget * 100, 100)}%"></div>
+            </div>
+          </span>
+        </div></div></div>`;
+        const groups = [
+          { label: 'Artifacts', items: [
+            { key: 'brew', label: 'Brew' },
+            { key: 'helm', label: 'Helm' },
+          ]},
+          { label: 'Tests', items: [
+            { key: 'ci', label: 'CI', type: 'pct' },
+            { key: 'weekly', label: 'Weekly' },
+          ]},
+          { label: 'Nightly', items: [
+            { key: 'nightly', label: 'Tests' },
+            { key: 'nightlyCompliance', label: 'Compliance' },
+            { key: 'nightlyDashboard', label: 'Dashboard' },
+            { key: 'nightlyGhaw', label: 'gh-aw' },
+            { key: 'nightlyPlaywright', label: 'Playwright' },
+          ]},
+          { label: 'Releases', items: [
+            { key: 'nightlyRel', label: 'Nightly' },
+            { key: 'weeklyRel', label: 'Weekly' },
+          ]},
+          { label: 'Deploys', items: [
+            { key: 'vllm', label: 'vLLM-d' },
+            { key: 'pokprod', label: 'PokProd' },
+          ]},
+        ];
+        const renderItem = d => {
+          const v = h[d.key];
+          if (d.type === 'pct') {
+            const cls = v >= 90 ? 'good' : v >= 70 ? 'warn' : 'bad';
+            return `<span class="ind-dot-item"><span class="health-ci ${cls}">${v || 0}%</span><span class="ind-dlabel">${d.label}</span></span>`;
+          }
+          const dotCls = v === 1 ? 'ok' : v === 0 ? 'fail' : 'unknown';
+          return `<span class="ind-dot-item"><span class="health-dot ${dotCls}"></span><span class="ind-dlabel">${d.label}</span></span>`;
+        };
+        return `${covBar}<div class="agent-indicators">${groups.map(g =>
+          `<div class="ind-group"><span class="ind-group-label">${g.label}</span><div class="ind-dots">${g.items.map(renderItem).join('')}</div></div>`
+        ).join('')}</div>`;
+      }
+
+      if (name === 'outreach') {
+        const stars = m.stars || 0;
+        const forks = m.forks || 0;
+        const contribs = m.contributors || 0;
+        const adopters = m.adopters || 0;
+        const acmm = m.acmm || 0;
+        const awOpen = m.awesomeOpen || 0;
+        const awMerged = m.awesomeMerged || 0;
+        const starSpark = sparkSvg((window._trendData || []).map(s => s.stars || 0), '#e3b341');
+        const awOpenSpark = sparkSvg((window._trendData || []).map(s => s.awesomeOpen || 0), '#58a6ff');
+        const awMergedSpark = sparkSvg((window._trendData || []).map(s => s.awesomeMerged || 0), '#3fb950');
+        return `<div class="agent-indicators">
+          <div class="ind-group"><span class="ind-group-label">GROWTH</span><div class="ind-dots">
+            <span class="ind-dot-item"><span class="ind-num">⭐ ${stars}</span><span class="ind-dlabel">stars ${starSpark}</span></span>
+            <span class="ind-dot-item"><span class="ind-num">🍴 ${forks}</span><span class="ind-dlabel">forks</span></span>
+            <span class="ind-dot-item"><span class="ind-num">👥 ${contribs}</span><span class="ind-dlabel">contributors</span></span>
+          </div></div>
+          <div class="ind-group"><span class="ind-group-label">ADOPTION</span><div class="ind-dots">
+            <span class="ind-dot-item"><span class="ind-num">${adopters}</span><span class="ind-dlabel">adopters</span></span>
+            <span class="ind-dot-item"><span class="ind-num">${acmm}</span><span class="ind-dlabel">ACMM badges</span></span>
+          </div></div>
+          <div class="ind-group"><span class="ind-group-label">AWESOME LISTS</span><div class="ind-dots">
+            <span class="ind-dot-item"><span class="ind-num">${awOpen}</span><span class="ind-dlabel">open ${awOpenSpark}</span></span>
+            <span class="ind-dot-item"><span class="ind-num">${awMerged}</span><span class="ind-dlabel">merged ${awMergedSpark}</span></span>
+          </div></div>
+        </div>`;
+      }
+
+      if (name === 'feature' || name === 'architect') {
+        const prs = m.prs || 0;
+        const closed = m.closed || 0;
+        return `<div class="agent-indicators">
+          <div class="ind-row">
+            ${prs > 0 ? `<span class="ind-stat"><span class="ind-num">${prs}</span> PRs</span>` : ''}
+            ${closed > 0 ? `<span class="ind-stat"><span class="ind-num">${closed}</span> closed</span>` : ''}
+          </div>
+        </div>`;
+      }
+
+      return '';
+    }
+
+    function parseCadenceMinutes(cadence) {
+      if (!cadence || cadence === 'paused') return 0;
+      const m = cadence.match(/^(\d+)(m|h)$/);
+      if (!m) return 0;
+      const MINUTES_PER_HOUR = 60;
+      return m[2] === 'h' ? parseInt(m[1]) * MINUTES_PER_HOUR : parseInt(m[1]);
+    }
+
+    function agentTokenRow(name, cadence) {
+      const byAgent = window._tokensByAgent || {};
+      const t = byAgent[name];
+      if (!t || (t.messages === 0 && t.sessions === 0)) return '';
+      const total = (t.input || 0) + (t.output || 0) + (t.cacheRead || 0);
+      if (total === 0) {
+        return `<div class="agent-field"><span class="label">tokens (24h)</span><span class="value" style="color:var(--muted)">${t.sessions} sess · ${t.messages} msgs</span></div>`;
+      }
+      const avg = t.avgPerSession || (t.sessions > 0 ? Math.floor(total / t.sessions) : 0);
+      let rows = `<div class="agent-field"><span class="label">tokens (24h)</span><span class="value" style="color:var(--cyan)">${fmtTokens(total)} <span style="color:var(--muted);font-size:0.65rem">(${t.sessions} sess)</span></span></div>`;
+      rows += `<div class="agent-field"><span class="label">avg/pass</span><span class="value">${fmtTokens(avg)}</span></div>`;
+      const intervalMin = parseCadenceMinutes(cadence);
+      if (intervalMin > 0 && avg > 0) {
+        const MINUTES_PER_HOUR = 60;
+        const HOURS_PER_WEEK = 168;
+        const passesPerHour = MINUTES_PER_HOUR / intervalMin;
+        const tokensPerHour = avg * passesPerHour;
+        const tokensPerWeek = tokensPerHour * HOURS_PER_WEEK;
+        rows += `<div class="agent-field"><span class="label">burn rate</span><span class="value" style="color:var(--yellow)">${fmtTokens(tokensPerHour)}/hr · ${fmtTokens(tokensPerWeek)}/wk</span></div>`;
+      }
+      return rows;
+    }
+
+    const AGENT_TMUX_SESSION = {
+      supervisor: 'supervisor',
+      scanner: 'issue-scanner',
+      reviewer: 'reviewer',
+      architect: 'feature',
+      outreach: 'outreach',
+    };
+    const TTYD_PORT = 7681;
+
+    function terminalUrl(agentName) {
+      const session = AGENT_TMUX_SESSION[agentName] || agentName;
+      const host = window.location.hostname;
+      return `http://${host}:${TTYD_PORT}/?arg=${encodeURIComponent(session)}`;
+    }
+
+    function renderAgents(agents) {
+      const el = document.getElementById('agents');
+      // Preserve custom prompt input values across re-renders
+      const savedInputs = {};
+      const focusedId = document.activeElement?.id;
+      el.querySelectorAll('.kick-prompt').forEach(inp => {
+        if (inp.value) savedInputs[inp.id] = inp.value;
+      });
+      const cards = agents.map(a => {
+        const needsLogin = a.needsLogin === true;
+        const cls = needsLogin ? 'needs-login' : (a.state === 'stopped' ? 'stopped' : a.busy);
+        const dotCls = a.state === 'stopped' ? 'stopped' : 'running';
+        // liveSummary is pushed via SSE every 5s — no separate fetch needed
+        let summaryEl = '';
+        if (a.liveSummary) {
+          let ageBadge = '';
+          if (!a.doing && a.summaryUpdated) {
+            const ageMs = Date.now() - new Date(a.summaryUpdated).getTime();
+            const ageMin = Math.floor(ageMs / 60000);
+            if (ageMin >= 5) {
+              const ageStr = ageMin >= 60 ? `${Math.floor(ageMin/60)}h ${ageMin%60}m ago` : `${ageMin}m ago`;
+              const ageCls = ageMin >= 120 ? 'age-stale' : 'age-recent';
+              ageBadge = `<span class="summary-age ${ageCls}">${ageStr}</span>`;
+            }
+          }
+          summaryEl = `<div class="doing">${ageBadge}${esc(a.liveSummary)}</div>`;
+        }
+        const indEl = agentIndicators(a.name);
+        return `<div class="agent-card ${cls}">
+          <div class="agent-name"><span class="dot ${dotCls}"></span>${a.name} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a></div>
+          <div class="agent-field"><span class="label">cli</span><span class="value ${a.cli}">${a.cli}</span></div>
+          <div class="agent-field"><span class="label">model</span><span class="value">${a.model || ''} ${a.govBackend ? modelChip(a.govBackend, a.govModel, a.govReason) : ''}</span></div>
+          <div class="agent-field"><span class="label">interval</span><span class="value">${a.cadence}</span></div>
+          <div class="agent-field"><span class="label">next run</span><span class="value">${a.nextKick || '—'}</span></div>
+          ${agentTokenRow(a.name, a.cadence)}
+          <div class="agent-field"><span class="label">restarts</span><span class="value${(a.restarts || 0) > 5 ? ' restart-high' : (a.restarts || 0) > 0 ? ' restart-warn' : ''}">${a.restarts || 0}<span class="restart-label">24h</span><span class="restart-spark">${restartSparkSvg(a.name)}</span></span></div>
+          <div class="agent-state ${a.busy}">${a.busy}</div>
+          ${needsLogin ? '<div class="login-warning">⚠ NOT LOGGED IN — run /login</div>' : ''}
+          ${summaryEl}${indEl}
+          <div class="agent-actions">
+            <input type="text" class="kick-prompt" id="kick-prompt-${a.name}" placeholder="custom prompt (optional)" />
+            <button class="btn" onclick="kick('${a.name}')">kick</button>
+            <select class="btn backend-select" onchange="switchCli('${a.name}', this.value); this.selectedIndex=0">
+              <option value="" disabled selected>cli ▾</option>
+              <option value="copilot" ${a.cli === 'copilot' ? 'disabled' : ''}>copilot</option>
+              <option value="claude" ${a.cli === 'claude' ? 'disabled' : ''}>claude</option>
+              <option value="gemini" ${a.cli === 'gemini' ? 'disabled' : ''}>gemini</option>
+              <option value="goose" ${a.cli === 'goose' ? 'disabled' : ''}>goose</option>
+            </select>
+            <select class="btn backend-select" onchange="switchModel('${a.name}', this.value); this.selectedIndex=0">
+              <option value="" disabled selected>model ▾</option>
+              <option value="claude-opus-4-6">Opus 4.6</option>
+              <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+              <option value="claude-sonnet-4-5">Sonnet 4.5</option>
+              <option value="claude-haiku-4-5">Haiku 4.5</option>
+              <option value="gpt-5.4">GPT-5.4</option>
+              <option value="gpt-5.2">GPT-5.2</option>
+            </select>
+          </div>
+        </div>`;
+      });
+      el.innerHTML = cards.join('');
+      // Restore saved input values and focus
+      for (const [id, val] of Object.entries(savedInputs)) {
+        const inp = document.getElementById(id);
+        if (inp) inp.value = val;
+      }
+      if (focusedId) {
+        const prev = document.getElementById(focusedId);
+        if (prev) prev.focus();
+      }
+    }
+
+    function renderHealth(health) {
+      const el = document.getElementById('health');
+      if (!health || Object.keys(health).length === 0) { el.innerHTML = '<span style="color:var(--muted);font-size:0.8rem">Loading…</span>'; return; }
+      const items = [
+        { key: 'ci', label: 'CI Pass Rate', type: 'pct' },
+        { key: 'brew', label: 'Brew Formula' },
+        { key: 'helm', label: 'Helm Chart' },
+        { key: 'nightly', label: 'Nightly Tests' },
+        { key: 'nightlyRel', label: 'Nightly Release' },
+        { key: 'weekly', label: 'Weekly Tests' },
+        { key: 'weeklyRel', label: 'Weekly Rel' },
+        { key: 'vllm', label: 'vLLM-d Deploy' },
+        { key: 'pokprod', label: 'PokProd Deploy' },
+      ];
+      el.innerHTML = items.map(it => {
+        const v = health[it.key];
+        if (it.type === 'pct') {
+          const cls = v >= 90 ? 'good' : v >= 70 ? 'warn' : 'bad';
+          return `<div class="health-item"><span class="health-ci ${cls}">${v}%</span><span class="health-label">${it.label}</span></div>`;
+        }
+        const dotCls = v === 1 ? 'ok' : v === 0 ? 'fail' : 'unknown';
+        return `<div class="health-item"><span class="health-dot ${dotCls}"></span><span class="health-label">${it.label}</span></div>`;
+      }).join('');
+    }
+
+    function renderGovernor(gov, cadenceMatrix, data) {
+      const el = document.getElementById('governor');
+      const cls = gov.active ? 'active' : 'dead';
+      el.className = `governor ${cls}`;
+      const issuesSpark = sparkSvg(getHistorySeries('govIssues'), '#58a6ff');
+      const prsSpark = sparkSvg(getHistorySeries('govPrs'), '#bc8cff');
+      const totalSpark = sparkSvg(getHistorySeries('govTotal'), '#3fb950');
+      const total = (gov.issues || 0) + (gov.prs || 0);
+      const currentMode = gov.mode || 'idle';
+      const modes = ['idle', 'quiet', 'busy', 'surge'];
+
+      // Gauge bar — thresholds: idle≤2, quiet≤10, busy≤20, surge>20
+      const maxQ = 30;
+      const pct = Math.min(total / maxQ * 100, 100);
+      const modeColors = { idle: '#238636', quiet: '#58a6ff', busy: '#d29922', surge: '#f85149' };
+      const modeColor = modeColors[gov.mode] || '#8b949e';
+
+      // Timeline strip from 24h persistent timeline data
+      const tlData = window._timelineData || [];
+      const tlModes = tlData.map(s => s.mode || 'unknown');
+      const ticks = tlModes.map(m => `<div class="tick tick-${m}"></div>`).join('');
+      const firstTime = tlData.length > 0 ? new Date(tlData[0].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true}) : '';
+      const lastTime = tlData.length > 0 ? new Date(tlData[tlData.length-1].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true}) : '';
+
+      el.innerHTML = `
+        <div class="gov-title">Governor</div>
+        <div class="gov-grid">
+          <div class="gov-stat"><div class="label">timer</div><div class="val ${cls}">${gov.active ? '● active' : '⚠ DEAD'}</div></div>
+          <div class="gov-stat"><div class="label">mode</div><div class="val" style="color:${modeColor}">${gov.mode}</div></div>
+          <div class="gov-stat"><div class="label">actionable</div><div class="spark-row"><span class="val">${total}</span>${totalSpark}</div></div>
+          <div class="gov-stat"><div class="label">issues</div><div class="spark-row"><span class="val">${gov.issues}</span>${issuesSpark}</div></div>
+          <div class="gov-stat"><div class="label">PRs</div><div class="spark-row"><span class="val">${gov.prs}</span>${prsSpark}</div></div>
+          <div class="gov-stat"><div class="label">next run</div><div class="val">${gov.nextKick || '—'}</div></div>
+        </div>
+        <div class="temp-gauge">
+          <div class="temp-gauge-label"><span>Queue: ${total}</span><span>max ${maxQ}</span></div>
+          <div class="temp-gauge-track">
+            <div class="temp-gauge-glow" style="width:100%"></div>
+            <div class="temp-gauge-ticks"><span>0</span><span>2</span><span>10</span><span>20</span><span>${maxQ}</span></div>
+            <div class="temp-gauge-needle" style="left:${pct}%" data-val="${total}"></div>
+          </div>
+          <div class="temp-gauge-labels">
+            <span class="tl-idle">idle</span>
+            <span class="tl-quiet">quiet</span>
+            <span class="tl-busy">busy</span>
+            <span class="tl-surge">surge</span>
+          </div>
+        </div>
+        <div class="gov-timeline">
+          <div class="gov-timeline-label"><span>${firstTime}</span><span>Mode Timeline</span><span>${lastTime}</span></div>
+          <div class="gov-timeline-strip">${ticks || '<div class="tick tick-unknown" style="flex:1"></div>'}</div>
+          <div class="gov-timeline-legend">
+            <span class="tl-idle">idle</span>
+            <span class="tl-quiet">quiet</span>
+            <span class="tl-busy">busy</span>
+            <span class="tl-surge">surge</span>
+          </div>
+        </div>
+        ${renderBudgetBar(data.budget || {})}
+        ${renderCadenceMatrix(cadenceMatrix, currentMode, modes)}`;
+    }
+
+    function renderCadenceMatrix(matrix, currentMode, modes) {
+      if (!matrix || !matrix.length) return '';
+      const agents = window._lastAgents || [];
+      const agentOrder = ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach'];
+      const rows = agentOrder.map(aname => {
+        const row = matrix.find(r => r.agent === aname);
+        if (!row) return '';
+        const agentData = agents.find(a => a.name === aname);
+        const isWorking = agentData && agentData.busy === 'working';
+        const cells = modes.map(m => {
+          const val = row[m] || '?';
+          const isActive = m === currentMode;
+          const isPaused = val === 'paused';
+          const colCls = isActive ? `col-active mode-${m}${isWorking ? ' agent-working' : ''}` : '';
+          const pausedCls = isPaused ? ' paused' : '';
+          return `<td class="${colCls}${pausedCls}">${isPaused ? '—' : val}</td>`;
+        }).join('');
+        const mChip = agentData && agentData.govBackend ? modelChip(agentData.govBackend, agentData.govModel, agentData.govReason) : '';
+        return `<tr><td>${aname}</td>${cells}<td>${mChip}</td></tr>`;
+      }).join('');
+      const headers = modes.map(m => {
+        const isActive = m === currentMode;
+        const cls = `mode-${m}${isActive ? ' mode-active' : ''}`;
+        return `<th class="${cls}">${m}${isActive ? ' ◀' : ''}</th>`;
+      }).join('');
+      return `<table class="gov-matrix">
+        <thead><tr><th></th>${headers}<th>model</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    }
+
+    function renderRepos(repos) {
+      const el = document.getElementById('repos');
+      el.innerHTML = repos.map(r => {
+        const iSpark = sparkSvg(historyData.map(s => s.repos?.[r.name]?.issues ?? 0), '#58a6ff');
+        const pSpark = sparkSvg(historyData.map(s => s.repos?.[r.name]?.prs ?? 0), '#bc8cff');
+        return `
+        <div class="repo-card">
+          <div class="repo-name">${r.full || r.name}</div>
+          <div class="repo-stats">
+            <div class="repo-stat"><div class="spark-row"><span class="num">${r.issues >= 0 ? r.issues : '?'}</span>${iSpark}</div><div class="label">issues</div></div>
+            <div class="repo-stat"><div class="spark-row"><span class="num">${r.prs >= 0 ? r.prs : '?'}</span>${pSpark}</div><div class="label">PRs</div></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderBeads(beads) {
+      const el = document.getElementById('beads');
+      const wSpark = sparkSvg(getHistorySeries('beadsWorkers'), '#39d2c0');
+      const sSpark = sparkSvg(getHistorySeries('beadsSupervisor'), '#d29922');
+      el.innerHTML = `
+        <div class="bead-stat"><div class="spark-row"><span class="num">${beads.workers >= 0 ? beads.workers : 0}</span>${wSpark}</div><div class="label">workers</div></div>
+        <div class="bead-stat"><div class="spark-row"><span class="num">${beads.supervisor >= 0 ? beads.supervisor : 0}</span>${sSpark}</div><div class="label">supervisor</div></div>`;
+    }
+
+    function fmtTokens(n) {
+      if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+      if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+      if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+      return String(n);
+    }
+
+    function renderBudgetBar(budget) {
+      if (!budget || !budget.BUDGET_WEEKLY) return '';
+      const PCT_SAFE = 50;
+      const PCT_WARN = 85;
+      const used = budget.BUDGET_USED || 0;
+      const weekly = budget.BUDGET_WEEKLY;
+      const pctUsed = budget.BUDGET_PCT_USED || 0;
+      const projPct = budget.PROJECTED_PCT || 0;
+      const burnRate = budget.BURN_RATE_HOURLY || 0;
+      const hoursLeft = budget.HOURS_REMAINING || 0;
+      const HOURS_PER_DAY = 24;
+      const dailyRate = burnRate * HOURS_PER_DAY;
+      const usedFillCls = pctUsed < PCT_SAFE ? 'safe' : pctUsed < PCT_WARN ? 'warning' : 'danger';
+      const projFillCls = projPct < PCT_SAFE ? 'safe' : projPct < PCT_WARN ? 'warning' : 'danger';
+
+      let govAction = '';
+      if (projPct > PCT_WARN) {
+        govAction = '<span style="color:var(--red)">Governor downgrading models to stay within budget</span>';
+      } else if (projPct > PCT_SAFE) {
+        govAction = '<span style="color:var(--yellow)">Governor may downgrade non-priority agents if burn increases</span>';
+      } else {
+        govAction = '<span style="color:var(--green)">Budget healthy — governor using preferred models</span>';
+      }
+
+      return `<div class="budget-bar">
+        <div class="budget-bar-label">
+          <span>Used: ${fmtTokens(used)} / ${fmtTokens(weekly)} (${pctUsed}%)</span>
+          <span>${hoursLeft}h until reset</span>
+        </div>
+        <div class="budget-bar-track"><div class="budget-bar-fill ${usedFillCls}" style="width:${Math.min(pctUsed, 100)}%"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--muted);margin-top:4px">
+          <span>Burn: ${fmtTokens(burnRate)}/hr · ${fmtTokens(dailyRate)}/day</span>
+          <span>Projected: ${fmtTokens(used + burnRate * hoursLeft)} (${projPct}%)</span>
+        </div>
+        <div style="font-size:0.68rem;margin-top:3px">${govAction}</div>
+      </div>`;
+    }
+
+    function modelChip(backend, model, reason) {
+      if (!backend || backend === 'unknown') return '';
+      const isFree = backend === 'copilot' || backend === 'goose';
+      let tier = 'sonnet';
+      if (isFree) tier = 'free';
+      else if (model && model.includes('haiku')) tier = 'haiku';
+      else if (model && model.includes('opus')) tier = 'opus';
+      const shortModel = model ? model.replace(/^claude-/, '').replace(/-\d+-\d+$/, m => m.replace(/-/g, '.').slice(0, 4)) : '?';
+      const label = isFree ? `${backend}` : shortModel;
+      const isBudgetOverride = reason && (reason.includes('budget_downgrade') || reason.includes('budget_critical'));
+      const overrideIcon = isBudgetOverride ? ' ⬇' : '';
+      const overrideTitle = isBudgetOverride ? ` (${reason})` : '';
+      return `<span class="model-chip ${tier}" title="${backend}:${model}${overrideTitle}">${label}${overrideIcon}</span>`;
+    }
+
+    function buildCadenceAdvisor(byAgent) {
+      const agents = window._lastAgents || [];
+      if (!agents.length || !byAgent) return '';
+
+      const MINUTES_PER_HOUR = 60;
+      const HOURS_PER_WEEK = 168;
+      const AGENT_ORDER = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+      const rows = [];
+      let totalWeeklyBurn = 0;
+
+      for (const name of AGENT_ORDER) {
+        const agentData = agents.find(a => a.name === name);
+        const tokenData = byAgent[name];
+        if (!agentData || !tokenData) continue;
+
+        const avg = tokenData.avgPerSession || 0;
+        const cadenceMin = parseCadenceMinutes(agentData.cadence);
+        const isPaused = !cadenceMin;
+        const passesPerHour = isPaused ? 0 : MINUTES_PER_HOUR / cadenceMin;
+        const weeklyBurn = avg * passesPerHour * HOURS_PER_WEEK;
+        totalWeeklyBurn += weeklyBurn;
+
+        rows.push({ name, avg, cadenceMin, isPaused, passesPerHour, weeklyBurn, cli: agentData.cli });
+      }
+
+      if (totalWeeklyBurn === 0) return '';
+
+      const tips = [];
+      const sorted = [...rows].filter(r => r.weeklyBurn > 0).sort((a, b) => b.weeklyBurn - a.weeklyBurn);
+
+      if (sorted.length > 0) {
+        const top = sorted[0];
+        const topPct = Math.round((top.weeklyBurn / totalWeeklyBurn) * 100);
+        if (topPct > 60) {
+          const DOUBLE_CADENCE = 2;
+          tips.push(`<b>${top.name}</b> uses ${topPct}% of weekly tokens. Doubling interval to ${top.cadenceMin * DOUBLE_CADENCE}m would halve its burn.`);
+        }
+      }
+
+      const architect = rows.find(r => r.name === 'architect');
+      if (architect) {
+        if (architect.isPaused) {
+          tips.push(`<b>architect</b> is paused — no feature work happening. Consider enabling at 1h cadence.`);
+        } else if (architect.weeklyBurn > 0) {
+          const architectPct = Math.round((architect.weeklyBurn / totalWeeklyBurn) * 100);
+          if (architectPct < 15 && architect.cadenceMin > 15) {
+            const HALVE_CADENCE = 2;
+            tips.push(`<b>architect</b> is only ${architectPct}% of burn. Could increase to ${Math.max(15, Math.floor(architect.cadenceMin / HALVE_CADENCE))}m for more feature work.`);
+          }
+        }
+      }
+
+      for (const r of rows) {
+        if (r.cli === 'copilot' && r.avg === 0 && !r.isPaused) {
+          tips.push(`<b>${r.name}</b> runs on copilot (unlimited tokens, no metering). Token burn unknown — consider switching to claude CLI for visibility.`);
+        }
+      }
+
+      // Model-aware tips from governor assignments
+      const OPUS_COST = 15;
+      const SONNET_COST = 3;
+      for (const r of rows) {
+        const agentData = agents.find(a => a.name === r.name);
+        if (!agentData) continue;
+        const gb = agentData.govBackend;
+        const gm = agentData.govModel || '';
+        if (gb === 'copilot' || gb === 'goose') {
+          if (r.weeklyBurn > 0) {
+            tips.push(`<b>${r.name}</b> assigned to ${gb} (free) — ${fmtTokens(r.weeklyBurn)}/wk savings vs metered CLI.`);
+          }
+        } else if (gm.includes('opus') && r.weeklyBurn > 0) {
+          const sonnetBurn = Math.round(r.weeklyBurn * SONNET_COST / OPUS_COST);
+          tips.push(`<b>${r.name}</b> on Opus (${OPUS_COST}x) — switching to Sonnet would save ~${fmtTokens(r.weeklyBurn - sonnetBurn)}/wk in cost-adjusted tokens.`);
+        }
+      }
+
+      const budget = window._lastBudget || {};
+      if (budget.PROJECTED_PCT) {
+        const SAFE_THRESHOLD = 50;
+        const WARN_THRESHOLD = 85;
+        if (budget.PROJECTED_PCT > WARN_THRESHOLD) {
+          tips.push(`Budget projected at <b>${budget.PROJECTED_PCT}%</b> — governor is auto-downgrading models to stay within budget.`);
+        } else if (budget.PROJECTED_PCT < SAFE_THRESHOLD) {
+          const paused = rows.filter(r => r.isPaused);
+          if (paused.length > 0) {
+            tips.push(`Budget at ${budget.PROJECTED_PCT}% — headroom to enable paused agents: ${paused.map(r => `<b>${r.name}</b>`).join(', ')}.`);
+          }
+        }
+      }
+
+      const barRows = rows.filter(r => r.weeklyBurn > 0 || !r.isPaused).map(r => {
+        const pct = totalWeeklyBurn > 0 ? Math.round((r.weeklyBurn / totalWeeklyBurn) * 100) : 0;
+        const barColor = r.name === 'scanner' ? 'var(--blue)' : r.name === 'reviewer' ? 'var(--green)' : r.name === 'architect' ? 'var(--purple)' : r.name === 'outreach' ? 'var(--cyan)' : 'var(--yellow)';
+        const label = r.isPaused ? 'paused' : `${fmtTokens(r.weeklyBurn)}/wk`;
+        return `<div class="advisor-bar-row">
+          <span class="advisor-agent">${r.name}</span>
+          <div class="advisor-bar-track"><div class="advisor-bar-fill" style="width:${Math.max(pct, 2)}%;background:${barColor}"></div></div>
+          <span class="advisor-pct">${r.isPaused ? '—' : pct + '%'}</span>
+          <span class="advisor-burn">${label}</span>
+        </div>`;
+      }).join('');
+
+      const tipsHtml = tips.length > 0 ? `<div class="advisor-tips">${tips.map(t => `<div class="advisor-tip">💡 ${t}</div>`).join('')}</div>` : '';
+
+      return `<div class="advisor-section">
+        <div class="advisor-title">Cadence Advisor <span style="color:var(--muted);font-size:0.7rem">weekly projection at current cadence</span></div>
+        <div class="advisor-total">Projected: <b style="color:var(--cyan)">${fmtTokens(totalWeeklyBurn)}</b> tokens/week</div>
+        <div class="advisor-bars">${barRows}</div>
+        ${tipsHtml}
+      </div>`;
+    }
+
+    function renderTokens(tokens) {
+      const el = document.getElementById('token-panel');
+
+      if (!tokens || !tokens.totals || tokens.totals.sessions === 0) {
+        el.innerHTML = '';
+        return;
+      }
+
+      const sessionsOpen = el.querySelector('.token-sessions')?.open || false;
+
+      const t = tokens.totals;
+      const totalTokens = t.input + t.output + t.cacheRead;
+      const models = Object.entries(tokens.byModel || {}).sort((a, b) =>
+        (b[1].input + b[1].output + b[1].cacheRead) - (a[1].input + a[1].output + a[1].cacheRead)
+      );
+      const sessions = tokens.sessions || [];
+
+      const modelChips = models.map(([name, m]) => {
+        const mTotal = m.input + m.output + m.cacheRead;
+        const mSpark = sparkSvg(historyData.map(s => s.tokenModels?.[name] ?? 0), '#bc8cff');
+        return `<div class="token-model-chip">
+          <span class="mname">${esc(name)}</span>
+          <span class="mcount">${fmtTokens(mTotal)} tokens · ${m.messages} msgs</span>
+          ${mSpark}
+        </div>`;
+      }).join('');
+
+      const sessionRows = sessions.map(s => {
+        const age = s.lastActive ? new Date(s.lastActive).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true}) : '';
+        const agentName = s.agent && s.agent !== 'unknown' ? s.agent : '';
+        const agentCls = agentName ? `a-${agentName}` : 'a-unknown';
+        return `<div class="token-session-row">
+          <span class="sid">${esc(s.id)}</span>
+          <span class="sagent ${agentCls}">${agentName || '—'}</span>
+          <span class="smodel">${esc(s.model)}</span>
+          <span class="stokens">${fmtTokens(s.total)}</span>
+          <span class="smsgs">${s.messages} msgs</span>
+          <span class="sproj">${esc(s.project)} · ${age}</span>
+        </div>`;
+      }).join('');
+
+      const advisorHtml = buildCadenceAdvisor(tokens.byAgent || {});
+
+      const totalSpark = sparkSvg(getHistorySeries('tokenTotal'), '#39d2c0');
+      const agentNames = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+      const agentColors = { scanner: '#58a6ff', reviewer: '#3fb950', architect: '#bc8cff', outreach: '#39d2c0', supervisor: '#d29922' };
+      const agentSparkRows = agentNames.map(name => {
+        const ba = tokens.byAgent || {};
+        const aData = ba[name];
+        const aTotal = aData ? (aData.input || 0) + (aData.output || 0) + (aData.cacheRead || 0) : 0;
+        const aSpark = sparkSvg(historyData.map(s => s.tokens?.[name] ?? 0), agentColors[name] || '#8b949e');
+        return `<div class="token-stat"><div class="spark-row"><span class="tval" style="color:${agentColors[name]}">${fmtTokens(aTotal)}</span>${aSpark}</div><div class="tlabel">${name}</div></div>`;
+      }).join('');
+
+      el.innerHTML = `<div class="token-panel">
+        <div class="token-title">Token Usage <span class="lookback">${tokens.lookbackHours || 24}h window · ${t.sessions} sessions</span></div>
+        <div class="token-grid">
+          <div class="token-stat"><div class="spark-row"><span class="tval" style="color:var(--cyan)">${fmtTokens(totalTokens)}</span>${totalSpark}</div><div class="tlabel">total tokens</div></div>
+          <div class="token-stat"><div class="spark-row"><span class="tval" style="color:var(--blue)">${fmtTokens(t.input)}</span>${sparkSvg(getHistorySeries('tokenInput'), '#58a6ff')}</div><div class="tlabel">input</div></div>
+          <div class="token-stat"><div class="spark-row"><span class="tval" style="color:var(--purple)">${fmtTokens(t.output)}</span>${sparkSvg(getHistorySeries('tokenOutput'), '#bc8cff')}</div><div class="tlabel">output</div></div>
+          <div class="token-stat"><div class="spark-row"><span class="tval" style="color:var(--green)">${fmtTokens(t.cacheRead)}</span>${sparkSvg(getHistorySeries('tokenCacheRead'), '#3fb950')}</div><div class="tlabel">cache read</div></div>
+          <div class="token-stat"><div class="spark-row"><span class="tval" style="color:var(--yellow)">${fmtTokens(t.cacheCreate)}</span>${sparkSvg(getHistorySeries('tokenCacheCreate'), '#d29922')}</div><div class="tlabel">cache create</div></div>
+          <div class="token-stat"><div class="spark-row"><span class="tval">${t.messages}</span>${sparkSvg(getHistorySeries('tokenMessages'), '#8b949e')}</div><div class="tlabel">messages</div></div>
+        </div>
+        ${agentSparkRows ? `<div class="token-grid" style="margin-top:4px">${agentSparkRows}</div>` : ''}
+        ${advisorHtml}
+        <div class="token-models">${modelChips}</div>
+        ${sessions.length > 0 ? `<details class="token-sessions"${sessionsOpen ? ' open' : ''}><summary>Active Sessions (${sessions.length})</summary>${sessionRows}</details>` : ''}
+      </div>`;
+    }
+
+    function renderGhRateLimits(ghRateLimits) {
+      const el = document.getElementById('gh-rate-alert');
+      const alerts = (ghRateLimits && ghRateLimits.alerts) || [];
+      // Filter out expired alerts client-side
+      const now = Math.floor(Date.now() / 1000);
+      const GH_RATE_DEFAULT_TTL = 3600;
+      const active = alerts.filter(a => {
+        const ttl = a.ttl_seconds || GH_RATE_DEFAULT_TTL;
+        return now - (a.detected_epoch || 0) < ttl;
+      });
+      if (active.length === 0) {
+        el.className = 'gh-rate-alert';
+        el.innerHTML = '';
+        return;
+      }
+      el.className = 'gh-rate-alert active';
+      const SECONDS_PER_MINUTE = 60;
+      const MINUTES_PER_HOUR = 60;
+      const items = active.map(a => {
+        const ageSec = now - (a.detected_epoch || now);
+        let ageStr;
+        if (ageSec < SECONDS_PER_MINUTE) ageStr = ageSec + 's ago';
+        else if (ageSec < SECONDS_PER_MINUTE * MINUTES_PER_HOUR) ageStr = Math.floor(ageSec / SECONDS_PER_MINUTE) + 'm ago';
+        else ageStr = Math.floor(ageSec / (SECONDS_PER_MINUTE * MINUTES_PER_HOUR)) + 'h ago';
+        return `<div class="gh-rate-alert-item">
+          <span class="gh-rate-alert-agent">${esc(a.agent)}</span>
+          <span class="gh-rate-alert-age">${ageStr}</span>
+          <span class="gh-rate-alert-msg">${esc(a.message || 'GitHub API rate limited')}</span>
+        </div>`;
+      }).join('');
+      el.innerHTML = `<div class="gh-rate-alert-title">GitHub API Rate Limit (${active.length} agent${active.length > 1 ? 's' : ''})</div>${items}`;
+    }
+
+    function render(data) {
+      if (!data || data.error) return;
+      const scrollY = window.scrollY;
+      document.getElementById('ts').textContent = new Date(data.timestamp).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
+      currentAgentMetrics = data.agentMetrics || {};
+      window._healthData = data.health || {};
+      window._tokensByAgent = (data.tokens || {}).byAgent || {};
+      window._lastAgents = data.agents || [];
+      window._lastBudget = data.budget || {};
+      renderGhRateLimits(data.ghRateLimits || {});
+      renderAgents(data.agents || []);
+      renderGovernor(data.governor || {}, data.cadenceMatrix || [], data);
+      renderTokens(data.tokens || {});
+      renderRepos(data.repos || []);
+      renderBeads(data.beads || {});
+      requestAnimationFrame(() => window.scrollTo(0, scrollY));
+    }
+
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    async function kick(agent) {
+      const input = document.getElementById(`kick-prompt-${agent}`);
+      const prompt = input ? input.value.trim() : '';
+      const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+      if (prompt) opts.body = JSON.stringify({ prompt });
+      const res = await fetch(`/api/kick/${agent}`, opts);
+      const data = await res.json();
+      if (!data.ok) { alert('Kick failed: ' + (data.error || 'unknown')); return; }
+      if (input) input.value = '';
+    }
+
+    async function switchCli(agent, backend) {
+      if (!backend) return;
+      if (!confirm(`Switch ${agent} to ${backend}?`)) return;
+      const res = await fetch(`/api/switch/${agent}/${backend}`, { method: 'POST' });
+      const data = await res.json();
+      if (!data.ok) alert('Switch failed: ' + (data.error || 'unknown'));
+    }
+
+    async function switchModel(agent, model) {
+      if (!model) return;
+      if (!confirm(`Switch ${agent} model to ${model}?`)) return;
+      const res = await fetch(`/api/model/${agent}/${encodeURIComponent(model)}`, { method: 'POST' });
+      const data = await res.json();
+      if (!data.ok) alert('Model switch failed: ' + (data.error || 'unknown'));
+    }
+
+    // Git version indicator
+    const GIT_VERSION_POLL_MS = 300000;
+    async function fetchGitVersion() {
+      try {
+        const res = await fetch('/api/version');
+        const v = await res.json();
+        const el = document.getElementById('git-version');
+        let html = `<a href="https://github.com/kubestellar/hive/commit/${v.hash}" target="_blank" style="color:inherit;text-decoration:none" title="${v.hash}">${v.short}</a>`;
+        if (v.dirty) html += ' <span class="git-dirty">*</span>';
+        if (v.behind > 0) html += ` <span class="git-behind">${v.behind} behind</span>`;
+        el.innerHTML = html;
+      } catch (_) {}
+    }
+    fetchGitVersion();
+    setInterval(fetchGitVersion, GIT_VERSION_POLL_MS);
+
+    // SSE connection
+    function connect() {
+      const source = new EventSource('/api/events');
+      const conn = document.getElementById('conn');
+
+      source.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          render(data);
+          conn.className = 'connection live';
+          conn.innerHTML = '<span class="dot-live">●</span> live';
+          // Append to local history for instant sparkline updates
+          const snap = {
+            t: Date.now(),
+            govIssues: data.governor?.issues || 0,
+            govPrs: data.governor?.prs || 0,
+            govTotal: (data.governor?.issues || 0) + (data.governor?.prs || 0),
+            govActive: data.governor?.active ? 1 : 0,
+            beadsWorkers: Math.max(data.beads?.workers ?? 0, 0),
+            beadsSupervisor: Math.max(data.beads?.supervisor ?? 0, 0),
+            repos: {},
+            agents: {},
+          };
+          for (const r of (data.repos || [])) snap.repos[r.name] = { issues: r.issues || 0, prs: r.prs || 0 };
+          for (const a of (data.agents || [])) snap.agents[a.name] = { busy: a.busy === 'working' ? 1 : 0 };
+          // Token sparkline data
+          snap.tokens = {};
+          snap.tokenTotal = 0;
+          const _tt = data.tokens?.totals || {};
+          snap.tokenInput = _tt.input || 0;
+          snap.tokenOutput = _tt.output || 0;
+          snap.tokenCacheRead = _tt.cacheRead || 0;
+          snap.tokenCacheCreate = _tt.cacheCreate || 0;
+          snap.tokenMessages = _tt.messages || 0;
+          const _ba = data.tokens?.byAgent || {};
+          for (const [name, stats] of Object.entries(_ba)) {
+            const t = (stats.input || 0) + (stats.output || 0) + (stats.cacheRead || 0);
+            snap.tokens[name] = t;
+            snap.tokenTotal += t;
+          }
+          // Per-model token data
+          snap.tokenModels = {};
+          const _bm = data.tokens?.byModel || {};
+          for (const [name, stats] of Object.entries(_bm)) {
+            snap.tokenModels[name] = (stats.input || 0) + (stats.output || 0) + (stats.cacheRead || 0);
+          }
+          historyData.push(snap);
+          if (historyData.length > 200) historyData.shift();
+        } catch (err) {
+          console.error('SSE parse error:', err);
+        }
+      };
+
+      source.onerror = () => {
+        conn.className = 'connection';
+        conn.innerHTML = '<span class="dot-dead">●</span> reconnecting...';
+        source.close();
+        setTimeout(connect, 3000);
+      };
+    }
+
+    // Initial fetch then SSE
+    fetch('/api/status').then(r => r.json()).then(render).catch(console.error);
+    // Fetch persistent trends for sparklines (day/week)
+    window._trendData = [];
+    fetch('/api/trends?range=week').then(r => r.json()).then(d => { window._trendData = d; }).catch(() => {});
+    // Refresh trends every 15 min
+    const TREND_REFRESH_MS = 900000;
+    setInterval(() => {
+      fetch('/api/trends?range=week').then(r => r.json()).then(d => { window._trendData = d; }).catch(() => {});
+    }, TREND_REFRESH_MS);
+    // Fetch 24h timeline for governor mode strip
+    window._timelineData = [];
+    function fetchTimeline() {
+      fetch('/api/timeline').then(r => r.json()).then(d => { window._timelineData = d; }).catch(() => {});
+    }
+    fetchTimeline();
+    const TIMELINE_REFRESH_MS = 60000;
+    setInterval(fetchTimeline, TIMELINE_REFRESH_MS);
+    connect();
+  </script>
+</body>
+</html>
