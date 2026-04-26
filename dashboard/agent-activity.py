@@ -2,7 +2,7 @@
 """Extract live activity summaries from Claude Code JSONL session files.
 
 Tails active session files efficiently using byte offset tracking.
-Produces human-readable 1-3 line summaries via template-based extraction.
+Produces human-readable 1-5 line summaries via template-based extraction.
 Called by server.js every 5s, outputs JSON to stdout.
 """
 
@@ -259,7 +259,7 @@ def summarize_entries(entries):
         msg = entry.get("message", {})
         for content in msg.get("content", []):
             ct = content.get("type")
-            if ct == "tool_use" and len(tools) < 3:
+            if ct == "tool_use" and len(tools) < 5:
                 desc = describe_tool(content)
                 if desc and desc not in tools:
                     tools.append(desc)
@@ -310,7 +310,7 @@ def scrape_tmux(session):
     for l in lines:
         if l not in unique:
             unique.append(l)
-    result = unique[-3:] if unique else []
+    result = unique[-5:] if unique else []
     return ("\n".join(result), is_working) if result else None
 
 
