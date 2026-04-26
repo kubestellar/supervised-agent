@@ -146,7 +146,21 @@ switch_backend() {
 
   set_current_backend "$agent" "$fallback_backend"
 
-  log "SWITCH $agent — launched $fallback_backend in $session"
+  local SWITCH_STARTUP_WAIT=90
+  local SWITCH_POLL=3
+  local sw_waited=0
+  log "SWITCH $agent — waiting up to ${SWITCH_STARTUP_WAIT}s for $fallback_backend CLI to start"
+  while (( sw_waited < SWITCH_STARTUP_WAIT )); do
+    if session_cli_ready "$session"; then
+      log "SWITCH $agent — $fallback_backend CLI ready after ${sw_waited}s"
+      break
+    fi
+    sleep "$SWITCH_POLL"
+    (( sw_waited += SWITCH_POLL ))
+  done
+  if (( sw_waited >= SWITCH_STARTUP_WAIT )); then
+    log "SWITCH $agent — $fallback_backend CLI did not start within ${SWITCH_STARTUP_WAIT}s"
+  fi
 }
 
 session_exists() {
@@ -158,6 +172,22 @@ session_idle() {
   # The prompt is ❯ (U+276F) followed by a non-breaking space (U+00A0)
   # Check full pane to account for status bar lines below the prompt
   $TMUX_BIN capture-pane -t "$1" -p | grep -q "❯"
+}
+
+session_cli_ready() {
+  # Returns 0 if the CLI has fully started (not just shell prompt visible).
+  # After a model switch, the old scrollback still has ❯ from the previous
+  # session, so session_idle returns true before the new CLI loads. This
+  # function checks for actual CLI startup markers AND the idle prompt.
+  local pane_text
+  pane_text=$($TMUX_BIN capture-pane -t "$1" -p 2>/dev/null || true)
+  # Must have BOTH: a CLI startup banner AND the idle prompt
+  if echo "$pane_text" | grep -qE "Environment loaded|Describe a task|custom instructions"; then
+    if echo "$pane_text" | grep -q "❯"; then
+      return 0
+    fi
+  fi
+  return 1
 }
 
 next_run() {
@@ -284,18 +314,21 @@ kick() {
   # session and starts a new one. Without polling, session_exists fails because
   # the new CLI hasn't created its tmux session yet.
   if [[ "${MODEL_SWITCHED[$agent]:-}" == "1" ]]; then
-    local MODEL_SWITCH_STARTUP_WAIT=30
+    local MODEL_SWITCH_STARTUP_WAIT=90
     local POLL_INTERVAL=3
     local waited=0
-    log "MODEL SWITCH $agent — waiting up to ${MODEL_SWITCH_STARTUP_WAIT}s for session to start"
+    log "MODEL SWITCH $agent — waiting up to ${MODEL_SWITCH_STARTUP_WAIT}s for CLI to fully start"
     while (( waited < MODEL_SWITCH_STARTUP_WAIT )); do
-      if session_exists "$session" && session_idle "$session"; then
-        log "MODEL SWITCH $agent — session ready after ${waited}s"
+      if session_exists "$session" && session_cli_ready "$session"; then
+        log "MODEL SWITCH $agent — CLI ready after ${waited}s"
         break
       fi
       sleep "$POLL_INTERVAL"
       (( waited += POLL_INTERVAL ))
     done
+    if (( waited >= MODEL_SWITCH_STARTUP_WAIT )); then
+      log "MODEL SWITCH $agent — CLI did not start within ${MODEL_SWITCH_STARTUP_WAIT}s, kicking anyway"
+    fi
     MODEL_SWITCHED[$agent]=0
   fi
 
@@ -389,11 +422,21 @@ MANDATORY FIX ITEMS — do NOT just report these, you MUST open PRs to fix them:
 (A) Coverage: run npm run test:coverage. If below 91%, write new tests targeting the lowest-coverage files and open a PR. \
 Do NOT move on until you have opened a coverage PR or confirmed coverage ≥91%. \
 (B.5) CI workflow health: run /tmp/hive/dashboard/health-check.sh. For EVERY red check \
-(nightly, hourly, CI, weekly), pull the failed workflow logs, diagnose root cause, and open a fix PR. \
+(nightly, hourly, CI, weekly, deploys), pull the failed workflow logs, diagnose root cause, and open a fix PR. \
 Do NOT just log failures — fix them with PRs. \
+(C) Deploy health — FIX MANDATORY: check vLLM-d and PokProd deploy status. If either shows red \
+(failed deploy workflow, failing health checks, pods not ready), diagnose the root cause from \
+the Build and Deploy KC workflow logs and open a fix PR. Deploy failures are production-impacting \
+and MUST be fixed, not just reported. \
+(D) Nightly test failures — FIX MANDATORY: if Nightly Test Suite, Nightly Compliance, Playwright \
+Nightly, or any nightly workflow is red, pull the logs, find the failing test(s), and open a fix PR. \
+Nightly failures that persist across passes indicate real regressions — treat them as P1. \
+YOUR JOB IS TO MAKE RED INDICATORS GREEN. Every red dot on the dashboard is a task for you. \
+Do not finish your pass with any red indicator that you have not either fixed via PR or \
+filed a blocker bead explaining why you cannot fix it (e.g., infrastructure access needed). \
 ALSO CHECK (not fix-mandatory): (B) OAuth code presence, \
-(C) release freshness + brew formula + Helm chart appVersion + vllm-d + pok-prod01 deploy health, \
-(D) GA4 error watch + adoption digest, (F) post-merge diff scan. \
+(E) release freshness + brew formula + Helm chart appVersion, \
+(F) GA4 error watch + adoption digest, (G) post-merge diff scan. \
 Print all GA4 tables to this pane. Send ntfy for all findings. Write all results to reviewer_log.md. $(beads_sync "$REVIEWER_BEADS" "reviewer")"
 
 ARCHITECT_BEADS="/home/dev/feature-beads"
