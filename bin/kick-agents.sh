@@ -447,7 +447,27 @@ Merge AI-authored PRs with green CI. Send ntfy (curl -s -H 'Title: Scanner: <act
 Log to cron_scan_log.md. $(beads_sync "$SCANNER_BEADS" "scanner")"
 
 REVIEWER_BEADS="/home/dev/reviewer-beads"
-REVIEWER_MSG="[AGENT:reviewer] $PULL_INSTRUCTIONS \
+# Build live health preamble — tells reviewer exactly what's red RIGHT NOW
+_rh_json=$(/tmp/hive/dashboard/health-check.sh 2>/dev/null || echo '{}')
+_rh_reds=""
+_rh_ci=$(echo "$_rh_json" | jq -r '.ci // 0' 2>/dev/null || echo 0)
+[ "$_rh_ci" -lt 100 ] && _rh_reds="${_rh_reds} CI=${_rh_ci}%"
+for _rk in nightly nightlyCompliance nightlyDashboard nightlyPlaywright hourly weekly nightlyRel weeklyRel; do
+  _rv=$(echo "$_rh_json" | jq -r ".${_rk} // -1" 2>/dev/null || echo -1)
+  [ "$_rv" = "0" ] && _rh_reds="${_rh_reds} ${_rk}=RED"
+done
+for _dk in vllm pokprod; do
+  _dv=$(echo "$_rh_json" | jq -r ".${_dk} // -1" 2>/dev/null || echo -1)
+  [ "$_dv" = "0" ] && _rh_reds="${_rh_reds} deploy:${_dk}=RED"
+done
+_rh_cvg=$(curl -sf "${BADGE_URL:-https://gist.githubusercontent.com/clubanderson/b9a9ae8469f1897a22d5a40629bc1e82/raw/coverage-badge.json}" 2>/dev/null | jq -r '.message // "0"' | tr -d '%' || echo 0)
+[ "${_rh_cvg:-0}" -lt 91 ] && _rh_reds="${_rh_reds} coverage=${_rh_cvg}%<91%"
+if [ -n "$_rh_reds" ]; then
+  _HEALTH_PREAMBLE="URGENT — DASHBOARD HAS RED INDICATORS:${_rh_reds}. Your ONLY job this pass is to FIX these. Do NOT acknowledge and stand by. Do NOT skip health checks. Run /tmp/hive/dashboard/health-check.sh, diagnose each failure, and open fix PRs. "
+else
+  _HEALTH_PREAMBLE=""
+fi
+REVIEWER_MSG="[AGENT:reviewer] ${_HEALTH_PREAMBLE}$PULL_INSTRUCTIONS \
 $(beads_restore "$REVIEWER_BEADS") \
 Then: Run a full reviewer pass per /tmp/hive/examples/kubestellar/agents/reviewer-CLAUDE.md. \
 MANDATORY FIX ITEMS — do NOT just report these, you MUST open PRs to fix them: \
