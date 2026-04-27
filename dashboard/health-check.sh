@@ -55,8 +55,11 @@ for wf in "Perf — React commits per navigation" "Performance TTFI Gate"; do
 done
 hourly_ok=$hourly_worst
 
-# Deploy checks — from latest "Build and Deploy KC" workflow jobs
-deploy_jobs=$(gh run list --repo kubestellar/console --workflow "Build and Deploy KC" --limit 1 \
+# Deploy checks — from latest push-to-main "Build and Deploy KC" workflow run.
+# Deploy jobs only execute on push-to-main (not PRs), so filtering by
+# event=push and branch=main avoids picking up PR runs where deploy is skipped.
+deploy_jobs=$(gh run list --repo kubestellar/console --workflow "Build and Deploy KC" \
+  --event push --branch main --limit 1 \
   --json databaseId --jq '.[0].databaseId' 2>/dev/null || echo "")
 if [ -n "$deploy_jobs" ]; then
   vllm_result=$(gh run view "$deploy_jobs" --repo kubestellar/console --json jobs \
