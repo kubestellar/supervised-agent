@@ -135,14 +135,20 @@ switch_backend() {
 
   capture_handoff_state "$session" "$agent"
 
+  # Write governor model file so supervisor.sh picks up the new backend on relaunch
+  cat > "$GOVERNOR_FLAG_DIR/model_${agent}" <<MODELEOF
+BACKEND=$fallback_backend
+MODEL=$model
+COST_WEIGHT=0
+REASON=rate_limit_switch
+UPDATED=$(date -Iseconds)
+MODELEOF
+
+  # Send /exit — supervisor.sh will detect the agent died and relaunch
+  # with the new backend:model from the governor model file
   $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
   sleep 2
   $TMUX_BIN send-keys -t "$session" -l "/exit" 2>/dev/null || true
-  sleep 1
-  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
-  sleep 3
-
-  $TMUX_BIN send-keys -t "$session" -l "agent-launch.sh --backend $fallback_backend --model $model" 2>/dev/null || true
   sleep 1
   $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
 
@@ -221,14 +227,10 @@ restart_stuck_agent() {
     kill -9 "$pane_pid" 2>/dev/null || true
     sleep 2
   fi
-  # Relaunch the agent CLI
-  local _cur_backend _cur_model
-  _cur_backend=$(get_current_backend "$agent")
-  _cur_model=$(get_model_for "$agent" "$_cur_backend")
-  log "RESTART $session — relaunching with ${_cur_backend}:${_cur_model}"
-  $TMUX_BIN send-keys -t "$session" -l "agent-launch.sh --backend $_cur_backend --model $_cur_model" 2>/dev/null || true
-  sleep 1
-  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
+  # supervisor.sh detects the killed process and relaunches automatically
+  # (reading the governor model file for the correct backend:model).
+  # Just wait for it to come back.
+  log "RESTART $session — killed, waiting for supervisor.sh to relaunch"
   local RESTART_WAIT=90
   local waited=0
   while (( waited < RESTART_WAIT )); do
@@ -577,6 +579,37 @@ OUTREACH_MSG="[agent:outreach] [KICK] git pull /tmp/hive. Read your CLAUDE.md. F
 # itself changes (e.g., claude → copilot).
 GOVERNOR_STATE_DIR="/var/run/kick-governor"
 
+detect_running_model() {
+  # Detect the actual model running in a tmux session from its process cmdline.
+  # Returns "backend:model" or empty string if undetectable.
+  local session="$1"
+  local pane_pid cmd_line
+  pane_pid=$($TMUX_BIN display-message -t "$session" -p '#{pane_pid}' 2>/dev/null || true)
+  [ -z "$pane_pid" ] && return
+
+  # Walk child processes to find the CLI binary
+  local child_pids
+  child_pids=$(pgrep -P "$pane_pid" 2>/dev/null || true)
+  for cpid in $pane_pid $child_pids; do
+    cmd_line=$(ps -p "$cpid" -o args= 2>/dev/null || true)
+    [ -z "$cmd_line" ] && continue
+
+    local detected_backend="" detected_model=""
+    case "$cmd_line" in
+      *copilot*) detected_backend="copilot" ;;
+      *claude*)  detected_backend="claude" ;;
+      *gemini*)  detected_backend="gemini" ;;
+      *)         continue ;;
+    esac
+
+    detected_model=$(echo "$cmd_line" | grep -oE '\-\-model[= ]+[a-zA-Z0-9._-]+' | sed 's/--model[= ]*//' || true)
+    if [ -n "$detected_backend" ] && [ -n "$detected_model" ]; then
+      echo "${detected_backend}:${detected_model}"
+      return
+    fi
+  done
+}
+
 apply_model_if_changed() {
   local agent="$1" session="$2"
 
@@ -597,12 +630,25 @@ apply_model_if_changed() {
   gov_model=$(grep '^MODEL=' "$model_file" 2>/dev/null | cut -d= -f2)
   [[ -z "$gov_backend" || -z "$gov_model" ]] && return 0
 
-  local cur_backend
-  cur_backend=$(get_current_backend "$agent")
-  local cur_model
-  cur_model=$(get_model_for "$agent" "$cur_backend")
+  # Detect the actual running model from the process, not from our state files.
+  # State files can be stale when supervisor.sh relaunches with its original cmd.
+  local cur_backend cur_model
+  local detected
+  detected=$(detect_running_model "$session")
+  if [[ -n "$detected" ]]; then
+    cur_backend="${detected%%:*}"
+    cur_model="${detected#*:}"
+  else
+    cur_backend=$(get_current_backend "$agent")
+    cur_model=$(get_model_for "$agent" "$cur_backend")
+  fi
 
-  if [[ "$cur_backend" == "$gov_backend" && "$cur_model" == "$gov_model" ]]; then
+  # Normalize model names for comparison (dots vs hyphens)
+  local norm_gov norm_cur
+  norm_gov=$(echo "$gov_model" | sed -E 's/([0-9])\.([0-9])/\1-\2/g')
+  norm_cur=$(echo "$cur_model" | sed -E 's/([0-9])\.([0-9])/\1-\2/g')
+
+  if [[ "$cur_backend" == "$gov_backend" && "$norm_cur" == "$norm_gov" ]]; then
     return 0
   fi
 
@@ -624,12 +670,11 @@ apply_model_if_changed() {
 
   capture_handoff_state "$session" "$agent"
 
+  # Send /exit — supervisor.sh will detect the agent died and relaunch.
+  # supervisor.sh reads the governor model file before relaunch, so it
+  # picks up the new backend:model automatically. Do NOT type agent-launch.sh
+  # into the pane — that races with supervisor.sh's keepalive loop.
   $TMUX_BIN send-keys -t "$session" -l "/exit" 2>/dev/null || true
-  sleep 1
-  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
-  sleep 3
-
-  $TMUX_BIN send-keys -t "$session" -l "agent-launch.sh --backend $gov_backend --model $gov_model" 2>/dev/null || true
   sleep 1
   $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
 
@@ -637,7 +682,7 @@ apply_model_if_changed() {
   BACKEND_MODEL[$gov_backend]="$gov_model"
   AGENT_MODEL_OVERRIDE["${agent}-${gov_backend}"]="$gov_model"
 
-  log "MODEL SWITCH $agent — relaunched with ${gov_backend}:${gov_model}, will inject kick prompt after startup"
+  log "MODEL SWITCH $agent — sent /exit, supervisor.sh will relaunch with ${gov_backend}:${gov_model}"
   MODEL_SWITCHED[$agent]=1
   return 0
 }

@@ -489,6 +489,12 @@ optimize_model_assignment() {
   fi
 
   for agent in "${agents[@]}"; do
+    # Skip paused agents — don't write model files that trigger restarts
+    if [[ -f "$STATE_DIR/paused_${agent}" ]]; then
+      log "  PAUSED: $agent — skipping model assignment"
+      continue
+    fi
+
     local selection="${assignments[$agent]}"
     local backend="${selection%%:*}"
     local model="${selection#*:}"
