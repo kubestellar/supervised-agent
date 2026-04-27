@@ -584,9 +584,9 @@ cmd_status() {
       local _next=$(( ((_raw_next + 299) / 300) * 300 ))
       [[ $_next -le $_now ]] && _next=$(( ((_now + 299) / 300) * 300 ))
       if [[ $_next -le $_now ]]; then
-        next_kick="${YLW}$(TZ=America/New_York date -d @$_next '+%-I:%M %p')${RST}"
+        next_kick="${YLW}$(TZ=America/New_York date -d @$_next '+%-m/%-d %-I:%M %p')${RST}"
       else
-        next_kick="$(TZ=America/New_York date -d @$_next '+%-I:%M %p')"
+        next_kick="$(TZ=America/New_York date -d @$_next '+%-m/%-d %-I:%M %p')"
       fi
     elif [[ "$cadence" == "paused" ]]; then next_kick="paused"
     fi
@@ -788,16 +788,16 @@ cmd_status_json() {
         local _til=$(( (5 - (_min % 5)) * 60 - _sec ))
         [[ $_til -le 0 ]] && _til=$((5 * 60 + _til))
         local _abs_next=$(( _now + _til ))
-        nk="$(TZ=America/New_York date -d @$_abs_next '+%-I:%M %p')"
+        nk="$(TZ=America/New_York date -d @$_abs_next '+%-m/%-d %-I:%M %p')"
       else
-        nk="$(TZ=America/New_York date -d @$_next '+%-I:%M %p')"
+        nk="$(TZ=America/New_York date -d @$_next '+%-m/%-d %-I:%M %p')"
       fi
     elif [[ "$cadence" == "paused" ]]; then nk="paused"
     fi
     # Format last kick time
     local lk_fmt=""
     if [[ -n "$_lk" && "$_lk" -gt 0 ]] 2>/dev/null; then
-      lk_fmt="$(TZ=America/New_York date -d @$_lk '+%-I:%M %p')"
+      lk_fmt="$(TZ=America/New_York date -d @$_lk '+%-m/%-d %-I:%M %p')"
     fi
     # Governor-assigned model
     local gov_backend gov_model gov_cost gov_reason
@@ -822,7 +822,7 @@ cmd_status_json() {
   gov_qp=$(  cat /var/run/kick-governor/queue_prs    2>/dev/null || echo "0")
   gov_next=$(systemctl list-timers kick-governor.timer --no-pager 2>/dev/null \
        | awk 'NR==2{print $1,$2,$3,$4}' \
-       | xargs -I{} bash -c "TZ=\"$HIVE_TZ\" date -d \"{}\" \"+%-I:%M %p %Z\"" 2>/dev/null || echo "")
+       | xargs -I{} bash -c "TZ=\"$HIVE_TZ\" date -d \"{}\" \"+%-m/%-d %-I:%M %p %Z\"" 2>/dev/null || echo "")
 
   # Repos — read from centralized api-collector cache
   local GITHUB_CACHE="${HIVE_METRICS_DIR:-/var/run/hive-metrics}/github-cache.json"
