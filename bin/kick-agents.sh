@@ -382,8 +382,17 @@ kick() {
 
   log "KICK $session"
   $TMUX_BIN send-keys -t "$session" -l "$message"
-  sleep 1  # let tmux flush long message text before sending Enter
+  sleep 2  # let tmux flush long message text before sending Enter
   $TMUX_BIN send-keys -t "$session" Enter
+  # Verify Enter was delivered — retry if text still in prompt after 3s
+  sleep 3
+  local _vline _vtext
+  _vline=$($TMUX_BIN capture-pane -t "$session" -p 2>/dev/null | grep "❯" | tail -1)
+  _vtext=$(echo "$_vline" | sed 's/.*❯[[:space:]]*//')
+  if [ -n "$_vtext" ] && [ ${#_vtext} -gt 2 ]; then
+    log "RETRY $session — Enter not delivered, resending"
+    $TMUX_BIN send-keys -t "$session" Enter
+  fi
   ntfy "$agent started" "Kicked at $ET_NOW. Next: $(next_run "$agent")"
 
   # Background check for rate limit after kick settles
