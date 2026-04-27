@@ -791,8 +791,8 @@
       const tlData = window._timelineData || [];
       const tlModes = tlData.map(s => s.mode || 'unknown');
       const ticks = tlModes.map(m => `<div class="tick tick-${m}"></div>`).join('');
-      const firstTime = tlData.length > 0 ? new Date(tlData[0].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true}) : '';
-      const lastTime = tlData.length > 0 ? new Date(tlData[tlData.length-1].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true}) : '';
+      const firstTime = tlData.length > 0 ? new Date(tlData[0].t).toLocaleDateString([], {month:'numeric',day:'numeric'}) + ' ' + new Date(tlData[0].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true}) : '';
+      const lastTime = tlData.length > 0 ? new Date(tlData[tlData.length-1].t).toLocaleDateString([], {month:'numeric',day:'numeric'}) + ' ' + new Date(tlData[tlData.length-1].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true}) : '';
 
       el.innerHTML = `
         <div class="gov-title">Governor</div>
@@ -1295,7 +1295,7 @@ function intensityGauge() {
     function render(data) {
       if (!data || data.error) return;
       const scrollY = window.scrollY;
-      document.getElementById('ts').textContent = new Date(data.timestamp).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
+      document.getElementById('ts').textContent = new Date(data.timestamp).toLocaleDateString([], {month:'numeric',day:'numeric'}) + ' ' + new Date(data.timestamp).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
       currentAgentMetrics = data.agentMetrics || {};
       window._healthData = data.health || {};
       window._tokensByAgent = (data.tokens || {}).byAgent || {};
