@@ -44,18 +44,21 @@ if command -v gh &>/dev/null; then
     # Fetch all unique issue titles in parallel
     unique_issues=$(echo "$scanner_pairs_json" | jq -r '.[].issue' | sort -un | grep -v '^0$')
     for inum in $unique_issues; do
-      (gh api "repos/kubestellar/console/issues/${inum}" --jq '.title' > "$issue_tmp/$inum" 2>/dev/null || echo "" > "$issue_tmp/$inum") &
+      (gh api "repos/kubestellar/console/issues/${inum}" --jq '{title: .title, state: .state}' > "$issue_tmp/$inum" 2>/dev/null || echo '{"title":"","state":"open"}' > "$issue_tmp/$inum") &
     done
     wait
-    # Build title lookup JSON
+    # Build title and state lookup maps
     title_map="{}"
+    state_map="{}"
     for inum in $unique_issues; do
-      ititle=$(cat "$issue_tmp/$inum" 2>/dev/null || echo "")
+      ititle=$(cat "$issue_tmp/$inum" 2>/dev/null | jq -r '.title // ""')
+      istate=$(cat "$issue_tmp/$inum" 2>/dev/null | jq -r '.state // "open"')
       title_map=$(echo "$title_map" | jq --arg k "$inum" --arg v "$ititle" '. + {($k): $v}')
+      state_map=$(echo "$state_map" | jq --arg k "$inum" --arg v "$istate" '. + {($k): $v}')
     done
     rm -rf "$issue_tmp"
-    # Merge titles into pairs
-    scanner_pairs_json=$(echo "$scanner_pairs_json" | jq --argjson titles "$title_map" '[.[] | .issueTitle = ($titles[(.issue|tostring)] // "")]')
+    # Merge titles into pairs and drop pairs where the issue is closed
+    scanner_pairs_json=$(echo "$scanner_pairs_json" | jq --argjson titles "$title_map" --argjson states "$state_map" '[.[] | .issueTitle = ($titles[(.issue|tostring)] // "") | select(($states[(.issue|tostring)] // "open") != "closed")]')
   fi
 fi
 
