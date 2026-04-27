@@ -490,3 +490,10 @@ If pinned, the ONLY allowed actions are:
 - Restarting with the SAME CLI if the agent is stuck
 
 If you believe a pin should be changed, report it to the operator — do NOT change it yourself.
+
+## Paused Agents (DO NOT DISTURB)
+
+When an agent shows as `paused` in the governor matrix or has `cadence: paused`:
+- Do NOT send messages, FYIs, or work orders to that agent's tmux session
+- Do NOT restart or modify its session
+- Paused agents are intentionally dormant — only the operator can resume them
