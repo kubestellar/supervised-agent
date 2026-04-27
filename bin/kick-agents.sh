@@ -490,6 +490,16 @@ GOVERNOR_STATE_DIR="/var/run/kick-governor"
 
 apply_model_if_changed() {
   local agent="$1" session="$2"
+
+  # Respect manual CLI pin -- operator used hive switch or dashboard dropdown
+  local pin_file
+  case "$agent" in
+    scanner) pin_file="/etc/hive/issue-scanner.env" ;;
+    *) pin_file="/etc/hive/${agent}.env" ;;
+  esac
+  if grep -q "^AGENT_CLI_PINNED=true" "$pin_file" 2>/dev/null; then
+    return 0
+  fi
   local model_file="$GOVERNOR_STATE_DIR/model_${agent}"
   [[ ! -f "$model_file" ]] && return 0
 
@@ -571,7 +581,7 @@ case "$TARGET" in
     apply_model_if_changed "reviewer" "reviewer" && kick "reviewer" "$REVIEWER_MSG" "reviewer"
     ;;
   architect)
-    apply_model_if_changed "architect" "feature" && kick "architect" "$ARCHITECT_MSG" "architect"
+    apply_model_if_changed "architect" "architect" && kick "architect" "$ARCHITECT_MSG" "architect"
     ;;
   outreach)
     apply_model_if_changed "outreach" "outreach" && kick "outreach" "$OUTREACH_MSG" "outreach"
@@ -582,7 +592,7 @@ case "$TARGET" in
   all)
     apply_model_if_changed "scanner" "issue-scanner" && kick "issue-scanner" "$SCANNER_MSG" "scanner"
     apply_model_if_changed "reviewer" "reviewer" && kick "reviewer" "$REVIEWER_MSG" "reviewer"
-    apply_model_if_changed "architect" "feature" && kick "architect" "$ARCHITECT_MSG" "architect"
+    apply_model_if_changed "architect" "architect" && kick "architect" "$ARCHITECT_MSG" "architect"
     apply_model_if_changed "outreach" "outreach" && kick "outreach" "$OUTREACH_MSG" "outreach"
     # supervisor is NOT kicked in "all" — it has its own cadence via governor
     ;;

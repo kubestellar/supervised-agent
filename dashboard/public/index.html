@@ -699,7 +699,7 @@
         const indEl = agentIndicators(a.name);
         return `<div class="agent-card ${cls}">
           <div class="agent-name"><span class="dot ${dotCls}"></span>${a.name} ${toggleBtn} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a></div>
-          <div class="agent-field"><span class="label">cli</span><span class="value">${cliChip(a.cli)}</span></div>
+          <div class="agent-field"><span class="label">cli</span><span class="value">${cliChip(a.cli, a.pinned)}</span></div>
           <div class="agent-field"><span class="label">model</span><span class="value">${modelChip(a.model, a.govReason)}</span></div>
           <div class="agent-field"><span class="label">interval</span><span class="value">${isPaused ? 'paused' : a.cadence}</span></div>
           <div class="agent-field"><span class="label">last run</span><span class="value">${a.lastKick || '—'}</span></div>
@@ -852,7 +852,7 @@
         }).join('');
         const nameDot = isWorking ? '<span class="agent-dot"></span>' : '';
         const pauseBadge = agentPaused ? '<span class="pause-badge">paused</span>' : '';
-        const cChip = agentData && agentData.cli ? cliChip(agentData.cli) : '?';
+        const cChip = agentData && agentData.cli ? cliChip(agentData.cli, agentData.pinned) : '?';
         const mChip = agentData && agentData.model ? modelChip(agentData.model, agentData.govReason) : '';
         return `<tr><td>${nameDot}${aname}${pauseBadge}</td>${cells}<td>${cChip}</td><td>${mChip}</td></tr>`;
       }).join('');
@@ -937,11 +937,13 @@
       </div>`;
     }
 
-    function cliChip(cli) {
+    function cliChip(cli, pinned) {
       if (!cli || cli === '?') return '?';
       const tiers = { copilot: 'free', claude: 'opus', goose: 'free', gemini: 'sonnet' };
       const tier = tiers[cli] || 'sonnet';
-      return `<span class="model-chip ${tier}" title="cli: ${cli}">${cli}</span>`;
+      const pin = pinned ? ' \u{1F4CC}' : '';
+      const pinTitle = pinned ? ' (pinned)' : '';
+      return `<span class="model-chip ${tier}" title="cli: ${cli}${pinTitle}">${cli}${pin}</span>`;
     }
 
     function backendChip(backend) {

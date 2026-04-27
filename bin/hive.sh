@@ -130,7 +130,8 @@ ${BLD}COMMANDS${RST}
   kick    [all|scanner|reviewer|architect|outreach]
   logs    [governor|scanner|reviewer|architect|outreach|supervisor]
   stop    [all|agent]
-  switch  <agent> <backend>            Switch agent to a different CLI backend
+  switch  <agent> <backend>            Switch agent to a different CLI backend (pins CLI)
+  unpin   <agent>                      Unpin CLI â let governor manage backend again
 
 ${BLD}BACKENDS${RST}  (set HIVE_BACKENDS in hive.conf)
   copilot   GitHub Copilot CLI (cloud)
@@ -380,7 +381,7 @@ ensure_agents() {
   local services=(
     "claude-scanner.service:scanner"
     "hive@reviewer.service:reviewer"
-    "hive@feature.service:architect"
+    "hive@architect.service:architect"
     "hive@outreach.service:outreach"
   )
   local all_units=("${services[@]}" "kick-governor.timer:governor")
@@ -444,14 +445,14 @@ kick_agents() {
   declare -A AGENT_BEADS_DIR
   AGENT_BEADS_DIR["issue-scanner"]="${BEADS_SCANNER_DIR:-/home/${AGENT_USER:-dev}/scanner-beads}"
   AGENT_BEADS_DIR["reviewer"]="${BEADS_REVIEWER_DIR:-/home/${AGENT_USER:-dev}/reviewer-beads}"
-  AGENT_BEADS_DIR["feature"]="${BEADS_FEATURE_DIR:-/home/${AGENT_USER:-dev}/feature-beads}"
+  AGENT_BEADS_DIR["architect"]="${BEADS_FEATURE_DIR:-/home/${AGENT_USER:-dev}/feature-beads}"
   AGENT_BEADS_DIR["outreach"]="${BEADS_OUTREACH_DIR:-/home/${AGENT_USER:-dev}/outreach-beads}"
 
   # Expected model substring — must be visible in pane before kick is safe to send.
   # Copilot shows "claude-opus-4.6" in bottom-right; Claude Code shows "Opus 4.6".
   local expected_model="4.6"
 
-  for session in issue-scanner reviewer feature outreach; do
+  for session in issue-scanner reviewer architect outreach; do
     if ! tmux has-session -t "$session" 2>/dev/null; then
       warn "$session session not ready yet — governor will kick on next cycle"
       continue
@@ -722,6 +723,10 @@ cmd_status_json() {
       if [[ "$cli" == "?" ]]; then
         cli=$(grep "^AGENT_CLI=" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "?")
       fi
+      local pinned="false"
+      if grep -q "^AGENT_CLI_PINNED=true" "$ENV_DIR/${ENV_FILES[$i]}.env" 2>/dev/null; then
+        pinned="true"
+      fi
       local recent_lines
       # Extract model from process cmdline --model flag (most reliable)
       model=$(detect_model_from_proc "$s")
@@ -904,7 +909,7 @@ cmd_attach() {
   # map friendly names to session names
   case "$name" in
     scanner|issue-scanner) name="issue-scanner" ;;
-    architect|feature)     name="feature" ;;
+    architect|feature)     name="architect" ;;
     supervisor|reviewer|outreach) ;;
     *) die "Unknown agent: $name. Use: supervisor scanner reviewer architect outreach" ;;
   esac
@@ -924,7 +929,7 @@ cmd_logs() {
     governor)           exec journalctl -u kick-governor -f --no-pager ;;
     scanner)            exec journalctl -u claude-scanner -f --no-pager ;;
     reviewer)           exec journalctl -u "hive@reviewer" -f --no-pager ;;
-    architect|feature)  exec journalctl -u "hive@feature" -f --no-pager ;;
+    architect|feature)  exec journalctl -u "hive@architect" -f --no-pager ;;
     outreach)           exec journalctl -u "hive@outreach" -f --no-pager ;;
     supervisor)         exec journalctl -u "hive@supervisor" -f --no-pager ;;
     *) die "Unknown agent. Use: governor scanner reviewer architect outreach supervisor" ;;
@@ -942,7 +947,7 @@ cmd_stop() {
   local target="${1:-all}"
   if [[ "$target" == "all" ]]; then
     info "Stopping all agents..."
-    for svc in claude-scanner hive@reviewer hive@feature hive@outreach hive@supervisor; do
+    for svc in claude-scanner hive@reviewer hive@architect hive@outreach hive@supervisor; do
       sudo systemctl stop "$svc" 2>/dev/null && ok "Stopped $svc" || true
     done
     sudo systemctl stop kick-governor.timer 2>/dev/null && ok "Stopped governor" || true
@@ -950,7 +955,7 @@ cmd_stop() {
     case "$target" in
       scanner)  sudo systemctl stop claude-scanner ;;
       reviewer) sudo systemctl stop "hive@reviewer" ;;
-      architect|feature) sudo systemctl stop "hive@feature" ;;
+      architect|feature) sudo systemctl stop "hive@architect" ;;
       outreach) sudo systemctl stop "hive@outreach" ;;
       supervisor) sudo systemctl stop "hive@supervisor" ;;
       *) die "Unknown agent: $target" ;;
@@ -961,6 +966,26 @@ cmd_stop() {
 
 # ── switch ───────────────────────────────────────────────────────────────────
 
+cmd_unpin() {
+  local agent="${1:-}"
+  [[ -z "$agent" ]] && die "Usage: hive unpin <agent>"
+  local envfile
+  case "$agent" in
+    scanner)            envfile="issue-scanner" ;;
+    reviewer)           envfile="reviewer" ;;
+    architect|feature)  envfile="architect" ;;
+    outreach)           envfile="outreach" ;;
+    *) die "Unknown agent: $agent" ;;
+  esac
+  local ef="$ENV_DIR/${envfile}.env"
+  if [[ -f "$ef" ]]; then
+    sudo sed -i "/^AGENT_CLI_PINNED=/d" "$ef"
+    ok "Unpinned $agent â governor will manage CLI on next kick"
+  else
+    die "Env file not found: $ef"
+  fi
+}
+
 cmd_switch() {
   local agent="${1:-}" backend="${2:-}"
   [[ -z "$agent" || -z "$backend" ]] && die "Usage: hive switch <agent> <backend>  (backends: copilot claude gemini goose)"
@@ -970,7 +995,7 @@ cmd_switch() {
   case "$agent" in
     scanner)            session="issue-scanner"; envfile="issue-scanner"; service="claude-scanner" ;;
     reviewer)           session="reviewer";      envfile="reviewer";      service="hive@reviewer" ;;
-    architect|feature)  session="feature";       envfile="feature";       service="hive@feature" ;;
+    architect|feature)  session="architect";    envfile="architect";    service="hive@architect" ;;
     outreach)           session="outreach";      envfile="outreach";      service="hive@outreach" ;;
     supervisor)         session="supervisor";    envfile="supervisor";    service="hive@supervisor" ;;
     *) die "Unknown agent: $agent (valid: scanner reviewer architect outreach supervisor)" ;;
@@ -993,7 +1018,13 @@ cmd_switch() {
   if [[ -f "$ef" ]]; then
     sudo sed -i "s|^AGENT_LAUNCH_CMD=.*|AGENT_LAUNCH_CMD=\"${launch_cmd}\"|" "$ef"
     sudo sed -i "s|^AGENT_CLI=.*|AGENT_CLI=${backend}|" "$ef"
-    ok "Updated $ef"
+    # Pin the CLI so governor doesn't override on next kick
+    if grep -q "^AGENT_CLI_PINNED=" "$ef" 2>/dev/null; then
+      sudo sed -i "s|^AGENT_CLI_PINNED=.*|AGENT_CLI_PINNED=true|" "$ef"
+    else
+      echo "AGENT_CLI_PINNED=true" | sudo tee -a "$ef" >/dev/null
+    fi
+    ok "Updated $ef (pinned)"
   else
     die "Env file not found: $ef"
   fi
@@ -1017,7 +1048,7 @@ cmd_model() {
   case "$agent" in
     scanner)            session="issue-scanner"; envfile="issue-scanner"; service="claude-scanner" ;;
     reviewer)           session="reviewer";      envfile="reviewer";      service="hive@reviewer" ;;
-    architect|feature)  session="feature";       envfile="feature";       service="hive@feature" ;;
+    architect|feature)  session="architect";    envfile="architect";    service="hive@architect" ;;
     outreach)           session="outreach";      envfile="outreach";      service="hive@outreach" ;;
     supervisor)         session="supervisor";    envfile="supervisor";    service="hive@supervisor" ;;
     *) die "Unknown agent: $agent (valid: scanner reviewer architect outreach supervisor)" ;;
@@ -1122,6 +1153,7 @@ main() {
     kick)     shift; cmd_kick    "${1:-all}" ;;
     logs)     shift; cmd_logs    "${1:-governor}" ;;
     stop)     shift; cmd_stop    "${1:-all}" ;;
+    unpin)    shift; cmd_unpin   "$@" ;;
     switch)   shift; cmd_switch  "$@" ;;
     model)    shift; cmd_model   "$@" ;;
     dashboard)
