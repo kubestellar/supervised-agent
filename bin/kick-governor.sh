@@ -590,14 +590,7 @@ maybe_kick() {
     return
   fi
 
-  # Agents kick on quarter-hour boundaries (:00, :15, :30, :45)
-  local now_min
-  now_min=$(date +%-M)
-  local quarter=$(( (now_min / 15) * 15 ))  # 0, 15, 30, or 45
-  local on_quarter=false
-  [[ $(( now_min - quarter )) -le 4 ]] && on_quarter=true  # within 5-min governor window
-
-  if [ "$elapsed" -ge "$cadence" ] && [ "$on_quarter" = true ]; then
+  if [ "$elapsed" -ge "$cadence" ]; then
     local next_et
     next_et=$(TZ=America/New_York date -d "+${cadence} seconds" '+%H:%M %Z')
     log "KICK ${agent} (mode=${mode} cadence=$(secs_to_label "$cadence") elapsed=$(secs_to_label "$elapsed") next≈${next_et})"
@@ -614,13 +607,7 @@ maybe_kick() {
   else
     local remaining=$(( cadence - elapsed ))
     [[ "$remaining" -lt 0 ]] && remaining=0
-    if [ "$on_quarter" != true ] && [ "$elapsed" -ge "$cadence" ]; then
-      # Overdue but not on quarter — find next quarter
-      local mins_to_quarter=$(( 15 - (now_min % 15) ))
-      log "SKIP ${agent} (mode=${mode} due — waiting for :${quarter} boundary, ~${mins_to_quarter}m)"
-    else
-      log "SKIP ${agent} (mode=${mode} next in $(secs_to_label "$remaining"))"
-    fi
+    log "SKIP ${agent} (mode=${mode} next in $(secs_to_label "$remaining"))"
   fi
 }
 
