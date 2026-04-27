@@ -57,8 +57,8 @@ if command -v gh &>/dev/null; then
       state_map=$(echo "$state_map" | jq --arg k "$inum" --arg v "$istate" '. + {($k): $v}')
     done
     rm -rf "$issue_tmp"
-    # Merge titles into pairs and drop pairs where the issue is closed
-    scanner_pairs_json=$(echo "$scanner_pairs_json" | jq --argjson titles "$title_map" --argjson states "$state_map" '[.[] | .issueTitle = ($titles[(.issue|tostring)] // "") | select(($states[(.issue|tostring)] // "open") != "closed")]')
+    # Merge titles into pairs; drop open PRs where the issue is already closed
+    scanner_pairs_json=$(echo "$scanner_pairs_json" | jq --argjson titles "$title_map" --argjson states "$state_map" '[.[] | .issueTitle = ($titles[(.issue|tostring)] // "") | select(.state == "merged" or ($states[(.issue|tostring)] // "open") != "closed")]')
   fi
 fi
 
