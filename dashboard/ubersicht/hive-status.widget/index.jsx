@@ -4,184 +4,341 @@
 
 const HIVE_URL = "http://192.168.4.56:3001";
 const REFRESH_MS = 5000;
+const RESTART_WARN_THRESHOLD = 5;
+const RESTART_HIGH_THRESHOLD = 20;
+const COVERAGE_TARGET = 91;
+const COVERAGE_WARN_OFFSET = 10;
+const BUDGET_SAFE_PCT = 50;
+const BUDGET_WARN_PCT = 85;
+const GAUGE_MAX_QUEUE = 30;
 
 export const refreshFrequency = REFRESH_MS;
 
 export const command = `curl -sf ${HIVE_URL}/api/status 2>/dev/null || echo '{"error":true}'`;
 
-const stateColor = (s) => {
-  if (s === "running") return "#22c55e";
-  if (s === "idle" || s === "stopped") return "#64748b";
-  return "#eab308";
+const C = {
+  green: "#3fb950", red: "#f85149", yellow: "#d29922",
+  blue: "#58a6ff", cyan: "#39d2c0", purple: "#bc8cff",
+  muted: "#8b949e", dimmed: "#64748b", text: "#e2e8f0",
+  bg: "rgba(15, 15, 25, 0.88)", surface: "rgba(255,255,255,0.04)",
+  border: "rgba(255,255,255,0.08)",
 };
 
-const busyIcon = (b) => {
-  if (b === "working") return "🔄";
-  if (b === "idle") return "💤";
-  return "⏸";
+const stateColor = (s) => s === "running" ? C.green : s === "idle" || s === "stopped" ? C.dimmed : C.yellow;
+const busyIcon = (b) => b === "working" ? "🔄" : b === "idle" ? "💤" : "⏸";
+const modeColor = (m) => ({ idle: C.green, quiet: C.blue, busy: C.yellow, surge: C.red }[m] || C.muted);
+
+const cliColor = (cli) => ({ copilot: C.cyan, claude: C.purple, gemini: C.yellow, goose: C.green }[cli] || C.muted);
+
+const modelTier = (model) => {
+  if (!model || model === "?") return { color: C.muted, short: "?" };
+  const n = model.toLowerCase();
+  const short = n.replace(/^claude-/, "").replace(/-(\d[\d-]*\d)$/, (_, v) => "-" + v.replace(/-/g, "."));
+  if (n.includes("haiku")) return { color: C.blue, short };
+  if (n.includes("opus")) return { color: C.red, short };
+  return { color: C.yellow, short };
 };
 
-const govColor = (g) => (g === "active" ? "#22c55e" : "#ef4444");
+const fmtTokens = (n) => {
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+  return String(n);
+};
 
 export const render = ({ output }) => {
   let data;
-  try {
-    data = JSON.parse(output);
-  } catch {
-    return <div style={styles.container}><span style={styles.err}>⚠ parse error</span></div>;
+  try { data = JSON.parse(output); } catch {
+    return <div style={S.container}><span style={S.err}>⚠ parse error</span></div>;
   }
 
   if (data.error) {
     return (
-      <div style={styles.container}>
-        <div style={styles.header}>🐝 HIVE</div>
-        <span style={styles.err}>dashboard offline</span>
+      <div style={S.container}>
+        <div style={S.header}>🐝 HIVE</div>
+        <span style={S.err}>dashboard offline</span>
       </div>
     );
   }
 
   const agents = data.agents || [];
   const gov = data.governor || {};
-  const repo = data.repo || {};
+  const repos = data.repos || [];
+  const budget = data.budget || {};
+  const metrics = data.agentMetrics || {};
+  const health = data.health || {};
+  const total = (gov.issues || 0) + (gov.prs || 0);
+  const gaugePct = Math.min((total / GAUGE_MAX_QUEUE) * 100, 100);
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
+    <div style={S.container}>
+      {/* Header */}
+      <div style={S.header}>
         🐝 HIVE
-        <span style={{ ...styles.govBadge, background: govColor(gov.timer) }}>
-          GOV {gov.timer || "?"}
+        <span style={{ ...S.badge, background: gov.active ? C.green : C.red }}>
+          GOV {gov.active ? "●" : "⚠"}
         </span>
-        {gov.mode && <span style={styles.mode}>{gov.mode}</span>}
+        <span style={{ ...S.badge, background: modeColor(gov.mode), marginLeft: 4 }}>
+          {gov.mode || "?"}
+        </span>
+        <span style={S.ts}>
+          {data.timestamp ? new Date(data.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true }) : ""}
+        </span>
       </div>
 
-      <div style={styles.grid}>
-        {agents.map((a) => (
-          <div key={a.name} style={styles.agent}>
-            <div style={styles.agentHeader}>
-              <span style={{ ...styles.dot, background: stateColor(a.state) }} />
-              <span style={styles.agentName}>{a.name}</span>
-              <span style={styles.busyIcon}>{busyIcon(a.busy)}</span>
-            </div>
-            <div style={styles.agentMeta}>
-              {a.cli} · {a.cadence}
-            </div>
-            {a.doing && <div style={styles.doing}>{a.doing}</div>}
+      {/* Governor gauge */}
+      <div style={S.gaugeWrap}>
+        <div style={S.gaugeTrack}>
+          <div style={{ ...S.gaugeFill, width: `${gaugePct}%`, background: modeColor(gov.mode) }} />
+        </div>
+        <div style={S.gaugeLabels}>
+          <span>📋 {gov.issues} issues · 🔀 {gov.prs} PRs</span>
+          <span>next: {gov.nextKick || "—"}</span>
+        </div>
+      </div>
+
+      {/* Budget bar */}
+      {budget.BUDGET_WEEKLY > 0 && (
+        <div style={S.budgetWrap}>
+          <div style={S.budgetTrack}>
+            <div style={{
+              ...S.budgetFill,
+              width: `${Math.min(budget.BUDGET_PCT_USED || 0, 100)}%`,
+              background: (budget.BUDGET_PCT_USED || 0) < BUDGET_SAFE_PCT ? C.green : (budget.BUDGET_PCT_USED || 0) < BUDGET_WARN_PCT ? C.yellow : C.red,
+            }} />
           </div>
-        ))}
+          <div style={S.budgetLabels}>
+            <span>💰 {budget.BUDGET_PCT_USED || 0}% used</span>
+            <span>proj: {budget.PROJECTED_PCT || 0}%</span>
+            <span>{budget.HOURS_REMAINING || 0}h left</span>
+          </div>
+        </div>
+      )}
+
+      {/* Agent cards */}
+      <div style={S.grid}>
+        {agents.map((a) => {
+          const isPaused = a.paused === true;
+          const mt = modelTier(a.model);
+          const restarts = a.restarts || 0;
+          const restartColor = restarts >= RESTART_HIGH_THRESHOLD ? C.red : restarts > RESTART_WARN_THRESHOLD ? C.yellow : C.muted;
+          const am = metrics[a.name] || {};
+
+          return (
+            <div key={a.name} style={{
+              ...S.card,
+              borderColor: isPaused ? C.red : a.busy === "working" ? C.yellow : C.border,
+              opacity: isPaused ? 0.6 : 1,
+            }}>
+              {/* Agent name + state */}
+              <div style={S.cardHeader}>
+                <span style={{ ...S.dot, background: stateColor(a.state) }} />
+                <span style={S.agentName}>{a.name}</span>
+                <span style={S.busyIcon}>{busyIcon(a.busy)}</span>
+              </div>
+
+              {/* CLI + pin + model */}
+              <div style={S.row}>
+                <span style={{ ...S.chip, color: cliColor(a.cli), borderColor: cliColor(a.cli) }}>
+                  {a.cli || "?"}{a.pinned ? " 📌" : ""}
+                </span>
+                <span style={{ ...S.chip, color: mt.color, borderColor: mt.color }}>
+                  {mt.short}
+                </span>
+              </div>
+
+              {/* Cadence + timing */}
+              <div style={S.meta}>
+                {isPaused ? "paused" : a.cadence} · last {a.lastKick || "—"} · next {isPaused ? "paused" : (a.nextKick || "—")}
+              </div>
+
+              {/* Restarts */}
+              {restarts > 0 && (
+                <div style={{ ...S.meta, color: restartColor }}>
+                  ↻ {restarts} restarts
+                </div>
+              )}
+
+              {/* Doing text */}
+              {a.doing && <div style={S.doing}>{a.doing}</div>}
+              {!a.doing && a.liveSummary && <div style={S.doing}>{a.liveSummary}</div>}
+
+              {/* Agent-specific metrics */}
+              {a.name === "scanner" && am.pairs && am.pairs.length > 0 && (
+                <div style={S.indicators}>
+                  {am.pairs.slice(0, 4).map((p, i) => (
+                    <div key={i} style={S.pairRow}>
+                      <span style={{ color: C.green, fontSize: 9 }}>⊙#{p.issue}</span>
+                      <span style={{ color: C.muted, fontSize: 8 }}>→</span>
+                      <span style={{ color: p.state === "merged" ? C.green : C.purple, fontSize: 9 }}>
+                        {p.state === "merged" ? "✓" : "⎇"}#{p.pr}
+                      </span>
+                    </div>
+                  ))}
+                  {am.pairs.length > 4 && <div style={{ fontSize: 8, color: C.muted }}>+{am.pairs.length - 4} more</div>}
+                </div>
+              )}
+
+              {a.name === "reviewer" && (
+                <div style={S.indicators}>
+                  <div style={S.coverageRow}>
+                    <span style={{ fontSize: 9, color: C.muted }}>coverage</span>
+                    <div style={S.coverageTrack}>
+                      <div style={{
+                        ...S.coverageFill,
+                        width: `${Math.min(((am.coverage || 0) / COVERAGE_TARGET) * 100, 100)}%`,
+                        background: (am.coverage || 0) >= COVERAGE_TARGET ? C.green : (am.coverage || 0) >= COVERAGE_TARGET - COVERAGE_WARN_OFFSET ? C.yellow : C.red,
+                      }} />
+                    </div>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700,
+                      color: (am.coverage || 0) >= COVERAGE_TARGET ? C.green : (am.coverage || 0) >= COVERAGE_TARGET - COVERAGE_WARN_OFFSET ? C.yellow : C.red,
+                    }}>{am.coverage || 0}%</span>
+                  </div>
+                  {/* Health dots */}
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
+                    {[
+                      { k: "ci", l: "CI", pct: true },
+                      { k: "nightly", l: "Night" },
+                      { k: "brew", l: "Brew" },
+                      { k: "helm", l: "Helm" },
+                    ].map((h) => (
+                      <span key={h.k} style={{ fontSize: 8, color: C.muted }}>
+                        <span style={{
+                          display: "inline-block", width: 5, height: 5, borderRadius: "50%",
+                          background: h.pct ? ((health[h.k] || 0) >= 90 ? C.green : C.yellow) : (health[h.k] === 1 ? C.green : health[h.k] === 0 ? C.red : C.muted),
+                          marginRight: 2, verticalAlign: "middle",
+                        }} />
+                        {h.l}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {a.name === "outreach" && (
+                <div style={S.indicators}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 9 }}>⭐{am.stars || 0}</span>
+                    <span style={{ fontSize: 9 }}>🍴{am.forks || 0}</span>
+                    <span style={{ fontSize: 9 }}>👥{am.contributors || 0}</span>
+                    <span style={{ fontSize: 9, color: C.cyan }}>{am.adopters || 0} adopters</span>
+                    <span style={{ fontSize: 9, color: C.purple }}>{am.acmm || 0} ACMM</span>
+                  </div>
+                  <div style={{ fontSize: 8, color: C.muted, marginTop: 2 }}>
+                    PRs: {am.outreachOpen || 0} open · {am.outreachMerged || 0} merged
+                  </div>
+                </div>
+              )}
+
+              {a.name === "architect" && (am.prs > 0 || am.closed > 0) && (
+                <div style={S.indicators}>
+                  <span style={{ fontSize: 9 }}>{am.prs || 0} PRs · {am.closed || 0} closed</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      <div style={styles.footer}>
-        <span>📋 {repo.openIssues ?? "?"} issues</span>
-        <span style={styles.sep}>·</span>
-        <span>🔀 {repo.openPRs ?? "?"} PRs</span>
-        {gov.queueDepth != null && (
-          <>
-            <span style={styles.sep}>·</span>
-            <span>📥 {gov.queueDepth} queued</span>
-          </>
-        )}
+      {/* Repos */}
+      <div style={S.repoRow}>
+        {repos.filter(r => (r.issues || 0) + (r.prs || 0) > 0).map((r) => (
+          <span key={r.name} style={S.repoChip}>
+            {r.name}: {r.issues}i/{r.prs}p
+          </span>
+        ))}
       </div>
     </div>
   );
 };
 
-const styles = {
+const S = {
   container: {
-    position: "fixed",
-    bottom: 20,
-    left: 20,
-    width: 280,
-    background: "rgba(15, 15, 25, 0.85)",
-    backdropFilter: "blur(12px)",
-    WebkitBackdropFilter: "blur(12px)",
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.08)",
-    padding: 14,
-    fontFamily: "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace",
-    fontSize: 11,
-    color: "#e2e8f0",
-    lineHeight: 1.4,
-    zIndex: 9999,
+    position: "fixed", bottom: 20, left: 20, width: 340,
+    background: C.bg, backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+    borderRadius: 14, border: `1px solid ${C.border}`,
+    padding: 14, fontFamily: "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace",
+    fontSize: 11, color: C.text, lineHeight: 1.4, zIndex: 9999,
   },
   header: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    fontSize: 13,
-    fontWeight: 700,
-    marginBottom: 10,
-    letterSpacing: 1,
+    display: "flex", alignItems: "center", gap: 6,
+    fontSize: 13, fontWeight: 700, marginBottom: 8, letterSpacing: 1,
   },
-  govBadge: {
-    fontSize: 9,
-    padding: "2px 6px",
-    borderRadius: 4,
-    color: "#fff",
-    fontWeight: 600,
-    marginLeft: "auto",
+  badge: {
+    fontSize: 8, padding: "1px 5px", borderRadius: 3,
+    color: "#fff", fontWeight: 600, textTransform: "uppercase",
   },
-  mode: {
-    fontSize: 9,
-    color: "#94a3b8",
-    textTransform: "uppercase",
+  ts: { fontSize: 9, color: C.muted, marginLeft: "auto" },
+
+  gaugeWrap: { marginBottom: 6 },
+  gaugeTrack: {
+    height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden",
   },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 6,
+  gaugeFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
+  gaugeLabels: {
+    display: "flex", justifyContent: "space-between",
+    fontSize: 8, color: C.muted, marginTop: 2,
   },
-  agent: {
-    background: "rgba(255,255,255,0.04)",
-    borderRadius: 6,
-    padding: "6px 8px",
+
+  budgetWrap: { marginBottom: 8 },
+  budgetTrack: {
+    height: 3, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden",
   },
-  agentHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
+  budgetFill: { height: "100%", borderRadius: 2, transition: "width 0.4s ease" },
+  budgetLabels: {
+    display: "flex", justifyContent: "space-between",
+    fontSize: 8, color: C.muted, marginTop: 1,
   },
+
+  grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 },
+  card: {
+    background: C.surface, borderRadius: 7,
+    padding: "6px 7px", border: "1px solid", borderColor: C.border,
+    transition: "border-color 0.3s",
+  },
+  cardHeader: { display: "flex", alignItems: "center", gap: 3 },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: "50%",
-    display: "inline-block",
-    flexShrink: 0,
+    width: 6, height: 6, borderRadius: "50%",
+    display: "inline-block", flexShrink: 0,
   },
-  agentName: {
-    fontWeight: 600,
-    fontSize: 10,
-    textTransform: "capitalize",
+  agentName: { fontWeight: 700, fontSize: 10, textTransform: "capitalize" },
+  busyIcon: { marginLeft: "auto", fontSize: 10 },
+
+  row: { display: "flex", gap: 3, marginTop: 3, flexWrap: "wrap" },
+  chip: {
+    fontSize: 8, padding: "1px 4px", borderRadius: 3,
+    border: "1px solid", fontWeight: 600,
   },
-  busyIcon: {
-    marginLeft: "auto",
-    fontSize: 10,
-  },
-  agentMeta: {
-    fontSize: 9,
-    color: "#64748b",
-    marginTop: 2,
-  },
+
+  meta: { fontSize: 8, color: C.dimmed, marginTop: 2 },
+
   doing: {
-    fontSize: 9,
-    color: "#facc15",
-    marginTop: 2,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
+    fontSize: 8, color: C.cyan, marginTop: 3,
+    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
   },
-  footer: {
-    marginTop: 10,
-    fontSize: 10,
-    color: "#94a3b8",
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
+
+  indicators: {
+    marginTop: 4, paddingTop: 3,
+    borderTop: `1px solid ${C.border}`, fontSize: 9,
   },
-  sep: {
-    color: "#475569",
+  pairRow: { display: "flex", alignItems: "center", gap: 3, marginTop: 1 },
+
+  coverageRow: { display: "flex", alignItems: "center", gap: 4 },
+  coverageTrack: {
+    flex: 1, height: 4, borderRadius: 2,
+    background: "rgba(255,255,255,0.08)", overflow: "hidden",
   },
-  err: {
-    color: "#ef4444",
-    fontSize: 11,
+  coverageFill: { height: "100%", borderRadius: 2 },
+
+  repoRow: {
+    display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8,
+    fontSize: 8, color: C.muted,
   },
+  repoChip: {
+    background: "rgba(88,166,255,0.08)", padding: "1px 5px",
+    borderRadius: 3, border: "1px solid rgba(88,166,255,0.15)",
+  },
+
+  err: { color: C.red, fontSize: 11 },
 };
