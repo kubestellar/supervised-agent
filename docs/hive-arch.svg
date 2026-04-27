@@ -39,8 +39,9 @@
 <rect x="440" y="330" width="130" height="34" rx="6" fill="#ede9fe" stroke="#5b21b6" stroke-width="1.5"/>
 <text x="505" y="352" text-anchor="middle" font-size="12" font-weight="600" fill="#1e293b" font-family="ui-sans-serif,system-ui,sans-serif">supervisor</text>
 
-<!-- Backend CLI label under agents -->
-<text x="505" y="378" text-anchor="middle" font-size="9" fill="#7c3aed" font-family="ui-sans-serif,system-ui,sans-serif">CLI: claude · gemini  |  Aggregate: copilot · goose</text>
+<!-- Backend CLI labels under agents -->
+<text x="505" y="378" text-anchor="middle" font-size="9" fill="#7c3aed" font-family="ui-sans-serif,system-ui,sans-serif">Native: claude · gemini</text>
+<text x="505" y="392" text-anchor="middle" font-size="9" fill="#7c3aed" font-family="ui-sans-serif,system-ui,sans-serif">Aggregate: copilot · goose · qwen · deepseek</text>
 
 <!-- Local model stack (bottom) -->
 <rect x="230" y="430" width="130" height="34" rx="6" fill="#f0fdf4" stroke="#166534" stroke-width="1.5"/>
