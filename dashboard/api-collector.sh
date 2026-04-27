@@ -18,7 +18,7 @@ if [[ -f /usr/local/bin/hive-config.sh ]]; then
   source /usr/local/bin/hive-config.sh 2>/dev/null || true
 fi
 
-REPOS_STR="${HIVE_REPOS:-${PROJECT_REPOS:-kubestellar/console kubestellar/console-kb kubestellar/docs kubestellar/console-marketplace kubestellar/kubestellar-mcp}}"
+REPOS_STR="${HIVE_REPOS:-${PROJECT_REPOS:-kubestellar/console kubestellar/console-marketplace kubestellar/docs kubestellar/homebrew-tap kubestellar/console-kb}}"
 IFS=' ' read -ra REPOS <<< "$REPOS_STR"
 
 PRIMARY_REPO="${PROJECT_PRIMARY_REPO:-kubestellar/console}"

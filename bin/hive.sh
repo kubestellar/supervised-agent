@@ -832,12 +832,14 @@ cmd_status_json() {
     local rname issues prs
     rname="${repo##*/}"
     if [[ -f "$GITHUB_CACHE" ]]; then
-      issues=$(jq -r ".repos[] | select(.name == \"$rname\") | .issues // 0" "$GITHUB_CACHE" 2>/dev/null || echo "0")
-      prs=$(jq -r ".repos[] | select(.name == \"$rname\") | .prs // 0" "$GITHUB_CACHE" 2>/dev/null || echo "0")
+      issues=$(jq -r "(.repos[] | select(.name == \"$rname\") | .issues) // 0" "$GITHUB_CACHE" 2>/dev/null || echo "0")
+      prs=$(jq -r "(.repos[] | select(.name == \"$rname\") | .prs) // 0" "$GITHUB_CACHE" 2>/dev/null || echo "0")
     else
       issues=0
       prs=0
     fi
+    [[ -z "$issues" || "$issues" == "null" ]] && issues=0
+    [[ -z "$prs" || "$prs" == "null" ]] && prs=0
     [[ "$first_repo" == "false" ]] && repos_json+=","
     first_repo=false
     repos_json+="{\"name\":\"$rname\",\"full\":\"$repo\",\"issues\":$issues,\"prs\":$prs}"
