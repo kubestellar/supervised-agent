@@ -32,6 +32,8 @@ NOTIFY_LIB="${NOTIFY_LIB:-/usr/local/bin/notify.sh}"
 BACKEND_STATE_DIR="/var/run/agent-backends"
 mkdir -p "$BACKEND_STATE_DIR" 2>/dev/null || true
 
+GOVERNOR_FLAG_DIR="/var/run/kick-governor"
+
 # Agent handoff state — captures last N lines of work context when switching backends
 HANDOFF_DIR="/tmp/agent-handoff"
 mkdir -p "$HANDOFF_DIR" 2>/dev/null || true
@@ -472,6 +474,15 @@ kick() {
       ntfy "$agent — busy" "Still working, skipped kick at $ET_NOW. Next: $(next_run "$agent")"
       return
     fi
+  fi
+
+  # Check if governor flagged this agent for restart (buffer completely stuck)
+  local _restart_flag="$GOVERNOR_FLAG_DIR/needs_restart_${agent}"
+  if [ -f "$_restart_flag" ]; then
+    log "RESTART $session — governor flagged buffer stuck, killing CLI"
+    rm -f "$_restart_flag"
+    restart_stuck_agent "$session" "$agent"
+    # After restart, fall through to kick below
   fi
 
   # Clear any stale input before sending new kick

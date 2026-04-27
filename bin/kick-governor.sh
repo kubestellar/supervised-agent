@@ -680,10 +680,10 @@ log "BUDGET projected=${budget_pct}% models: $(for _a in scanner reviewer archit
 done)"
 
 # Clear stuck input on every tick — C-c + C-u to discard, not Enter to execute.
-# Stale queued text (from old direct kicks or piled-up messages) should be
-# discarded so the next cadence kick delivers a clean message.
-for _fa in scanner reviewer supervisor; do
+# If C-c + C-u fails (buffer completely stuck), flag agent for restart.
+for _fa in scanner reviewer supervisor architect outreach; do
   [[ -f "$STATE_DIR/paused_${_fa}" ]] && continue
+  tmux has-session -t "$_fa" 2>/dev/null || continue
   _pane_text=$(tmux capture-pane -t "$_fa" -p 2>/dev/null || true)
   _prompt_line=$(echo "$_pane_text" | grep "❯" | tail -1)
   _after=$(echo "$_prompt_line" | sed 's/.*❯[[:space:]]*//')
@@ -692,7 +692,13 @@ for _fa in scanner reviewer supervisor; do
     tmux send-keys -t "$_fa" C-c 2>/dev/null || true
     sleep 1
     tmux send-keys -t "$_fa" C-u 2>/dev/null || true
-    sleep 1
+    sleep 2
+    # Verify clear worked — if text persists, buffer is frozen
+    _after2=$(tmux capture-pane -t "$_fa" -p 2>/dev/null | grep "❯" | tail -1 | sed 's/.*❯[[:space:]]*//')
+    if [ -n "$_after2" ] && [ ${#_after2} -gt 2 ]; then
+      log "STUCK ${_fa} — buffer frozen (${#_after2} chars), flagging for restart"
+      touch "$STATE_DIR/needs_restart_${_fa}"
+    fi
   fi
 done
 
