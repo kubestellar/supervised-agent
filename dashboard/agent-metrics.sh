@@ -36,8 +36,8 @@ RECENT_MERGED_HOURS=24
 scanner_pairs_json="[]"
 if command -v gh &>/dev/null; then
   # Open PRs
-  open_prs=$(gh api 'repos/${REPO}/pulls?state=open&per_page=50' \
-    --jq '[.[] | select(.user.login == "${AI_AUTHOR}") | {pr: .number, title: .title, body: (.body // ""), created: .created_at, state: "open"}]' 2>/dev/null || echo "[]")
+  open_prs=$(gh api "repos/${REPO}/pulls?state=open&per_page=50" \
+    --jq "[.[] | select(.user.login == \"${AI_AUTHOR}\") | {pr: .number, title: .title, body: (.body // \"\"), created: .created_at, state: \"open\"}]" 2>/dev/null || echo "[]")
   # Recently merged PRs (last 24h)
   since=$(date -u -d "-${RECENT_MERGED_HOURS} hours" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-${RECENT_MERGED_HOURS}H '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "")
   merged_prs="[]"
