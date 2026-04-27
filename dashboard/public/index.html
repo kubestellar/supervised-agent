@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🐝 KubeStellar Hive Dashboard</title>
+  <title>🐝 KubeStellar Hive Dashboard for KubeStellar/Console</title>
   <style>
     :root {
       --bg: #0d1117; --surface: #161b22; --border: #30363d;
@@ -413,7 +413,7 @@
     <span class="dot-live">●</span> live
   </div>
 
-  <h1><span class="bee">🐝</span> KubeStellar Hive Dashboard <span class="timestamp" id="ts"></span>
+  <h1><span class="bee">🐝</span> KubeStellar Hive Dashboard&nbsp;<span id="project-name">for KubeStellar/Console</span> <span class="timestamp" id="ts"></span>
     <span class="git-version" id="git-version"></span>
     <a href="/api/widget" class="widget-dl" title="Download Übersicht widget">⬇ Widget</a>
   </h1>
@@ -1433,6 +1433,16 @@ function intensityGauge() {
         setTimeout(connect, 3000);
       };
     }
+
+    // Set project name and repo from API
+    fetch("/api/config").then(r => r.json()).then(cfg => {
+      const el = document.getElementById("project-name");
+      if (el && cfg.primaryRepo) {
+        el.textContent = "for " + cfg.primaryRepo;
+        document.title = "🐝 Hive Dashboard for " + cfg.primaryRepo;
+      }
+      if (cfg.primaryRepo) window._primaryRepo = cfg.primaryRepo;
+    }).catch(() => {});
 
     // Initial fetch then SSE
     fetch('/api/status').then(r => r.json()).then(render).catch(console.error);
