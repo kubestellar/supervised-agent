@@ -679,6 +679,18 @@ log "BUDGET projected=${budget_pct}% models: $(for _a in scanner reviewer archit
   printf '%s=%s:%s ' "$_a" "$_b" "$_m"
 done)"
 
+# Flush stuck input on every tick — don't wait for kick cadence
+for _fa in scanner reviewer supervisor; do
+  [[ -f "$STATE_DIR/paused_${_fa}" ]] && continue
+  _prompt_line=$(tmux capture-pane -t "$_fa" -p 2>/dev/null | grep "❯" | tail -1)
+  _after=$(echo "$_prompt_line" | sed 's/.*❯[[:space:]]*//')
+  if [ -n "$_after" ] && [ ${#_after} -gt 2 ]; then
+    log "FLUSH ${_fa} — unsent input (${#_after} chars), sending Enter"
+    tmux send-keys -t "$_fa" Enter 2>/dev/null || true
+    sleep 2
+  fi
+done
+
 maybe_kick scanner    "$mode"
 maybe_kick reviewer   "$mode"
 maybe_kick architect  "$mode"
