@@ -44,8 +44,9 @@ hive attach scanner         # watch any agent
 hive kick all               # immediate kick to all agents
 hive kick scanner           # kick one agent
 
-hive switch scanner claude  # switch agent to a different CLI backend
+hive switch scanner claude  # switch CLI backend (pins it)
 hive switch reviewer copilot
+hive unpin scanner          # let governor manage CLI again
 
 hive logs governor          # tail governor decisions
 hive logs scanner           # tail any agent's service log
@@ -63,7 +64,10 @@ hive stop all               # stop everything
 - **Sparkline history** — per-agent busy time and restart count sparklines with rolling history
 - **Restart tracking** — 24-hour restart count per agent with color-coded thresholds (yellow >0, red >5)
 - **Kick buttons** — one-click kick for any agent
-- **Switch dropdown** — switch agent CLI backend (copilot, claude, gemini, goose) from the UI
+- **Switch dropdown** — switch agent CLI backend from the UI (auto-pins to prevent governor override)
+- **CLI pinning** — `hive switch` pins the backend so the governor won't override it; `hive unpin` releases it
+- **Intensity gauge** — half-circle speedometer comparing recent vs trailing token rates (cooling → steady → surging)
+- **Coverage tracking** — shows test coverage progress toward the configured target
 - **Übersicht widget** — download a macOS desktop widget from the button in the header
 - **Fast/slow refresh** — agent status refreshes every 5s; GitHub repo data refreshes every 60s to avoid API rate limits
 
@@ -82,7 +86,7 @@ curl -sf http://192.168.4.56:3001/api/widget | tar xzf - -C "$HOME/Library/Appli
 
 ## How it works
 
-The **kick-governor** measures issue and PR backlog across your repos every 15 minutes and picks a mode:
+The **kick-governor** measures issue and PR backlog across your repos every 5 minutes and picks a mode:
 
 | Mode | Trigger | Scanner | Reviewer | Architect | Outreach | Supervisor |
 |------|---------|---------|----------|-----------|----------|-----------|
@@ -111,8 +115,10 @@ Set `HIVE_BACKENDS` in `hive.conf`. `HIVE_AUTO_INSTALL=true` installs missing ba
 | `gemini` | CLI | Google's CLI — runs Gemini models directly |
 | `copilot` | Aggregate | GitHub Copilot — routes to Claude, GPT, Gemini, and other vendor models |
 | `goose` | Aggregate | Block's Goose — routes to any model via config (cloud or local) |
+| `qwen` | Aggregate | Alibaba's Qwen CLI — routes to Qwen models via DashScope API |
+| `deepseek` | Aggregate | DeepSeek CLI — routes to DeepSeek-V3/R1 models |
 
-**CLI backends** (`claude`, `gemini`) are single-vendor tools that run their own models. **Aggregate backends** (`copilot`, `goose`) are multi-vendor routers — they can call models from different providers through a single interface.
+**Native backends** (`claude`, `gemini`) are single-vendor tools that run their own models directly. **Aggregate backends** (`copilot`, `goose`, `qwen`, `deepseek`) are multi-vendor routers or alternative model providers — they can call models from different providers through a single interface.
 
 ### Local models (optional)
 
