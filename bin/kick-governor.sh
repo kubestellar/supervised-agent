@@ -679,15 +679,24 @@ log "BUDGET projected=${budget_pct}% models: $(for _a in scanner reviewer archit
   printf '%s=%s:%s ' "$_a" "$_b" "$_m"
 done)"
 
-# Flush stuck input on every tick — don't wait for kick cadence
+# Clear stuck input on every tick — C-c + C-u to discard, not Enter to execute.
+# Stale queued text (from old direct kicks or piled-up messages) should be
+# discarded so the next cadence kick delivers a clean message.
 for _fa in scanner reviewer supervisor; do
   [[ -f "$STATE_DIR/paused_${_fa}" ]] && continue
-  _prompt_line=$(tmux capture-pane -t "$_fa" -p 2>/dev/null | grep "❯" | tail -1)
+  _pane_text=$(tmux capture-pane -t "$_fa" -p 2>/dev/null || true)
+  # Skip if agent is mid-cancellation — let it finish
+  if echo "$_pane_text" | grep -qE "Cancelling"; then
+    continue
+  fi
+  _prompt_line=$(echo "$_pane_text" | grep "❯" | tail -1)
   _after=$(echo "$_prompt_line" | sed 's/.*❯[[:space:]]*//')
   if [ -n "$_after" ] && [ ${#_after} -gt 2 ]; then
-    log "FLUSH ${_fa} — unsent input (${#_after} chars), sending Enter"
-    tmux send-keys -t "$_fa" Enter 2>/dev/null || true
-    sleep 2
+    log "CLEAR ${_fa} — discarding ${#_after} chars of stale input (C-c + C-u)"
+    tmux send-keys -t "$_fa" C-c 2>/dev/null || true
+    sleep 1
+    tmux send-keys -t "$_fa" C-u 2>/dev/null || true
+    sleep 1
   fi
 done
 
