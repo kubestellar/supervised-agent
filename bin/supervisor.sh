@@ -280,6 +280,37 @@ check_rate_limit_and_failover() {
   fi
 }
 
+# ─── Governor model sync ──────────────────────────────────────────────────
+# When the governor changes an agent's model, it writes to
+# /var/run/kick-governor/model_<session>. kick-agents.sh sends /exit and
+# types agent-launch.sh with the new model, but that process exits and
+# supervisor.sh detects "agent missing" → relaunches with the ORIGINAL
+# ACTIVE_LAUNCH_CMD. This function checks the governor model file before
+# relaunch and updates ACTIVE_LAUNCH_CMD + CLI to match.
+
+GOVERNOR_MODEL_DIR="/var/run/kick-governor"
+
+sync_launch_cmd_from_governor() {
+  local model_file="$GOVERNOR_MODEL_DIR/model_${SESSION}"
+  [ -f "$model_file" ] || return 0
+
+  local gov_backend gov_model
+  gov_backend=$(grep '^BACKEND=' "$model_file" 2>/dev/null | cut -d= -f2)
+  gov_model=$(grep '^MODEL=' "$model_file" 2>/dev/null | cut -d= -f2)
+  [ -z "$gov_backend" ] || [ -z "$gov_model" ] && return 0
+
+  local new_cmd="agent-launch.sh --backend $gov_backend --model $gov_model"
+  if [ "$ACTIVE_LAUNCH_CMD" != "$new_cmd" ]; then
+    log "governor model sync: updating launch cmd to ${gov_backend}:${gov_model}"
+    ACTIVE_LAUNCH_CMD="$new_cmd"
+    case "$gov_backend" in
+      claude)  CLI="claude" ;;
+      copilot) CLI="copilot" ;;
+      *)       CLI="$gov_backend" ;;
+    esac
+  fi
+}
+
 # ─── Liveness ──────────────────────────────────────────────────────────────
 
 session_alive() { tmux has-session -t "$SESSION" 2>/dev/null; }
@@ -309,9 +340,11 @@ start_session
 while true; do
   if ! session_alive; then
     log "session $SESSION gone; restarting"
+    sync_launch_cmd_from_governor
     start_session
   elif ! agent_alive; then
     log "agent process missing in $SESSION; restarting"
+    sync_launch_cmd_from_governor
     start_session
   else
     handle_startup_dialogs
