@@ -60,7 +60,7 @@ ensure_session() {
 ensure_agent() {
   if ! agent_running; then
     log "Launching Copilot CLI in $SESSION (model: $MODEL)"
-    tmux send-keys -t "$SESSION" "cd $WORKDIR && copilot --allow-all --model $MODEL"
+    tmux send-keys -t "$SESSION" -l "cd $WORKDIR && copilot --allow-all --model $MODEL"
     tmux send-keys -t "$SESSION" Enter
     log "Waiting for idle prompt..."
     wait_for_idle
@@ -73,7 +73,7 @@ ensure_agent() {
 send_kick() {
   log "Sending kick to $SESSION"
   # RULE: text and Enter are always two separate calls — never combined
-  tmux send-keys -t "$SESSION" "$MESSAGE"
+  tmux send-keys -t "$SESSION" -l "$MESSAGE"
   sleep 1
   tmux send-keys -t "$SESSION" Enter
 }

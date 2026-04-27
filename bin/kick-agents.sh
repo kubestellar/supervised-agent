@@ -135,12 +135,12 @@ switch_backend() {
 
   $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
   sleep 2
-  $TMUX_BIN send-keys -t "$session" "/exit" 2>/dev/null || true
+  $TMUX_BIN send-keys -t "$session" -l "/exit" 2>/dev/null || true
   sleep 1
   $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
   sleep 3
 
-  $TMUX_BIN send-keys -t "$session" "agent-launch.sh --backend $fallback_backend --model $model" 2>/dev/null || true
+  $TMUX_BIN send-keys -t "$session" -l "agent-launch.sh --backend $fallback_backend --model $model" 2>/dev/null || true
   sleep 1
   $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
 
@@ -172,6 +172,27 @@ session_idle() {
   # The prompt is ❯ (U+276F) followed by a non-breaking space (U+00A0)
   # Check full pane to account for status bar lines below the prompt
   $TMUX_BIN capture-pane -t "$1" -p | grep -q "❯"
+}
+
+flush_pending_input() {
+  # Detect text stuck in the input line (sent without -l or missing Enter).
+  # If the last ❯ line has trailing text, the agent has unsent input — send Enter.
+  local session="$1"
+  local pane_text
+  pane_text=$($TMUX_BIN capture-pane -t "$session" -p 2>/dev/null || true)
+  local prompt_line
+  prompt_line=$(echo "$pane_text" | grep "❯" | tail -1)
+  if [ -n "$prompt_line" ]; then
+    local after_prompt
+    after_prompt=$(echo "$prompt_line" | sed 's/.*❯[[:space:]]*//')
+    if [ -n "$after_prompt" ] && [ ${#after_prompt} -gt 2 ]; then
+      log "FLUSH $session — found unsent input (${#after_prompt} chars), sending Enter"
+      $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
+      sleep 2
+      return 0
+    fi
+  fi
+  return 1
 }
 
 session_cli_ready() {
@@ -357,8 +378,10 @@ kick() {
     return
   fi
 
+  flush_pending_input "$session"
+
   log "KICK $session"
-  $TMUX_BIN send-keys -t "$session" "$message"
+  $TMUX_BIN send-keys -t "$session" -l "$message"
   sleep 1  # let tmux flush long message text before sending Enter
   $TMUX_BIN send-keys -t "$session" Enter
   ntfy "$agent started" "Kicked at $ET_NOW. Next: $(next_run "$agent")"
@@ -530,12 +553,12 @@ apply_model_if_changed() {
 
   capture_handoff_state "$session" "$agent"
 
-  $TMUX_BIN send-keys -t "$session" "/exit" 2>/dev/null || true
+  $TMUX_BIN send-keys -t "$session" -l "/exit" 2>/dev/null || true
   sleep 1
   $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
   sleep 3
 
-  $TMUX_BIN send-keys -t "$session" "agent-launch.sh --backend $gov_backend --model $gov_model" 2>/dev/null || true
+  $TMUX_BIN send-keys -t "$session" -l "agent-launch.sh --backend $gov_backend --model $gov_model" 2>/dev/null || true
   sleep 1
   $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
 
