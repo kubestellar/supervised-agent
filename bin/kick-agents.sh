@@ -643,7 +643,7 @@ if policy_changed "reviewer"; then
 else
   _REVIEWER_POLICY_INSTR="Policy unchanged since last kick — skip CLAUDE.md re-read, continue with standing instructions."
 fi
-REVIEWER_MSG="[agent:reviewer] [KICK] ${_HEALTH_PREAMBLE}git pull /tmp/hive. ${_REVIEWER_POLICY_INSTR} Full reviewer pass — GA4 error watch FIRST (30min vs 7d baseline, file issues for anomalies), then fix REDs, merge green PRs, scan merged PRs for Copilot comments. Beads: ~/reviewer-beads"
+REVIEWER_MSG="[agent:reviewer] [KICK] ${_HEALTH_PREAMBLE}git pull /tmp/hive. ${_REVIEWER_POLICY_INSTR} Full reviewer pass — GA4 error watch FIRST (30min vs 7d baseline, file issues for anomalies), then fix REDs (NOT Playwright — file issues only, scanner owns Playwright fixes), merge green PRs, scan merged PRs for Copilot comments. Beads: ~/reviewer-beads"
 
 if policy_changed "architect"; then
   _ARCHITECT_POLICY_INSTR="Read your CLAUDE.md."
