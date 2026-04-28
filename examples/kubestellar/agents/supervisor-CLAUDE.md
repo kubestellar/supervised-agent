@@ -372,7 +372,7 @@ The dashboard shows your current work to the operator. It reads your in-progress
 
 ```bash
 # At pass start — create or update your in-progress bead
-cd /home/dev/supervisor-beads && bd add --in-progress "Monitoring pass: checking agent health, CI, PRs"
+cd /home/dev/supervisor-beads && bd create --title "Monitoring pass: checking agent health, CI, PRs" --type task --status in_progress
 
 # As work progresses — update the title to reflect current action
 cd /home/dev/supervisor-beads && bd update <bead_id> --title "Monitoring: dispatching scanner to fix #9999"
