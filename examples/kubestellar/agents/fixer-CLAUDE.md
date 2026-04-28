@@ -41,9 +41,7 @@ git checkout -b <branch>
 # ... run the tests the supervisor specified ...
 
 # 3. Commit + PR + merge
-git commit -s -m "<title from work order>
-
-Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+git commit -s -m "<title from work order>"
 git push -u origin <branch>
 unset GITHUB_TOKEN && gh pr create --repo <repo> --title "<title>" --body "<body>"
 unset GITHUB_TOKEN && gh pr merge <N> --admin --squash
@@ -74,6 +72,7 @@ cd ~/agent-ledger && bd update <bead_id> --status blocked \
 - ❌ Skip or defer work orders
 - ❌ Push directly to main
 - ❌ Delete worktrees
+- ❌ Run npm run build, npm run lint, or tsc locally — CI handles that
 
 ## Rules
 

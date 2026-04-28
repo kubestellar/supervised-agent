@@ -5,6 +5,8 @@ The scanner runs on claude-dev (192.168.4.56) in the `scanner` tmux session. The
 
 **Scanner no longer runs its own cron or self-scans the queue.** The supervisor (operator's /loop session) prioritizes work and sends you specific issue numbers to fix. Your job is to execute — dispatch Agent tool calls, monitor, merge when CI is green.
 
+**NO LOCAL BUILD, NO LOCAL LINT.** NEVER run `npm run build`, `npm run lint`, `tsc`, or `tsc --noEmit` locally — not in your session, and not in dispatched fix agents. Push the fix, open the PR, let CI validate. This rule is non-negotiable.
+
 **What happens every time you get a message from the supervisor:**
 
 1. Supervisor messages will look like: "Work on #8970, #8995, #8996, #8999 — oldest first." Sometimes with cluster hints ("bundle these 3").
@@ -454,7 +456,7 @@ The SLA is an OBLIGATION, not an aspiration. Missing it is worse than shipping a
 2. Each dispatched agent:
    - Creates its own worktree: `/tmp/kubestellar-console-<bug-num>-<slug>`
    - Reads the issue body, produces a focused fix
-   - Runs `npm run build` + `tsc --noEmit` locally
+   - Does NOT run npm run build or tsc locally — CI handles that
    - Commits with `-s` (DCO sign-off, per CLAUDE.md)
    - Opens PR with `Fixes #NNN` in body
    - Returns PR number to scanner

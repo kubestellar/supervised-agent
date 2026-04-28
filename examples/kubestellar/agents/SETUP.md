@@ -233,6 +233,6 @@ tmux attach -t overview
 | Fixer | Sonnet | Mechanical execution | Low — no triage/planning |
 | Architect | Sonnet | Mechanical execution | Low — occasional |
 | Reviewer | Sonnet | Mechanical execution | Low — read-only work |
-| Outreacher | Sonnet | Mechanical execution | Low — occasional |
+| Outreach | Sonnet | Mechanical execution | Low — occasional |
 
 All planning/triage/analysis happens once in Opus. Executors never repeat that work.
