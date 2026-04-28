@@ -538,14 +538,20 @@ app.post('/api/switch/:agent/:backend', (req, res) => {
   if (!allowedBackends.includes(backend)) {
     return res.status(400).json({ error: `invalid backend: ${backend}` });
   }
-  // Write governor model file with new backend, preserving current model
-  const modelFile = path.join(GOVERNOR_STATE_DIR, `model_${agent}`);
+  // Detect running model from status cache (process-based), not model file
   let currentModel = 'claude-opus-4-6';
-  try {
-    const content = fs.readFileSync(modelFile, 'utf8');
-    const match = content.match(/^MODEL=(.+)$/m);
-    if (match) currentModel = match[1];
-  } catch (_) { /* use default */ }
+  const switchAgentData = (statusCache.agents || []).find(a => a.name === agent);
+  if (switchAgentData && switchAgentData.govModel) {
+    currentModel = switchAgentData.govModel;
+  } else {
+    try {
+      const mf = path.join(GOVERNOR_STATE_DIR, `model_${agent}`);
+      const content = fs.readFileSync(mf, 'utf8');
+      const match = content.match(/^MODEL=(.+)$/m);
+      if (match) currentModel = match[1];
+    } catch (_) { /* use default */ }
+  }
+  const modelFile = path.join(GOVERNOR_STATE_DIR, `model_${agent}`);
   const newContent = `BACKEND=${backend}\nMODEL=${currentModel}\n`;
   try {
     fs.writeFileSync(modelFile, newContent);
@@ -564,16 +570,23 @@ app.post('/api/model/:agent/:model', (req, res) => {
   if (!allowedAgents.includes(agent)) {
     return res.status(400).json({ error: `invalid agent: ${agent}` });
   }
-  // Write governor model file with new model, preserving current backend
-  const modelFile = path.join(GOVERNOR_STATE_DIR, `model_${agent}`);
+  // Detect running backend from status cache (process-based), not model file
+  // Model file can be stale if governor overwrote it after a CLI switch
   let currentBackend = 'claude';
-  try {
-    const content = fs.readFileSync(modelFile, 'utf8');
-    const match = content.match(/^BACKEND=(.+)$/m);
-    if (match) currentBackend = match[1];
-  } catch (_) { /* use default */ }
+  const agentData = (statusCache.agents || []).find(a => a.name === agent);
+  if (agentData && agentData.cli && agentData.cli !== '?') {
+    currentBackend = agentData.cli;
+  } else {
+    try {
+      const modelFile = path.join(GOVERNOR_STATE_DIR, `model_${agent}`);
+      const content = fs.readFileSync(modelFile, 'utf8');
+      const match = content.match(/^BACKEND=(.+)$/m);
+      if (match) currentBackend = match[1];
+    } catch (_) { /* use default */ }
+  }
   const decodedModel = decodeURIComponent(model);
   const newContent = `BACKEND=${currentBackend}\nMODEL=${decodedModel}\n`;
+  const modelFile = path.join(GOVERNOR_STATE_DIR, `model_${agent}`);
   try {
     fs.writeFileSync(modelFile, newContent);
   } catch (e) {
@@ -581,7 +594,7 @@ app.post('/api/model/:agent/:model', (req, res) => {
   }
   execFile('/tmp/hive/bin/kick-agents.sh', [agent], { timeout: 60000 }, (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ ok: true, output: `switched ${agent} model to ${decodedModel}` });
+    res.json({ ok: true, output: `switched ${agent} model to ${decodedModel} (backend: ${currentBackend})` });
   });
 });
 
