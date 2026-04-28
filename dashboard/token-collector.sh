@@ -59,12 +59,34 @@ weekly_totals = {"input": 0, "output": 0, "cacheRead": 0, "sessions": 0}
 hourly_by_agent = defaultdict(lambda: {"input": 0, "output": 0, "cacheRead": 0, "sessions": 0})
 
 AGENT_PATTERNS = [
-    ("supervisor", ["[agent:supervisor]", "supervisor-beads", "supervisor agent", "monitoring pass"]),
-    ("architect",  ["[agent:architect]", "architect-beads"]),
-    ("reviewer",   ["[agent:reviewer]", "reviewer-beads"]),
-    ("outreach",   ["[agent:outreach]", "outreach-beads"]),
-    ("scanner",    ["[agent:scanner]", "scanner-beads"]),
+    ("supervisor", ["[agent:supervisor]", "supervisor-beads", "supervisor agent", "monitoring pass",
+                    "you are the supervisor", "you are the supervisor agent"]),
+    ("architect",  ["[agent:architect]", "architect-beads", "you are the architect",
+                    "you are the kubestellar architect"]),
+    ("reviewer",   ["[agent:reviewer]", "reviewer-beads", "you are the reviewer",
+                    "you are the kubestellar reviewer"]),
+    ("outreach",   ["[agent:outreach]", "outreach-beads", "you are the outreach",
+                    "you are the kubestellar outreach"]),
+    ("scanner",    ["[agent:scanner]", "scanner-beads", "you are the scanner",
+                    "you are the kubestellar scanner"]),
 ]
+
+PROJECT_DIR_AGENTS = {
+    "gt-deacon-dogs-alpha": "dog-alpha",
+    "gt-deacon-dogs-bravo": "dog-bravo",
+    "gt-deacon-dogs-charlie": "dog-charlie",
+    "gt-deacon-dogs-delta": "dog-delta",
+    "gt-deacon-dogs-boot": "boot",
+    "gt-deacon": "deacon",
+    "gt-console-witness": "witness",
+    "gt-mayor": "mayor",
+}
+
+def detect_agent_from_project(proj_name):
+    for suffix, agent in PROJECT_DIR_AGENTS.items():
+        if proj_name.endswith(suffix):
+            return agent
+    return None
 
 def detect_agent_from_text(text):
     tl = text.lower()
@@ -88,7 +110,8 @@ for proj_name in os.listdir(projects_dir):
 
         sid = ""
         model = "unknown"
-        agent = "unknown"
+        proj_agent = detect_agent_from_project(proj_name)
+        agent = proj_agent or "unknown"
         inp = 0
         out = 0
         cache_read = 0
@@ -96,7 +119,7 @@ for proj_name in os.listdir(projects_dir):
         msg_count = 0
         first_ts = ""
         last_ts = ""
-        agent_detected = False
+        agent_detected = proj_agent is not None
         agent_scan_count = 0
         MAX_AGENT_SCAN = 5
 
