@@ -616,7 +616,7 @@ if policy_changed "scanner"; then
 else
   _SCANNER_POLICY_INSTR="Policy unchanged since last kick — skip CLAUDE.md re-read, continue with standing instructions."
 fi
-SCANNER_MSG="[agent:scanner] [KICK] git pull /tmp/hive. ${_SCANNER_POLICY_INSTR} AUTONOMOUS SCAN: query open issues (oldest-first), dispatch fix agents for 4-6 oldest, merge green PRs. Do NOT stand by — if issues exist, work them. NEVER run vitest, npm test, npm run build, tsc, or any test/build locally — dispatch fix agents instead, they read CI logs. Beads: ~/scanner-beads"
+SCANNER_MSG="[agent:scanner] [KICK] git pull /tmp/hive. ${_SCANNER_POLICY_INSTR} AUTONOMOUS SCAN: query open issues (oldest-first), dispatch fix agents for 4-6 oldest, merge green PRs. Do NOT stand by — if issues exist, work them. 'Not actionable' and 'not a code fix' are NOT valid reasons to skip an open issue — dispatch a fix agent with a best-effort PR. Deferred beads older than 1 pass MUST be retried. NEVER run vitest, npm test, npm run build, tsc, or any test/build locally — dispatch fix agents instead, they read CI logs. Beads: ~/scanner-beads"
 
 # Build live health preamble for reviewer — tells it exactly what's red RIGHT NOW
 _rh_json=$(/tmp/hive/dashboard/health-check.sh 2>/dev/null || echo '{}')
