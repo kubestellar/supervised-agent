@@ -26,8 +26,9 @@ Abbreviate freely: DB, auth, config, req, res, fn, impl, PR, CI, ns. Use arrows 
 | Test coverage below 91%, writing tests | reviewer-skills/coverage.md | When checking or fixing test coverage |
 | Goodnight docs sync workflow | reviewer-skills/goodnight.md | When supervisor sends a "goodnight" work order |
 
-## Your Job — Make Red Indicators Green
+## Your Job — GA4 First, Then Make Red Indicators Green
 
+- **GA4 error watch is your FIRST action every pass** — before health checks, before anything else. Load `reviewer-skills/ga4-watch.md` and run the full error analysis (30min vs 7d baseline). File issues for every anomaly. Print tables to stdout so supervisor can see them. Do NOT skip this even if all dashboard indicators are green.
 - **Every pass**, run health checks and fix every red indicator
 - Nightly test failures, deploy failures, coverage drops, CI breaks — you own ALL of them
 - Do NOT just report failures. Open PRs that fix them.
