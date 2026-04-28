@@ -144,14 +144,16 @@ REASON=rate_limit_switch
 UPDATED=$(date -Iseconds)
 MODELEOF
 
-  # Send Esc×2 + /exit — double Esc clears autocomplete/menus before /exit
+  # 4x Esc + /exit without -l (avoids autocomplete dropdown)
+  $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
+  sleep 0.3
+  $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
+  sleep 0.3
+  $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
+  sleep 0.3
   $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
   sleep 1
-  $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
-  sleep 1
-  $TMUX_BIN send-keys -t "$session" -l "/exit" 2>/dev/null || true
-  sleep 1
-  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
+  $TMUX_BIN send-keys -t "$session" "/exit" Enter 2>/dev/null || true
 
   set_current_backend "$agent" "$fallback_backend"
 
@@ -671,18 +673,18 @@ apply_model_if_changed() {
 
   capture_handoff_state "$session" "$agent"
 
-  # Send Esc + /exit — both claude and copilot CLIs need Esc first to
-  # ensure the prompt is clear before accepting /exit.
-  # supervisor.sh reads the governor model file before relaunch, so it
-  # picks up the new backend:model automatically. Do NOT type agent-launch.sh
-  # into the pane — that races with supervisor.sh's keepalive loop.
+  # 4x Esc clears autocomplete, menus, and pending input reliably on both
+  # claude and copilot CLIs. Then /exit + Enter without -l to avoid
+  # triggering the autocomplete dropdown.
+  $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
+  sleep 0.3
+  $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
+  sleep 0.3
+  $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
+  sleep 0.3
   $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
   sleep 1
-  $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
-  sleep 1
-  $TMUX_BIN send-keys -t "$session" -l "/exit" 2>/dev/null || true
-  sleep 1
-  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
+  $TMUX_BIN send-keys -t "$session" "/exit" Enter 2>/dev/null || true
 
   set_current_backend "$agent" "$gov_backend"
   BACKEND_MODEL[$gov_backend]="$gov_model"
@@ -690,7 +692,8 @@ apply_model_if_changed() {
 
   log "MODEL SWITCH $agent — sent /exit, supervisor.sh will relaunch with ${gov_backend}:${gov_model}"
   MODEL_SWITCHED[$agent]=1
-  return 0
+  # Return 1 so the && chain skips the kick — the session is dying/restarting
+  return 1
 }
 
 _now_et=$(TZ=America/New_York date '+%Y-%m-%d %I:%M %p %Z')
