@@ -404,9 +404,17 @@
       color: var(--text); opacity: 0.85; overflow: hidden;
       text-overflow: ellipsis; white-space: nowrap; flex: 1;
     }
+    #toast-container { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+    .toast { pointer-events: auto; padding: 10px 16px; border-radius: 6px; font-size: 0.78rem; color: #e6edf3; box-shadow: 0 4px 12px rgba(0,0,0,0.4); animation: toast-in 0.25s ease-out; max-width: 360px; }
+    .toast.success { background: #1a7f37; border: 1px solid #238636; }
+    .toast.error { background: #8b1a1a; border: 1px solid #f85149; }
+    .toast.info { background: #1a3a5c; border: 1px solid #1f6feb; }
+    @keyframes toast-in { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
   </style>
 </head>
 <body>
+<div id="toast-container"></div>
   <div class="gh-rate-alert" id="gh-rate-alert"></div>
 
   <div class="connection live" id="conn">
@@ -1322,11 +1330,22 @@ function intensityGauge() {
     async function kick(agent) {
       const input = document.getElementById(`kick-prompt-${agent}`);
       const prompt = input ? input.value.trim() : '';
+      const TOAST_DURATION_MS = 3000;
+    function showToast(msg, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const el = document.createElement('div');
+      el.className = `toast ${type}`;
+      el.textContent = msg;
+      container.appendChild(el);
+      setTimeout(() => { el.style.animation = 'toast-out 0.3s ease-in forwards'; setTimeout(() => el.remove(), 300); }, TOAST_DURATION_MS);
+    }
+
       const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
       if (prompt) opts.body = JSON.stringify({ prompt });
       const res = await fetch(`/api/kick/${agent}`, opts);
       const data = await res.json();
-      if (!data.ok) { alert('Kick failed: ' + (data.error || 'unknown')); return; }
+      if (!data.ok) { showToast('Kick failed: ' + (data.error || 'unknown'), 'error'); return; }
+      showToast(`Kicked ${agent}`, 'success');
       if (input) input.value = '';
     }
 
@@ -1334,30 +1353,34 @@ function intensityGauge() {
       const action = currentlyPaused ? 'resume' : 'pause';
       const res = await fetch(`/api/${action}/${agent}`, { method: 'POST' });
       const data = await res.json();
-      if (!data.ok) alert(`${action} failed: ` + (data.error || 'unknown'));
+      if (!data.ok) { showToast(`${action} failed: ` + (data.error || 'unknown'), 'error'); return; }
+      showToast(`${agent} ${action}d`, 'success');
     }
 
     async function switchCli(agent, backend) {
       if (!backend) return;
-      if (!confirm(`Switch ${agent} to ${backend}?`)) return;
+      showToast(`Switching ${agent} → ${backend}...`, 'info');
       const res = await fetch(`/api/switch/${agent}/${backend}`, { method: 'POST' });
       const data = await res.json();
-      if (!data.ok) alert('Switch failed: ' + (data.error || 'unknown'));
+      if (!data.ok) { showToast('Switch failed: ' + (data.error || 'unknown'), 'error'); return; }
+      showToast(`${agent} CLI → ${backend}`, 'success');
     }
 
     async function switchModel(agent, model) {
       if (!model) return;
-      if (!confirm(`Switch ${agent} model to ${model}?`)) return;
+      showToast(`Switching ${agent} model → ${model}...`, 'info');
       const res = await fetch(`/api/model/${agent}/${encodeURIComponent(model)}`, { method: 'POST' });
       const data = await res.json();
-      if (!data.ok) alert('Model switch failed: ' + (data.error || 'unknown'));
+      if (!data.ok) { showToast('Model switch failed: ' + (data.error || 'unknown'), 'error'); return; }
+      showToast(`${agent} model → ${model}`, 'success');
     }
 
     async function togglePin(agent, dimension, currentlyPinned) {
       const action = currentlyPinned ? 'unpin' : 'pin';
       const res = await fetch(`/api/${action}/${agent}/${dimension}`, { method: 'POST' });
       const data = await res.json();
-      if (!data.ok) alert(`${action} failed: ` + (data.error || 'unknown'));
+      if (!data.ok) { showToast(`${action} failed: ` + (data.error || 'unknown'), 'error'); return; }
+      showToast(`${agent} ${dimension} ${action}ned`, 'success');
     }
 
     // Git version indicator
