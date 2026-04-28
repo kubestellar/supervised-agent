@@ -108,9 +108,27 @@ apply_tmux_styling() {
 
 PROMPT_DELIVERED=""
 
+is_paused() {
+  [[ -f "$GOVERNOR_STATE_DIR/paused_${SESSION}" ]]
+}
+
+write_paused_launcher() {
+  cat > "$LAUNCHER" << LAUNCH
+#!/bin/bash
+cd "$WORKDIR"
+exec $ACTIVE_LAUNCH_CMD
+LAUNCH
+  chmod +x "$LAUNCHER"
+}
+
 start_session() {
-  write_launcher
-  log "starting tmux session $SESSION (cli=$CLI)"
+  if is_paused; then
+    write_paused_launcher
+    log "starting tmux session $SESSION (cli=$CLI) — PAUSED (no prompt)"
+  else
+    write_launcher
+    log "starting tmux session $SESSION (cli=$CLI)"
+  fi
   tmux kill-session -t "$SESSION" 2>/dev/null || true
   PROMPT_DELIVERED=""
   tmux new-session -d -s "$SESSION" -c "$WORKDIR" "$LAUNCHER"
@@ -298,7 +316,8 @@ check_rate_limit_and_failover() {
 # ACTIVE_LAUNCH_CMD. This function checks the governor model file before
 # relaunch and updates ACTIVE_LAUNCH_CMD + CLI to match.
 
-GOVERNOR_MODEL_DIR="/var/run/kick-governor"
+GOVERNOR_STATE_DIR="/var/run/kick-governor"
+GOVERNOR_MODEL_DIR="$GOVERNOR_STATE_DIR"
 
 sync_launch_cmd_from_governor() {
   local model_file="$GOVERNOR_MODEL_DIR/model_${SESSION}"
