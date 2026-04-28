@@ -622,9 +622,16 @@ apply_model_if_changed() {
     scanner) pin_file="/etc/hive/scanner.env" ;;
     *) pin_file="/etc/hive/${agent}.env" ;;
   esac
-  if grep -q "^AGENT_CLI_PINNED=true" "$pin_file" 2>/dev/null; then
+  # Pin checks: AGENT_CLI_PINNED=both, AGENT_PIN_CLI=backend only, AGENT_PIN_MODEL=model only
+  local pin_both pin_cli pin_model
+  pin_both=$(grep -q "^AGENT_CLI_PINNED=true" "$pin_file" 2>/dev/null && echo 1 || echo 0)
+  pin_cli=$(grep -q "^AGENT_PIN_CLI=true" "$pin_file" 2>/dev/null && echo 1 || echo 0)
+  pin_model=$(grep -q "^AGENT_PIN_MODEL=true" "$pin_file" 2>/dev/null && echo 1 || echo 0)
+
+  if [[ "$pin_both" == "1" ]]; then
     return 0
   fi
+
   local model_file="$GOVERNOR_STATE_DIR/model_${agent}"
   [[ ! -f "$model_file" ]] && return 0
 
@@ -634,7 +641,6 @@ apply_model_if_changed() {
   [[ -z "$gov_backend" || -z "$gov_model" ]] && return 0
 
   # Detect the actual running model from the process, not from our state files.
-  # State files can be stale when supervisor.sh relaunches with its original cmd.
   local cur_backend cur_model
   local detected
   detected=$(detect_running_model "$session")
@@ -644,6 +650,21 @@ apply_model_if_changed() {
   else
     cur_backend=$(get_current_backend "$agent")
     cur_model=$(get_model_for "$agent" "$cur_backend")
+  fi
+
+  # Enforce granular pins — override governor's requested value with current
+  if [[ "$pin_cli" == "1" && "$gov_backend" != "$cur_backend" ]]; then
+    log "PIN_CLI $agent: backend pinned to $cur_backend, ignoring governor request for $gov_backend"
+    gov_backend="$cur_backend"
+  fi
+  if [[ "$pin_model" == "1" ]]; then
+    local norm_gov_check norm_cur_check
+    norm_gov_check=$(echo "$gov_model" | sed -E 's/([0-9])\.([0-9])/\1-\2/g')
+    norm_cur_check=$(echo "$cur_model" | sed -E 's/([0-9])\.([0-9])/\1-\2/g')
+    if [[ "$norm_gov_check" != "$norm_cur_check" ]]; then
+      log "PIN_MODEL $agent: model pinned to $cur_model, ignoring governor request for $gov_model"
+      gov_model="$cur_model"
+    fi
   fi
 
   # Normalize model names for comparison (dots vs hyphens)

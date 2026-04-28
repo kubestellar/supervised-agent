@@ -514,12 +514,36 @@ optimize_model_assignment() {
       continue
     fi
 
-    # Double-check: respect AGENT_CLI_PINNED in env files even without lock file
+    # Respect pin flags in env files:
+    #   AGENT_CLI_PINNED=true  → pin both backend and model (legacy, full lock)
+    #   AGENT_PIN_CLI=true     → pin backend only, governor can change model
+    #   AGENT_PIN_MODEL=true   → pin model only, governor can change backend
     local env_dir="/etc/hive"
     if grep -q "^AGENT_CLI_PINNED=true" "$env_dir/${agent}.env" 2>/dev/null; then
-      log "  PINNED: $agent (env flag — skipping, creating missing lock)"
+      log "  PINNED: $agent (both pinned — skipping, creating missing lock)"
       sudo touch "$lock_file"
       continue
+    fi
+
+    local gov_pin_cli gov_pin_model
+    gov_pin_cli=$(grep -q "^AGENT_PIN_CLI=true" "$env_dir/${agent}.env" 2>/dev/null && echo 1 || echo 0)
+    gov_pin_model=$(grep -q "^AGENT_PIN_MODEL=true" "$env_dir/${agent}.env" 2>/dev/null && echo 1 || echo 0)
+
+    if [[ "$gov_pin_cli" == "1" ]]; then
+      local pinned_backend
+      pinned_backend=$(grep '^BACKEND=' "$STATE_DIR/model_${agent}" 2>/dev/null | cut -d= -f2 || true)
+      if [[ -n "$pinned_backend" && "$pinned_backend" != "$backend" ]]; then
+        log "  PIN_CLI: $agent backend pinned to $pinned_backend, overriding $backend"
+        backend="$pinned_backend"
+      fi
+    fi
+    if [[ "$gov_pin_model" == "1" ]]; then
+      local pinned_model
+      pinned_model=$(grep '^MODEL=' "$STATE_DIR/model_${agent}" 2>/dev/null | cut -d= -f2 || true)
+      if [[ -n "$pinned_model" && "$pinned_model" != "$model" ]]; then
+        log "  PIN_MODEL: $agent model pinned to $pinned_model, overriding $model"
+        model="$pinned_model"
+      fi
     fi
 
     local cost_weight
