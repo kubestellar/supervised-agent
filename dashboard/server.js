@@ -771,11 +771,17 @@ app.post('/api/unpin/:agent{/:dimension}', (req, res) => {
       res.json({ ok: true, output: `${agent} unpinned (all)` });
     } else if (dimension === 'cli') {
       removeEnvFlag(agent, 'AGENT_PIN_CLI');
+      const envFile = `${ENV_DIR}/${agent}.env`;
+      const hadLegacy = fs.existsSync(envFile) && /^AGENT_CLI_PINNED=true$/m.test(fs.readFileSync(envFile, 'utf8'));
       removeEnvFlag(agent, 'AGENT_CLI_PINNED');
+      if (hadLegacy) setEnvFlag(agent, 'AGENT_PIN_MODEL', 'true');
       res.json({ ok: true, output: `${agent} cli unpinned` });
     } else if (dimension === 'model') {
       removeEnvFlag(agent, 'AGENT_PIN_MODEL');
+      const envFile = `${ENV_DIR}/${agent}.env`;
+      const hadLegacy = fs.existsSync(envFile) && /^AGENT_CLI_PINNED=true$/m.test(fs.readFileSync(envFile, 'utf8'));
       removeEnvFlag(agent, 'AGENT_CLI_PINNED');
+      if (hadLegacy) setEnvFlag(agent, 'AGENT_PIN_CLI', 'true');
       res.json({ ok: true, output: `${agent} model unpinned` });
     } else {
       res.status(400).json({ error: `invalid dimension: ${dimension} (valid: cli, model, both)` });
