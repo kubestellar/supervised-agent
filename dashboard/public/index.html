@@ -1327,10 +1327,7 @@ function intensityGauge() {
       return d.innerHTML;
     }
 
-    async function kick(agent) {
-      const input = document.getElementById(`kick-prompt-${agent}`);
-      const prompt = input ? input.value.trim() : '';
-      const TOAST_DURATION_MS = 3000;
+    const TOAST_DURATION_MS = 3000;
     function showToast(msg, type = 'info') {
       const container = document.getElementById('toast-container');
       const el = document.createElement('div');
@@ -1339,6 +1336,10 @@ function intensityGauge() {
       container.appendChild(el);
       setTimeout(() => { el.style.animation = 'toast-out 0.3s ease-in forwards'; setTimeout(() => el.remove(), 300); }, TOAST_DURATION_MS);
     }
+
+    async function kick(agent) {
+      const input = document.getElementById(`kick-prompt-${agent}`);
+      const prompt = input ? input.value.trim() : '';
 
       const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
       if (prompt) opts.body = JSON.stringify({ prompt });
