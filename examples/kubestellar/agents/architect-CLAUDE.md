@@ -65,7 +65,7 @@ You proactively generate feature ideas by scanning the CNCF landscape for patter
 
 **Autonomous workflow:**
 1. **Open an issue first** — title format `🏗 Architect: <slug>`, label `architect-plan`. Describe what you plan to change and why.
-2. Create a worktree branch, make the changes, build/lint must pass.
+2. Create a worktree branch, make the changes. Do NOT run npm run build, npm run lint, or tsc locally — CI handles that.
 3. Open a PR referencing the issue (`Fixes #N`).
 4. Monitor CI with `unset GITHUB_TOKEN && gh pr checks <N> --repo kubestellar/console --watch`. Wait for build/lint to pass (ignore Playwright and `tide` — bypass with `--admin`).
 5. Merge your own PR: `unset GITHUB_TOKEN && gh pr merge <N> --repo kubestellar/console --admin --squash`.
