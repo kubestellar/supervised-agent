@@ -144,7 +144,7 @@ REASON=rate_limit_switch
 UPDATED=$(date -Iseconds)
 MODELEOF
 
-  # 4x Esc + /exit without -l (avoids autocomplete dropdown)
+  # 4x Esc + /exit with 4x Enter (split text and Enter per tmux_send_enter rule)
   $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
   sleep 0.3
   $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
@@ -153,7 +153,15 @@ MODELEOF
   sleep 0.3
   $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
   sleep 1
-  $TMUX_BIN send-keys -t "$session" "/exit" Enter 2>/dev/null || true
+  $TMUX_BIN send-keys -t "$session" -l "/exit" 2>/dev/null || true
+  sleep 0.3
+  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
+  sleep 0.3
+  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
+  sleep 0.3
+  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
+  sleep 0.3
+  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
 
   set_current_backend "$agent" "$fallback_backend"
 
@@ -691,8 +699,7 @@ apply_model_if_changed() {
   capture_handoff_state "$session" "$agent"
 
   # 4x Esc clears autocomplete, menus, and pending input reliably on both
-  # claude and copilot CLIs. Then /exit + Enter without -l to avoid
-  # triggering the autocomplete dropdown.
+  # claude and copilot CLIs. Then /exit with 4x Enter (split per tmux_send_enter rule).
   $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
   sleep 0.3
   $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
@@ -701,7 +708,15 @@ apply_model_if_changed() {
   sleep 0.3
   $TMUX_BIN send-keys -t "$session" Escape 2>/dev/null || true
   sleep 1
-  $TMUX_BIN send-keys -t "$session" "/exit" Enter 2>/dev/null || true
+  $TMUX_BIN send-keys -t "$session" -l "/exit" 2>/dev/null || true
+  sleep 0.3
+  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
+  sleep 0.3
+  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
+  sleep 0.3
+  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
+  sleep 0.3
+  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
 
   set_current_backend "$agent" "$gov_backend"
   BACKEND_MODEL[$gov_backend]="$gov_model"
