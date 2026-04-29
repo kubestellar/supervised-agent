@@ -377,7 +377,7 @@
     /* Token burn rate chart */
     .burn-chart-wrap { margin: 8px 0 12px; }
     .burn-chart-title { font-size: 0.7rem; color: var(--muted); margin-bottom: 4px; }
-    .burn-context { display: flex; gap: 16px; margin-top: 6px; font-size: 0.7rem; font-family: monospace; }
+    .burn-context { display: flex; justify-content: space-between; margin-top: 6px; font-size: 0.7rem; font-family: monospace; }
     .burn-context .bc-stat { display: flex; flex-direction: column; align-items: center; }
     .burn-context .bc-val { font-weight: 700; font-size: 0.85rem; }
     .burn-context .bc-label { color: var(--muted); font-size: 0.6rem; }
@@ -925,7 +925,7 @@
         <div class="gov-grid">
           <div class="gov-stat"><div class="label">timer</div><div class="val ${cls}">${gov.active ? '● active' : '⚠ DEAD'}</div></div>
           <div class="gov-stat"><div class="label">mode</div><div class="val" style="color:${modeColor}">${gov.mode}</div></div>
-          <div class="gov-stat"><div class="label">actionable</div><div class="spark-row"><span class="val">${issueCount}</span>${issuesSpark}</div></div>
+          <div class="gov-stat"><div class="label">actionable issues</div><div class="spark-row"><span class="val">${issueCount}</span>${issuesSpark}</div></div>
           <div class="gov-stat"><div class="label">PRs</div><div class="spark-row"><span class="val">${gov.prs}</span>${prsSpark}</div></div>
           <div class="gov-stat"><div class="label">next run</div><div class="val">${gov.nextKick || '—'}</div></div>
         </div>
@@ -1326,26 +1326,28 @@ function intensityGauge() {
   const tStart = new Date(rates[0].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true}).toLowerCase();
   const tEnd = new Date(rates[rates.length - 1].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true}).toLowerCase();
 
+  const dotLeftPct = (parseFloat(lastPt[0]) / W * 100).toFixed(1);
+  const dotTopPct = (parseFloat(lastPt[1]) / H * 100).toFixed(1);
+
   return `<div class="burn-chart-wrap">
     <div class="burn-chart-title">burn rate (tok/hr)</div>
-    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px">
-      <line x1="${PAD}" y1="${yPeak}" x2="${W - PAD}" y2="${yPeak}" stroke="#f85149" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.5"/>
-      <line x1="${PAD}" y1="${yAvg}" x2="${W - PAD}" y2="${yAvg}" stroke="#d29922" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.5"/>
-      <line x1="${PAD}" y1="${yLow}" x2="${W - PAD}" y2="${yLow}" stroke="#58a6ff" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.5"/>
-      <text x="${W - PAD}" y="${yPeak}" dy="-2" text-anchor="end" fill="#f85149" font-size="7" opacity="0.7">peak</text>
-      <text x="${W - PAD}" y="${yAvg}" dy="-2" text-anchor="end" fill="#d29922" font-size="7" opacity="0.7">avg</text>
-      <text x="${W - PAD}" y="${yLow}" dy="8" text-anchor="end" fill="#58a6ff" font-size="7" opacity="0.7">low</text>
-      <polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="${lastPt[0]}" cy="${lastPt[1]}" r="3" fill="${color}" stroke="#0d1117" stroke-width="1"/>
-    </svg>
+    <div style="position:relative">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:${H}px;display:block">
+        <line x1="${PAD}" y1="${yPeak}" x2="${W - PAD}" y2="${yPeak}" stroke="#f85149" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.5" vector-effect="non-scaling-stroke"/>
+        <line x1="${PAD}" y1="${yAvg}" x2="${W - PAD}" y2="${yAvg}" stroke="#d29922" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.5" vector-effect="non-scaling-stroke"/>
+        <line x1="${PAD}" y1="${yLow}" x2="${W - PAD}" y2="${yLow}" stroke="#58a6ff" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.5" vector-effect="non-scaling-stroke"/>
+        <polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      </svg>
+      <div style="position:absolute;left:${dotLeftPct}%;top:${dotTopPct}%;width:6px;height:6px;border-radius:50%;background:${color};border:1px solid #0d1117;transform:translate(-50%,-50%)"></div>
+    </div>
     <div style="display:flex;justify-content:space-between;font-size:0.6rem;color:var(--muted);margin-top:1px;font-family:monospace">
       <span>${tStart}</span><span>${tEnd}</span>
     </div>
     <div class="burn-context">
-      <div class="bc-stat"><span class="bc-val" style="color:#f85149">${fmtTokens(peak)}</span><span class="bc-label">peak/hr</span></div>
+      <div class="bc-stat"><span class="bc-val" style="color:#58a6ff">${fmtTokens(low)}</span><span class="bc-label">low/hr</span></div>
       <div class="bc-stat"><span class="bc-val" style="color:#d29922">${fmtTokens(avg)}</span><span class="bc-label">avg/hr</span></div>
       <div class="bc-stat"><span class="bc-val" style="color:${color}">${fmtTokens(now)}</span><span class="bc-label">now/hr</span></div>
-      <div class="bc-stat"><span class="bc-val" style="color:#58a6ff">${fmtTokens(low)}</span><span class="bc-label">low/hr</span></div>
+      <div class="bc-stat"><span class="bc-val" style="color:#f85149">${fmtTokens(peak)}</span><span class="bc-label">peak/hr</span></div>
     </div>
     <div style="color:${color};font-size:11px;font-family:monospace;margin-top:2px">${label}</div>
   </div>`;
@@ -1406,14 +1408,19 @@ function burnAreaChart() {
   const belowBand = nowVal < buckets[buckets.length - 1].p25;
   const dotColor = aboveBand ? '#f85149' : belowBand ? '#58a6ff' : '#3fb950';
 
+  const areaDotLeftPct = (parseFloat(lastNow.split(',')[0]) / W * 100).toFixed(1);
+  const areaDotTopPct = (parseFloat(lastNow.split(',')[1]) / H * 100).toFixed(1);
+
   return `<div class="burn-area-wrap">
-    <div class="burn-area-title" style="text-align:center">burn rate distribution · <span style="color:rgba(57,210,192,0.6)">p25–p75 band</span> · <span style="color:#39d2c0">actual</span></div>
-    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px">
-      <polygon points="${bandTop.join(' ')} ${bandBot.join(' ')}" fill="rgba(57,210,192,0.12)" stroke="none"/>
-      <polyline points="${medianPts.join(' ')}" fill="none" stroke="rgba(57,210,192,0.3)" stroke-width="1" stroke-dasharray="2,2"/>
-      <polyline points="${nowPts.join(' ')}" fill="none" stroke="#39d2c0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="${lastNow.split(',')[0]}" cy="${lastNow.split(',')[1]}" r="3" fill="${dotColor}" stroke="#0d1117" stroke-width="1"/>
-    </svg>
+    <div class="burn-area-title" style="text-align:left">burn rate distribution · <span style="color:rgba(57,210,192,0.6)">p25–p75 band</span> · <span style="color:#39d2c0">actual</span></div>
+    <div style="position:relative">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:${H}px;display:block">
+        <polygon points="${bandTop.join(' ')} ${bandBot.join(' ')}" fill="rgba(57,210,192,0.12)" stroke="none"/>
+        <polyline points="${medianPts.join(' ')}" fill="none" stroke="rgba(57,210,192,0.3)" stroke-width="1" stroke-dasharray="2,2" vector-effect="non-scaling-stroke"/>
+        <polyline points="${nowPts.join(' ')}" fill="none" stroke="#39d2c0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      </svg>
+      <div style="position:absolute;left:${areaDotLeftPct}%;top:${areaDotTopPct}%;width:6px;height:6px;border-radius:50%;background:${dotColor};border:1px solid #0d1117;transform:translate(-50%,-50%)"></div>
+    </div>
   </div>`;
 }
 
@@ -1474,9 +1481,9 @@ function burnAreaChart() {
 
       el.innerHTML = `<div class="token-panel">
         <div class="token-title">Token Usage <span class="lookback">${tokens.lookbackHours || 24}h window · ${t.sessions} sessions</span></div>
-        <div style="margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)">
-          ${intensityGauge()}
-          ${burnAreaChart()}
+        <div style="display:flex;gap:16px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+          <div style="flex:1;min-width:0">${intensityGauge()}</div>
+          <div style="flex:1;min-width:0">${burnAreaChart()}</div>
         </div>
         <div class="token-grid">
           <div class="token-stat"><div class="spark-row"><span class="tval" style="color:var(--cyan)">${fmtTokens(totalTokens)}</span>${totalSpark}</div><div class="tlabel">total tokens</div></div>
