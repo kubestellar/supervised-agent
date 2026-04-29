@@ -1239,21 +1239,25 @@ function intensityGauge() {
     { key: 'tokenMessages',   w: 1 },
   ];
 
-  let weightedRecent = 0, weightedTrail = 0, totalWeight = 0;
+  let weightedRecent = 0, totalWeight = 0;
   for (const m of metrics) {
     const recent = sliceRate(recentStart, len, m.key);
     const trail  = sliceRate(0, len, m.key);
-    if (trail > 0) {
-      weightedRecent += (recent / trail) * m.w;
-      totalWeight += m.w;
+    const absTrail = Math.abs(trail);
+    const MIN_RATE = 0.001;
+    if (absTrail > MIN_RATE) {
+      weightedRecent += (recent / absTrail) * m.w;
+    } else {
+      weightedRecent += 0;
     }
+    totalWeight += m.w;
   }
 
   if (totalWeight === 0) return '';
-  const ratio = weightedRecent / totalWeight;
+  const ratio = Math.max(0, weightedRecent / totalWeight);
 
-  // Clamp ratio to [0.2, 2.0] for display
-  const GAUGE_MIN = 0.2;
+  // Clamp ratio to [0, 2.0] for display
+  const GAUGE_MIN = 0;
   const GAUGE_MAX = 2.0;
   const clamped = Math.max(GAUGE_MIN, Math.min(GAUGE_MAX, ratio));
 
@@ -1272,7 +1276,8 @@ function intensityGauge() {
 
   // Label
   let label;
-  if (ratio < 0.7) label = 'cooling';
+  if (ratio < 0.1) label = 'idle';
+  else if (ratio < 0.7) label = 'cooling';
   else if (ratio < 0.9) label = 'easing';
   else if (ratio < 1.1) label = 'steady';
   else if (ratio < 1.4) label = 'ramping';
