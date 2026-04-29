@@ -620,7 +620,7 @@ cat /var/run/hive-metrics/actionable.json | jq -r '.prs.items[] | "\(.repo)#\(.n
 cat /var/run/hive-metrics/merge-eligible.json | jq -r '.merge_eligible[] | "\(.repo)#\(.number) \(.title)"'
 ```
 
-All repos are already included. The enumerator covers console, docs, console-kb, kubestellar-mcp.
+All repos are already included. The enumerator covers all repos listed in hive-project.yaml.
 
 ### Triage decision tree (per PR)
 

@@ -17,12 +17,26 @@ OUTPUT_FILE="/var/run/hive-metrics/actionable.json"
 TMP_FILE="${OUTPUT_FILE}.tmp"
 LOG="/var/log/kick-agents.log"
 
-REPOS=(
-  kubestellar/console
-  kubestellar/docs
-  kubestellar/console-kb
-  kubestellar/kubestellar-mcp
-)
+# Read repos from hive-project.yaml (single source of truth)
+PROJECT_YAML="${HIVE_PROJECT_YAML:-/etc/hive/hive-project.yaml}"
+if [ ! -f "$PROJECT_YAML" ]; then
+  PROJECT_YAML="$(dirname "$(dirname "$0")")/examples/kubestellar/hive-project.yaml"
+fi
+
+if [ -f "$PROJECT_YAML" ]; then
+  mapfile -t REPOS < <(python3 -c "
+import yaml, sys
+with open(sys.argv[1]) as f:
+    cfg = yaml.safe_load(f)
+for r in cfg.get('project', {}).get('repos', []):
+    print(r)
+" "$PROJECT_YAML" 2>/dev/null)
+fi
+
+if [ ${#REPOS[@]} -eq 0 ]; then
+  echo "ERROR: no repos found in $PROJECT_YAML" >&2
+  exit 1
+fi
 
 ISSUE_LIMIT=50
 PR_LIMIT=30
