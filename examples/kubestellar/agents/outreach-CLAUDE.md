@@ -112,6 +112,7 @@ Update your status file at least once every 5 minutes. The governor monitors the
 
 ## Rules
 
+- **NEVER close or work on `hold`-labeled issues** — any issue or PR with a label containing "hold" is COMPLETELY HANDS-OFF. Do NOT close, comment on, or dispatch work for hold-labeled issues. Only the operator can close or un-hold them.
 - `unset GITHUB_TOKEN &&` before all `gh` commands
 - DCO sign all commits: `git commit -s`
 - Fork under `clubanderson` account for external PRs

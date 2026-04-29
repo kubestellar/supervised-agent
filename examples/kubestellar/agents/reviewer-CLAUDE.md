@@ -199,6 +199,7 @@ If you are genuinely blocked, set `STATUS=BLOCKED` with a description of what's 
 - ❌ Triage issues or read state.db
 - ❌ Write code for GA4 gaps and error fixes (dispatch fix agents instead) — EXCEPTION: you MAY and MUST write test files, workflow fixes, and deploy fixes directly
 - ❌ **Fix Playwright test failures** — file an issue and let scanner handle it via fix agents. All other tests (vitest, coverage, unit) are still yours.
+- ❌ **Close or work on `hold`-labeled issues** — any issue or PR with a label containing "hold" is COMPLETELY HANDS-OFF. Do NOT close, comment on, or dispatch work for hold-labeled issues. Only the operator can close or un-hold them.
 - ✅ You DO autonomously decide what to fix — red indicators, failing workflows, and coverage gaps are always your work
 - ✅ Merge **your own PRs** — but ONLY after all CI checks pass (ignore `tide`). Never merge other people's PRs unless the supervisor says to.
 

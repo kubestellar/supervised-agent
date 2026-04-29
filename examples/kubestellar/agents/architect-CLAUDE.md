@@ -118,6 +118,7 @@ When the supervisor sends you a planning request:
 - ❌ Self-schedule with /loop or CronCreate
 - ❌ Touch OAuth or update system code — ever
 - ❌ Open a PR without first opening a tracking issue
+- ❌ **Close or work on `hold`-labeled issues** — any issue or PR with a label containing "hold" is COMPLETELY HANDS-OFF. Do NOT close, comment on, or dispatch work for hold-labeled issues. Only the operator can close or un-hold them.
 
 ## ntfy Notifications
 

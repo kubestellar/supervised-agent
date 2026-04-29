@@ -301,10 +301,11 @@ Sequence when scanner encounters an unPR'd issue:
 
 1. **Does it need architecture first?** Criteria: cross-cutting pattern, fundamental decision (storage backend, protocol, algorithm choice), affects >3 files or any public API. If yes → file `--actor architect --set-metadata lane_transfer=scanner-to-architect` and continue (architect will RFC; scanner implements the phase beads later).
 2. **Is an external contributor already engaged?** Check the issue for: assignee set, comments from non-maintainer in last 14d, a fork visible in the repo, a PR (even WIP / draft) referencing the issue. If yes → leave it; file `--set-metadata contributor_engaged=<login> last_activity=<iso>` and nudge in 14 days if it's gone quiet.
-3. **Is it an intentional tracker?** Exempt list (do NOT auto-work these): LFX Mentorship trackers (#4196, #4190, #4189), Nightly Test Suite aggregator (#4086), CNCF Incubation Readiness Tracker (#4072), any issue titled `[Tracker]` or labeled `meta-tracker`. Skip.
-4. **Otherwise → claim it.** Bundle into an iteration's fix-agent dispatch batch (multiple small related issues → one PR). Large single issues → one fix agent, one PR.
+3. **Does it have a `hold` label?** Any issue or PR with a label containing "hold" (e.g., `hold`, `on-hold`, `hold/review`) is COMPLETELY HANDS-OFF. Do NOT close it, do NOT work on it, do NOT dispatch fix agents for it, do NOT comment on it. Only the operator can close or un-hold these issues. This is a HARD RULE that overrides all other triage logic.
+4. **Is it an intentional tracker?** Exempt list (do NOT auto-work these): LFX Mentorship trackers (#4196, #4190, #4189), Nightly Test Suite aggregator (#4086), CNCF Incubation Readiness Tracker (#4072), any issue titled `[Tracker]` or labeled `meta-tracker`. Skip.
+5. **Otherwise → claim it.** Bundle into an iteration's fix-agent dispatch batch (multiple small related issues → one PR). Large single issues → one fix agent, one PR.
 
-The rule applies equally to bugs, features, enhancements, and docs. The only signal that lets scanner defer is one of the three exemptions above.
+The rule applies equally to bugs, features, enhancements, and docs. The only signals that let scanner defer are the four exemptions above (hold label, architecture-first, external contributor engaged, intentional tracker).
 
 When scanner has capacity remaining in an iteration and there are unPR'd issues outside the exempt list, it should pick them up before going idle. Silent queue backlog is a scanner bug, not a feature.
 
@@ -443,7 +444,7 @@ This is the recovery mechanism for usage-limit failures. The user /logins manual
 | Scan finds a new issue/PR not yet tracked | `bd create --title "<repo>#<num>: <short title>" --type bug\|feature\|task\|epic\|chore --priority 0-4 --actor scanner --external-ref gh-<num>` (metadata is attached via a follow-up `bd update <id> --set-metadata key=value`; `--set-metadata` is NOT valid on `bd create` in bd 1.0.2) |
 | Link to GitHub | `bd update <bead-id> --set-metadata github_url=https://github.com/<org>/<repo>/issues/<num>` |
 | Dispatch fix agent | `bd update <bead-id> --claim` (atomic: sets assignee and status=in_progress) |
-| PR merged that closes the issue | `bd close <bead-id>` |
+| PR merged that closes the issue | `bd close <bead-id>` — ⛔ ONLY close after verifying the PR is MERGED (`gh pr view <num> --json state` must show `"state":"MERGED"`). CI-green is NOT merged. "Ready to merge" is NOT merged. If the PR is still OPEN, you MUST run `gh pr merge <num> --admin --squash` FIRST, verify it succeeds, THEN close the bead. |
 | Defer with reason | `bd update <bead-id> --status blocked --set-metadata defer_reason=<reason>` |
 | Dependency (A needs B first) | `bd dep add <bead-a> <bead-b>` |
 | End of iteration | `bd sync` (commits `.beads/` state to local git — no remote) |
