@@ -380,6 +380,7 @@ if os.path.isdir(copilot_dir):
             continue
 
         cli = "copilot"
+        has_shutdown = cp_inp > 0 or cp_out > 0 or cp_cache_read > 0
         cp_total = cp_inp + cp_out + cp_cache_read
 
         BUCKET_MINUTES = 10
@@ -415,6 +416,7 @@ if os.path.isdir(copilot_dir):
             "messages": cp_msg_count,
             "toolCalls": cp_tool_count,
             "total": cp_total,
+            "estimated": not has_shutdown,
             "project": "copilot-session",
             "started": cp_first_ts,
             "lastActive": cp_last_ts,
@@ -461,6 +463,32 @@ if os.path.isdir(copilot_dir):
             hourly_by_agent[cp_agent]["output"] += cp_out
             hourly_by_agent[cp_agent]["cacheRead"] += cp_cache_read
             hourly_by_agent[cp_agent]["sessions"] += 1
+
+# Estimate tokens for active Copilot sessions (no session.shutdown yet)
+# Uses avg tokens-per-message from completed sessions of the same model
+model_token_stats = defaultdict(lambda: {"tokens": 0, "msgs": 0})
+for s in sessions:
+    if s.get("cli") == "copilot" and not s.get("estimated") and s["total"] > 0:
+        model_token_stats[s["model"]]["tokens"] += s["total"]
+        model_token_stats[s["model"]]["msgs"] += s["messages"]
+
+global_copilot_tokens = sum(v["tokens"] for v in model_token_stats.values())
+global_copilot_msgs = sum(v["msgs"] for v in model_token_stats.values())
+global_avg = global_copilot_tokens / global_copilot_msgs if global_copilot_msgs > 0 else 0
+
+for s in sessions:
+    if not s.get("estimated") or s["total"] > 0:
+        continue
+    m = s["model"]
+    ms = model_token_stats[m]
+    avg_per_msg = ms["tokens"] / ms["msgs"] if ms["msgs"] > 0 else global_avg
+    if avg_per_msg <= 0:
+        continue
+    est = int(avg_per_msg * s["messages"])
+    s["total"] = est
+    s["input"] = int(est * 0.6)
+    s["output"] = int(est * 0.05)
+    s["cacheRead"] = int(est * 0.35)
 
 # Sort sessions by most recent first
 sessions.sort(key=lambda s: s.get("mtime", 0), reverse=True)
