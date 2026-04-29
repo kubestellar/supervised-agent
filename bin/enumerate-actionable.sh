@@ -51,7 +51,7 @@ trap 'rm -f "$issues_tmp" "$prs_tmp"' EXIT
 
 # --- Fetch issues and PRs sequentially across all repos ---
 for repo in "${REPOS[@]}"; do
-  gh api "repos/${repo}/issues?state=open&per_page=${ISSUE_LIMIT}&sort=created&direction=asc" \
+  /usr/bin/gh api "repos/${repo}/issues?state=open&per_page=${ISSUE_LIMIT}&sort=created&direction=asc" \
     --jq "[.[] | select(.pull_request == null) | {
       repo: \"${repo}\",
       number: .number,
@@ -65,7 +65,7 @@ for repo in "${REPOS[@]}"; do
       url: .html_url
     }]" >> "$issues_tmp" 2>/dev/null || echo "[]" >> "$issues_tmp"
 
-  gh api "repos/${repo}/pulls?state=open&per_page=${PR_LIMIT}&sort=created&direction=asc" \
+  /usr/bin/gh api "repos/${repo}/pulls?state=open&per_page=${PR_LIMIT}&sort=created&direction=asc" \
     --jq "[.[] | {
       repo: \"${repo}\",
       number: .number,
@@ -171,7 +171,7 @@ if [ -n "$pr_numbers" ]; then
   for entry in $pr_numbers; do
     repo="${entry%%:*}"
     num="${entry##*:}"
-    files=$(gh api "repos/${repo}/pulls/${num}/files" --jq '.[].filename' 2>/dev/null || echo "")
+    files=$(/usr/bin/gh api "repos/${repo}/pulls/${num}/files" --jq '.[].filename' 2>/dev/null || echo "")
     if echo "$files" | grep -qi 'adopters'; then
       echo "$num" >> "$adopters_tmp"
     fi
@@ -250,7 +250,7 @@ Thanks for filing this issue! To help us reproduce and investigate, could you pl
 You can find it by:
 - **Git**: `git rev-parse HEAD` in your repo checkout
 - **Git log**: `git log --oneline -1`
-- **GitHub CLI**: `gh api repos/kubestellar/console/commits/main --jq .sha`
+- **GitHub CLI**: `/usr/bin/gh api repos/kubestellar/console/commits/main --jq .sha`
 - **Console UI**: Check the build version/commit hash in the bottom-right footer
 
 We've put this issue on hold until we can confirm which version it was filed against. Once you add the SHA, we'll pick it back up right away.
@@ -273,7 +273,7 @@ for marker_file in "${SHA_HOLD_MARKER}"_*; do
   mid="${mid%_${num}}"
   repo="${mid/_//}"
   # Fetch current issue body and check for SHA
-  body=$(gh api "repos/${repo}/issues/${num}" --jq '.body // ""' 2>/dev/null || echo "")
+  body=$(/usr/bin/gh api "repos/${repo}/issues/${num}" --jq '.body // ""' 2>/dev/null || echo "")
   has_sha=$(echo "$body" | python3 -c "
 import sys, re
 SHA_PATTERN = re.compile(r'[0-9a-f]{7,40}\b')
