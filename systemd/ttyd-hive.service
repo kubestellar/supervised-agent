@@ -1,0 +1,13 @@
+[Unit]
+Description=ttyd web terminal for hive agent sessions
+After=network.target
+
+[Service]
+Type=simple
+User=dev
+ExecStart=/usr/bin/ttyd -W -a -p 7681 -t fontSize=14 -t disableLeaveAlert=true /usr/local/bin/ttyd-tmux.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
