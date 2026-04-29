@@ -1483,17 +1483,18 @@ function burnAreaChart() {
           return `<div class="token-session-row" style="padding-left:12px">
             <span class="sid">${esc(s.id)}</span>
             <span class="smodel">${esc(s.model)}</span>
-            <span class="stokens">${s.total > 0 ? fmtTokens(s.total) : '—'}</span>
+            <span class="stokens" ${s.estimated ? 'title="estimated from avg tokens/msg"' : ''}>${s.total > 0 ? (s.estimated ? '~' : '') + fmtTokens(s.total) : '—'}</span>
             <span class="smsgs">${s.messages} msgs</span>${miniSpark}
             <span class="sproj">${age}</span>
           </div>`;
         }).join('');
         const totalMsgs = grp.reduce((a, s) => a + s.messages, 0);
         const totalTokens = grp.reduce((a, s) => a + s.total, 0);
+        const hasEstimates = grp.some(s => s.estimated && s.total > 0);
         return `<div style="margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
             <span class="sagent ${agentCls}" style="font-weight:700">${agent}</span>
-            <span style="color:var(--muted);font-size:0.65rem">${grp.length} session${grp.length > 1 ? 's' : ''} · ${totalMsgs} msgs${totalTokens > 0 ? ' · ' + fmtTokens(totalTokens) : ''}</span>
+            <span style="color:var(--muted);font-size:0.65rem">${grp.length} session${grp.length > 1 ? 's' : ''} · ${totalMsgs} msgs${totalTokens > 0 ? ' · ' + (hasEstimates ? '~' : '') + fmtTokens(totalTokens) : ''}</span>
           </div>
           ${rows}
         </div>`;
