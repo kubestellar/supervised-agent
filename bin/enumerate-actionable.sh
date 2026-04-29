@@ -248,6 +248,30 @@ COMMENT
   done
 fi
 
+# --- Re-check previously SHA-held issues: if SHA was added, unhold them ---
+for marker_file in "${SHA_HOLD_MARKER}"_*; do
+  [ -f "$marker_file" ] || continue
+  # Extract repo and number from marker filename: sha_hold_posted_org_repo_NUM
+  marker_base=$(basename "$marker_file")
+  num="${marker_base##*_}"
+  # Reconstruct repo from marker (sha_hold_posted_org_repo_NUM → org/repo)
+  mid="${marker_base#sha_hold_posted_}"
+  mid="${mid%_${num}}"
+  repo="${mid/_//}"
+  # Fetch current issue body and check for SHA
+  body=$(gh api "repos/${repo}/issues/${num}" --jq '.body // ""' 2>/dev/null || echo "")
+  has_sha=$(echo "$body" | python3 -c "
+import sys, re
+SHA_PATTERN = re.compile(r'[0-9a-f]{7,40}\b')
+print('yes' if SHA_PATTERN.search(sys.stdin.read()) else 'no')
+" 2>/dev/null || echo "no")
+  if [ "$has_sha" = "yes" ]; then
+    gh issue edit "$num" --repo "$repo" --remove-label "hold" --add-label "kind/bug" 2>/dev/null || true
+    rm -f "$marker_file"
+    log "SHA-UNHOLD: ${repo}#${num} — SHA found in body, removed hold, restored kind/bug"
+  fi
+done
+
 # Use only the kept issues (SHA-verified or internal)
 all_issues=$(echo "$sha_result" | python3 -c "import json,sys; print(json.dumps(json.load(sys.stdin)['kept']))" 2>/dev/null || echo "[]")
 
