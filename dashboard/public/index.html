@@ -1433,7 +1433,8 @@ function burnAreaChart() {
         return;
       }
 
-      const sessionsOpen = el.querySelector('.token-sessions')?.open || false;
+      const sessionsEl = el.querySelector('.token-sessions');
+      const sessionsOpen = sessionsEl ? sessionsEl.open : true;
 
       const t = tokens.totals;
       const totalTokens = t.input + t.output + t.cacheRead;
@@ -1452,24 +1453,42 @@ function burnAreaChart() {
         </div>`;
       }).join('');
 
-      const sessionRows = sessions.map(s => {
-        const age = s.lastActive ? new Date(s.lastActive).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true}) : '';
-        const agentName = s.agent && s.agent !== 'unknown' ? s.agent : '';
-        const agentCls = agentName ? `a-${agentName}` : 'a-unknown';
-        return `<div class="token-session-row">
-          <span class="sid">${esc(s.id)}</span>
-          <span class="sagent ${agentCls}">${agentName || '—'}</span>
-          <span class="smodel">${esc(s.model)}</span>
-          <span class="stokens">${fmtTokens(s.total)}</span>
-          <span class="smsgs">${s.messages} msgs</span>
-          <span class="sproj">${esc(s.project)} · ${age}</span>
+      const HIVE_AGENTS = new Set(['scanner', 'reviewer', 'architect', 'outreach', 'supervisor']);
+      const agentSessions = sessions.filter(s => HIVE_AGENTS.has(s.agent));
+      const grouped = {};
+      for (const s of agentSessions) {
+        if (!grouped[s.agent]) grouped[s.agent] = [];
+        grouped[s.agent].push(s);
+      }
+      const AGENT_ORDER = ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach'];
+      const sortedGroups = AGENT_ORDER.filter(a => grouped[a]).map(a => [a, grouped[a]]);
+      const sessionRows = sortedGroups.map(([agent, grp]) => {
+        const agentCls = `a-${agent}`;
+        const rows = grp.map(s => {
+          const age = s.lastActive ? new Date(s.lastActive).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true}) : '';
+          return `<div class="token-session-row" style="padding-left:12px">
+            <span class="sid">${esc(s.id)}</span>
+            <span class="smodel">${esc(s.model)}</span>
+            <span class="stokens">${s.total > 0 ? fmtTokens(s.total) : '—'}</span>
+            <span class="smsgs">${s.messages} msgs</span>
+            <span class="sproj">${age}</span>
+          </div>`;
+        }).join('');
+        const totalMsgs = grp.reduce((a, s) => a + s.messages, 0);
+        const totalTokens = grp.reduce((a, s) => a + s.total, 0);
+        return `<div style="margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+            <span class="sagent ${agentCls}" style="font-weight:700">${agent}</span>
+            <span style="color:var(--muted);font-size:0.65rem">${grp.length} session${grp.length > 1 ? 's' : ''} · ${totalMsgs} msgs${totalTokens > 0 ? ' · ' + fmtTokens(totalTokens) : ''}</span>
+          </div>
+          ${rows}
         </div>`;
       }).join('');
 
       const advisorHtml = buildCadenceAdvisor(tokens.byAgent || {});
 
       const totalSpark = sparkSvg(getHistorySeries('tokenTotal'), '#39d2c0');
-      const agentNames = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+      const agentNames = ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach'];
       const agentColors = { scanner: '#58a6ff', reviewer: '#3fb950', architect: '#bc8cff', outreach: '#39d2c0', supervisor: '#d29922' };
       const agentSparkRows = agentNames.map(name => {
         const ba = tokens.byAgent || {};
@@ -1496,7 +1515,7 @@ function burnAreaChart() {
         ${agentSparkRows ? `<div class="token-grid" style="margin-top:4px">${agentSparkRows}</div>` : ''}
         ${advisorHtml}
         <div class="token-models">${modelChips}</div>
-        ${sessions.length > 0 ? `<details class="token-sessions"${sessionsOpen ? ' open' : ''}><summary>Active Sessions (${sessions.length})</summary>${sessionRows}</details>` : ''}
+        ${agentSessions.length > 0 ? `<details class="token-sessions"${sessionsOpen ? ' open' : ''}><summary>Active Sessions (${agentSessions.length})</summary>${sessionRows}</details>` : ''}
       </div>`;
     }
 
