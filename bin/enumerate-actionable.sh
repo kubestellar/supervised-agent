@@ -8,6 +8,8 @@
 #   - Issues with labels: do-not-merge, auto-qa-tuning-report, or starting with "LFX"
 #   - PRs that modify ADOPTERS.md / ADOPTERS.MD (checked via file list)
 #   - Draft PRs (isDraft=true)
+#   - External contributor issues missing a commit SHA in the body
+#     (auto-labeled hold, comment posted asking for the SHA)
 
 set -euo pipefail
 
@@ -40,6 +42,9 @@ for repo in "${REPOS[@]}"; do
       repo: \"${repo}\",
       number: .number,
       title: .title,
+      body: (.body // \"\"),
+      author: .user.login,
+      author_type: .user.type,
       created_at: .created_at,
       labels: [.labels[].name],
       assignees: [.assignees[].login],
@@ -178,6 +183,72 @@ filtered = [p for p in prs if p['number'] not in exclude_nums]
 print(json.dumps(filtered))
 " "$adopters_prs" 2>/dev/null || echo "[]")
 
+# --- SHA enforcement for external contributor issues ---
+# Internal authors: their issues don't need a SHA (auto-generated issues, maintainer issues)
+INTERNAL_AUTHORS="clubanderson copilot-swe-agent[bot] github-actions[bot] dependabot[bot]"
+SHA_HOLD_MARKER="/var/run/hive-metrics/sha_hold_posted"
+mkdir -p "$(dirname "$SHA_HOLD_MARKER")"
+
+sha_result=$(echo "$all_issues" | python3 -c "
+import json, sys, re
+
+issues = json.load(sys.stdin)
+internal = set(sys.argv[1].split())
+
+SHA_PATTERN = re.compile(r'[0-9a-f]{7,40}\b')
+
+missing_sha = []
+kept = []
+
+for i in issues:
+    author = i.get('author', '')
+    author_type = i.get('author_type', 'User')
+    if author in internal or author_type == 'Bot':
+        kept.append(i)
+        continue
+    body = i.get('body', '') or ''
+    if SHA_PATTERN.search(body):
+        kept.append(i)
+    else:
+        missing_sha.append(i)
+
+print(json.dumps({'kept': kept, 'missing_sha': missing_sha}))
+" "$INTERNAL_AUTHORS" 2>/dev/null || echo '{"kept":[],"missing_sha":[]}')
+
+# For issues missing SHA: label hold + post comment (only once per issue)
+missing_sha_issues=$(echo "$sha_result" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+for i in d.get('missing_sha', []):
+    print(f\"{i['repo']}:{i['number']}\")
+" 2>/dev/null)
+
+if [ -n "$missing_sha_issues" ]; then
+  for entry in $missing_sha_issues; do
+    repo="${entry%%:*}"
+    num="${entry##*:}"
+    marker_file="${SHA_HOLD_MARKER}_${repo//\//_}_${num}"
+    if [ ! -f "$marker_file" ]; then
+      gh issue edit "$num" --repo "$repo" --add-label "hold" 2>/dev/null || true
+      gh issue comment "$num" --repo "$repo" --body "$(cat <<'COMMENT'
+Thanks for filing this issue! To help us reproduce and investigate, could you please include the **commit SHA** of the build you're running?
+
+You can find it by:
+- **Command line**: `git rev-parse HEAD` in your repo checkout
+- **Console UI**: Check the version/build info in the footer or About dialog
+
+We've put this issue on hold until we can confirm which version it was filed against. Once you add the SHA, we'll pick it back up right away.
+COMMENT
+)" 2>/dev/null || true
+      touch "$marker_file"
+      log "SHA-HOLD: ${repo}#${num} — external contributor issue missing commit SHA, labeled hold"
+    fi
+  done
+fi
+
+# Use only the kept issues (SHA-verified or internal)
+all_issues=$(echo "$sha_result" | python3 -c "import json,sys; print(json.dumps(json.load(sys.stdin)['kept']))" 2>/dev/null || echo "[]")
+
 # --- Build final output ---
 issue_count=$(echo "$all_issues" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
 pr_count=$(echo "$all_prs" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
@@ -199,6 +270,11 @@ for i in issues:
     except:
         i['age_minutes'] = 0
 
+# Strip body from output (used for SHA check only, too large to keep)
+for i in issues:
+    i.pop('body', None)
+    i.pop('author_type', None)
+
 SLA_MINUTES = 30
 sla_violations = [i for i in issues if i.get('age_minutes', 0) > SLA_MINUTES and i.get('repo') == 'kubestellar/console']
 
@@ -216,7 +292,8 @@ result = {
     'exclusions': {
         'labels': ['hold', 'on-hold', 'hold/review', 'do-not-merge', 'auto-qa-tuning-report', 'LFX*'],
         'files': ['ADOPTERS.md', 'ADOPTERS.MD'],
-        'drafts': True
+        'drafts': True,
+        'external_issues_missing_sha': True
     }
 }
 print(json.dumps(result, indent=2))
