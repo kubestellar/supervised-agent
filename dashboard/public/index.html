@@ -1236,22 +1236,50 @@
 function computeHourlyBurnRates() {
   const MIN_POINTS = 6;
   if (historyData.length < MIN_POINTS) return null;
+
+  // Collect points where tokenTotal actually changed (skip stale repeats)
+  const changePoints = [];
+  let lastVal = -1;
+  for (const s of historyData) {
+    const v = s.tokenTotal || 0;
+    if (v !== lastVal) {
+      changePoints.push({ t: s.t, v });
+      lastVal = v;
+    }
+  }
+  if (changePoints.length < 3) return null;
+
+  // Compute rate between consecutive change points
+  const rawRates = [];
+  for (let i = 1; i < changePoints.length; i++) {
+    const dt = (changePoints[i].t - changePoints[i - 1].t) / 1000;
+    if (dt <= 0) continue;
+    const delta = changePoints[i].v - changePoints[i - 1].v;
+    if (delta <= 0) continue;
+    rawRates.push({ t: changePoints[i].t, rate: (delta / dt) * 3600 });
+  }
+  if (rawRates.length < 3) return null;
+
+  // Cap outliers at p95 to remove collector-reset spikes
+  const sorted = rawRates.map(r => r.rate).sort((a, b) => a - b);
+  const P95_IDX = Math.floor(sorted.length * 0.95);
+  const cap = sorted[Math.min(P95_IDX, sorted.length - 1)] * 1.5;
+  for (const r of rawRates) { if (r.rate > cap) r.rate = cap; }
+
+  // Bucket into 5-minute windows
   const BUCKET_MS = 300000;
   const rates = [];
   let i = 0;
-  while (i < historyData.length) {
-    const bucketStart = historyData[i].t;
-    const bucketEnd = bucketStart + BUCKET_MS;
-    let j = i;
-    while (j < historyData.length && historyData[j].t < bucketEnd) j++;
-    if (j > i && j < historyData.length) {
-      const dt = (historyData[j - 1].t - historyData[i].t) / 1000;
-      if (dt > 0) {
-        const delta = (historyData[j - 1].tokenTotal || 0) - (historyData[i].tokenTotal || 0);
-        rates.push({ t: bucketStart, rate: Math.max(0, (delta / dt) * 3600) });
-      }
+  while (i < rawRates.length) {
+    const bucketEnd = rawRates[i].t + BUCKET_MS;
+    let sum = 0, count = 0;
+    const bt = rawRates[i].t;
+    while (i < rawRates.length && rawRates[i].t < bucketEnd) {
+      sum += rawRates[i].rate;
+      count++;
+      i++;
     }
-    i = j || i + 1;
+    if (count > 0) rates.push({ t: bt, rate: sum / count });
   }
   return rates.length >= 3 ? rates : null;
 }
@@ -1376,7 +1404,7 @@ function burnAreaChart() {
   const lastTime = new Date(rates[rates.length - 1].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
 
   return `<div class="burn-area-wrap">
-    <div class="burn-area-title">burn rate distribution · <span style="color:rgba(57,210,192,0.6)">p25–p75 band</span> · <span style="color:#39d2c0">actual</span></div>
+    <div class="burn-area-title" style="text-align:center">burn rate distribution · <span style="color:rgba(57,210,192,0.6)">p25–p75 band</span> · <span style="color:#39d2c0">actual</span></div>
     <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px">
       <polygon points="${bandTop.join(' ')} ${bandBot.join(' ')}" fill="rgba(57,210,192,0.12)" stroke="none"/>
       <polyline points="${medianPts.join(' ')}" fill="none" stroke="rgba(57,210,192,0.3)" stroke-width="1" stroke-dasharray="2,2"/>
@@ -1444,7 +1472,11 @@ function burnAreaChart() {
 
       el.innerHTML = `<div class="token-panel">
         <div class="token-title">Token Usage <span class="lookback">${tokens.lookbackHours || 24}h window · ${t.sessions} sessions</span></div>
-        <div class="token-grid" style="align-items:center">${intensityGauge()}
+        <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+          ${intensityGauge()}
+          <div style="flex:1;min-width:280px">${burnAreaChart()}</div>
+        </div>
+        <div class="token-grid">
           <div class="token-stat"><div class="spark-row"><span class="tval" style="color:var(--cyan)">${fmtTokens(totalTokens)}</span>${totalSpark}</div><div class="tlabel">total tokens</div></div>
           <div class="token-stat"><div class="spark-row"><span class="tval" style="color:var(--blue)">${fmtTokens(t.input)}</span>${sparkSvg(getHistorySeries('tokenInput'), '#58a6ff')}</div><div class="tlabel">input</div></div>
           <div class="token-stat"><div class="spark-row"><span class="tval" style="color:var(--purple)">${fmtTokens(t.output)}</span>${sparkSvg(getHistorySeries('tokenOutput'), '#bc8cff')}</div><div class="tlabel">output</div></div>
@@ -1453,7 +1485,6 @@ function burnAreaChart() {
           <div class="token-stat"><div class="spark-row"><span class="tval">${t.messages}</span>${sparkSvg(getHistorySeries('tokenMessages'), '#8b949e')}</div><div class="tlabel">messages</div></div>
         </div>
         ${agentSparkRows ? `<div class="token-grid" style="margin-top:4px">${agentSparkRows}</div>` : ''}
-        ${burnAreaChart()}
         ${advisorHtml}
         <div class="token-models">${modelChips}</div>
         ${sessions.length > 0 ? `<details class="token-sessions"${sessionsOpen ? ' open' : ''}><summary>Active Sessions (${sessions.length})</summary>${sessionRows}</details>` : ''}
