@@ -872,4 +872,20 @@ case "$TARGET" in
 esac
 
 bd dolt push 2>&1 | tee -a "$LOG" || log "WARN: bd dolt push failed (non-fatal)"
+
+# Merge all agent JSONL exports into central ledger for dashboard/supervisor visibility
+CENTRAL_ISSUES="/tmp/hive/.beads/issues.jsonl"
+CENTRAL_INTERACTIONS="/tmp/hive/.beads/interactions.jsonl"
+{
+  for agent_dir in /home/dev/{scanner,reviewer,architect,outreach,supervisor}-beads; do
+    [ -f "$agent_dir/.beads/issues.jsonl" ] && cat "$agent_dir/.beads/issues.jsonl"
+  done
+} > "${CENTRAL_ISSUES}.tmp" 2>/dev/null && mv "${CENTRAL_ISSUES}.tmp" "$CENTRAL_ISSUES" || true
+{
+  for agent_dir in /home/dev/{scanner,reviewer,architect,outreach,supervisor}-beads; do
+    [ -f "$agent_dir/.beads/interactions.jsonl" ] && cat "$agent_dir/.beads/interactions.jsonl"
+  done
+} > "${CENTRAL_INTERACTIONS}.tmp" 2>/dev/null && mv "${CENTRAL_INTERACTIONS}.tmp" "$CENTRAL_INTERACTIONS" || true
+log "Central ledger synced ($(wc -l < "$CENTRAL_ISSUES" 2>/dev/null || echo 0) issues)"
+
 log "DONE"
