@@ -170,20 +170,19 @@ Fixes #NNNN. Return PR number.
 All project repos are scanned equally. Do NOT skip repos or defer non-console work.
 
 ```bash
-# 1. Oldest-first issue list — ALL project repos
-for repo in kubestellar/console kubestellar/docs kubestellar/console-kb kubestellar/kubestellar-mcp; do
-  echo "=== $repo ==="
-  unset GITHUB_TOKEN && gh issue list --repo "$repo" --state open \
-    --json number,title,createdAt,labels --limit 30 | \
-    jq -r --arg repo "$repo" '[.[] | select([.labels[].name] | any(. == "do-not-merge" or . == "hold" or startswith("LFX") or . == "auto-qa-tuning-report") | not)] | sort_by(.createdAt) | .[0:10] | .[] | "\(((now - (.createdAt | fromdate)) / 60)m \($repo)#\(.number) \(.title | .[0:55])"'
-done
+# 1. Read actionable issues (pre-filtered by enumerator — hold, ADOPTERS, LFX, do-not-merge already excluded)
+cat /var/run/hive-metrics/actionable.json | jq -r '.issues.items[] | "\(.age_minutes)m \(.repo)#\(.number) \(.title | .[0:55])"'
 
-# 2. Open PR list — ALL project repos
-for repo in kubestellar/console kubestellar/docs kubestellar/console-kb kubestellar/kubestellar-mcp; do
-  echo "=== $repo PRs ==="
-  unset GITHUB_TOKEN && gh pr list --repo "$repo" --state open \
-    --json number,title,author,isDraft,mergeable,statusCheckRollup --limit 20
-done
+# 2. Read actionable PRs (pre-filtered — no hold, no ADOPTERS, no drafts)
+cat /var/run/hive-metrics/actionable.json | jq -r '.prs.items[] | "\(.repo)#\(.number) \(.title | .[0:55]) by \(.author)"'
+
+# 3. Read merge-eligible PRs (CI green, AI-authored, ready to merge)
+cat /var/run/hive-metrics/merge-eligible.json | jq -r '.merge_eligible[] | "\(.repo)#\(.number) \(.title)"'
+```
+
+⛔ **NEVER run `gh issue list` or `gh pr list` directly.** The enumerator (`/var/run/hive-metrics/actionable.json`) is your ONLY source for issues and PRs. It is pre-filtered to exclude hold-labeled items, ADOPTERS PRs, drafts, and exempt labels. Running your own queries bypasses these safety filters and has caused incidents (hold issues closed, ADOPTERS PRs merged without approval).
+
+⛔ **NEVER merge a PR that is not in `/var/run/hive-metrics/merge-eligible.json`.** The merge gate checks CI status and author classification. Only merge PRs listed there.
 
 # 3. Dispatch: oldest issues across ALL repos, fire Agent tool calls in parallel
 # Use repo-appropriate worktree paths (see dispatch template below)
@@ -412,9 +411,7 @@ Within the same-age bucket (tie-break), sub-order:
 **Concrete pre-flight query (use this — sorts by age)**:
 
 ```bash
-unset GITHUB_TOKEN && gh issue list --repo kubestellar/console --state open \
-  --json number,title,createdAt,labels --limit 100 | \
-  jq -r '[.[] | select([.labels[].name] | any(. == "do-not-merge" or . == "hold" or startswith("LFX")) | not)] | sort_by(.createdAt) | .[] | "\(((now - (.createdAt | fromdate)) / 60) | floor)m #\(.number) \(.title | .[0:60])"'
+cat /var/run/hive-metrics/actionable.json | jq -r '.issues.items | sort_by(.age_minutes) | reverse | .[] | "\(.age_minutes)m \(.repo)#\(.number) \(.title | .[0:60])"'
 ```
 
 Output is already sorted **oldest first**. Dispatch fix agents in that order. Don't cherry-pick quick wins if a 10-hour-old bug is higher in the list.
@@ -453,7 +450,7 @@ A bead can get stuck in `in_progress` if the fix agent dies mid-iteration — us
 For each returned bead owned by `scanner`:
 
 1. **Check `updated_at`**: if more than 20 minutes old AND no linked PR has been opened for the tracked issue, consider it stuck.
-2. **Verify on GitHub**: `gh pr list --repo <repo> --search "<issue-ref>" --json number,state` — if a PR exists that references the issue, the work is really in flight (or already landed), leave the bead alone and update its metadata with `--set-metadata pr_ref=<num>`.
+2. **Verify on GitHub**: `cat /var/run/hive-metrics/actionable.json | jq '.prs.items[] | select(.title | test("<issue-ref>"))'` — if a PR exists that references the issue, the work is really in flight (or already landed), leave the bead alone and update its metadata with `--set-metadata pr_ref=<num>`.
 3. **Reset**: if no PR and bead is stale, reset with `bd update <id> --status open --set-metadata sweep_reason=stale_no_pr sweep_at=<iso-ts>` so it's eligible for re-dispatch on the next iteration.
 4. **Log** the sweep count in the iteration block as `Stale sweep: N reset (<id1>, <id2>, ...)`.
 
@@ -522,15 +519,13 @@ If `bd` is missing or errors, log `Beads: skipped (bd unavailable: <error>)` and
 
 **Always process OLDEST issues first.** The 30-minute customer SLA makes age the primary priority signal. No cherry-picking quick wins from recent inbound if older bugs are in the queue. Dispatch fix agents in oldest→newest order.
 
-**Canonical sort** (run every iteration before dispatch planning):
+**Canonical sort** (read from enumerator — already pre-filtered and sorted):
 
 ```bash
-unset GITHUB_TOKEN && gh issue list --repo kubestellar/console --state open \
-  --json number,title,createdAt,labels --limit 100 \
-  | jq -r '[.[] | select([.labels[].name] | any(. == "do-not-merge" or . == "hold" or startswith("LFX")) | not)] | sort_by(.createdAt) | .[] | "\((((now - (.createdAt | fromdate)) / 60) | floor))m #\(.number) [\([.labels[].name] | join(","))] \(.title | .[0:70])"'
+cat /var/run/hive-metrics/actionable.json | jq -r '.issues.items | sort_by(.age_minutes) | reverse | .[] | "\(.age_minutes)m \(.repo)#\(.number) [\(.labels | join(","))] \(.title | .[0:70])"'
 ```
 
-Output is oldest→newest. **Dispatch fix agents for the 6-8 oldest this iteration.** Queue-debt + cross-lane-assist rules still apply (queue > 20 → dispatch breadth). Exempt trackers (LFX/do-not-merge) are already filtered; other exemptions (phase beads in flight, external contributor engaged) still gate claiming but not sort position.
+Output is oldest→newest. **Dispatch fix agents for the 6-8 oldest this iteration.** Queue-debt + cross-lane-assist rules still apply (queue > 20 → dispatch breadth). Exempt trackers (LFX/do-not-merge/hold/ADOPTERS) are already filtered by the enumerator; other exemptions (phase beads in flight, external contributor engaged) still gate claiming but not sort position.
 
 ## Customer SLA — 30 MINUTES from issue-filed to PR-merged (HARD PROMISE)
 
@@ -541,17 +536,14 @@ Output is oldest→newest. **Dispatch fix agents for the 6-8 oldest this iterati
 - Nightly regressions
 - Issues with no labels at all
 
-**Every iteration's first action**: compute SLA status for all open kind/bug issues:
+**Every iteration's first action**: compute SLA status from the enumerator (already pre-filtered):
 
 ```bash
-unset GITHUB_TOKEN && gh issue list --repo kubestellar/console --state open \
-  --json number,title,createdAt,labels \
-  --limit 100 | jq -r '[.[] | select([.labels[].name] | any(. == "do-not-merge" or . == "hold" or startswith("LFX") ) | not )] | .[] | "\(((now - (.createdAt | fromdate)) / 60) | floor) \(.number) \(.title | .[0:60])"' \
-  | sort -nr | head -20
+cat /var/run/hive-metrics/actionable.json | jq -r '.sla_violations as $v | .issues.items | sort_by(.age_minutes) | reverse | .[] | "\(.age_minutes) \(.repo)#\(.number) \(.title | .[0:60])"' | head -20
 ```
-Excludes only explicit exempt trackers (do-not-merge, LFX mentorships). Everything else counts — including nightly-regression, workflow-failure, and test-failure issues.
+The enumerator already excludes hold, do-not-merge, LFX, and ADOPTERS. Everything else counts — including nightly-regression, workflow-failure, and test-failure issues. SLA violation count is at `.sla_violations`.
 
-Output is `age_minutes number title`. Anything > 30 is an SLA violation.
+Output is `age_minutes repo#number title`. Anything > 30 is an SLA violation.
 
 **SLA-violation response (MANDATORY)**:
 
@@ -622,12 +614,13 @@ Scanner owns pre-merge PR review per the lane boundary. This runs on EVERY itera
 ### Pre-flight query
 
 ```bash
-unset GITHUB_TOKEN && gh pr list --repo kubestellar/console --state open \
-  --json number,title,author,createdAt,labels,isDraft,mergeable,statusCheckRollup \
-  --limit 30 | jq -r '.[] | select(.isDraft | not) | "\(.number) @\(.author.login) \(.createdAt[:16]) \(.title | .[0:70])"'
+# All actionable PRs (pre-filtered: no drafts, no hold, no ADOPTERS, no do-not-merge)
+cat /var/run/hive-metrics/actionable.json | jq -r '.prs.items[] | "\(.repo)#\(.number) @\(.author) \(.title | .[0:70])"'
+# Merge-eligible PRs (CI green, AI-authored, mergeable)
+cat /var/run/hive-metrics/merge-eligible.json | jq -r '.merge_eligible[] | "\(.repo)#\(.number) \(.title)"'
 ```
 
-Repeat for the 4 other repos. Collect all open non-draft PRs.
+All repos are already included. The enumerator covers console, docs, console-kb, kubestellar-mcp.
 
 ### Triage decision tree (per PR)
 

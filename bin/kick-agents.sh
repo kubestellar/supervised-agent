@@ -611,12 +611,34 @@ kick() {
 # Policy hash compression: if CLAUDE.md (and skill files) are unchanged since
 # the last kick, we tell the agent to skip re-reading to save tokens.
 
+# --- Pre-kick enumeration: canonical actionable issues/PRs + merge eligibility ---
+/tmp/hive/bin/enumerate-actionable.sh 2>/dev/null || log "WARN: enumerate-actionable.sh failed (non-fatal)"
+/tmp/hive/bin/merge-gate.sh 2>/dev/null || log "WARN: merge-gate.sh failed (non-fatal)"
+
+# Build actionable summary for scanner kick message
+_ENUM_FILE="/var/run/hive-metrics/actionable.json"
+_MERGE_FILE="/var/run/hive-metrics/merge-eligible.json"
+_ENUM_SUMMARY=""
+if [ -f "$_ENUM_FILE" ]; then
+  _ENUM_ISSUES=$(python3 -c "import json; print(json.load(open('$_ENUM_FILE')).get('issues',{}).get('count',0))" 2>/dev/null || echo 0)
+  _ENUM_PRS=$(python3 -c "import json; print(json.load(open('$_ENUM_FILE')).get('prs',{}).get('count',0))" 2>/dev/null || echo 0)
+  _ENUM_SLA=$(python3 -c "import json; print(json.load(open('$_ENUM_FILE')).get('issues',{}).get('sla_violations',0))" 2>/dev/null || echo 0)
+  _ENUM_SUMMARY="ACTIONABLE: ${_ENUM_ISSUES} issues, ${_ENUM_PRS} PRs"
+  [ "$_ENUM_SLA" -gt 0 ] 2>/dev/null && _ENUM_SUMMARY="${_ENUM_SUMMARY}, ${_ENUM_SLA} SLA VIOLATIONS"
+  _ENUM_SUMMARY="${_ENUM_SUMMARY}."
+fi
+_MERGE_SUMMARY=""
+if [ -f "$_MERGE_FILE" ]; then
+  _MERGE_COUNT=$(python3 -c "import json; print(json.load(open('$_MERGE_FILE')).get('count',0))" 2>/dev/null || echo 0)
+  [ "$_MERGE_COUNT" -gt 0 ] 2>/dev/null && _MERGE_SUMMARY=" MERGE-READY: ${_MERGE_COUNT} PRs (see /var/run/hive-metrics/merge-eligible.json)."
+fi
+
 if policy_changed "scanner"; then
   _SCANNER_POLICY_INSTR="Read your CLAUDE.md."
 else
   _SCANNER_POLICY_INSTR="Policy unchanged since last kick — skip CLAUDE.md re-read, continue with standing instructions."
 fi
-SCANNER_MSG="[agent:scanner] [KICK] git pull /tmp/hive. ${_SCANNER_POLICY_INSTR} AUTONOMOUS SCAN ALL REPOS: kubestellar/console, kubestellar/docs, kubestellar/console-kb, kubestellar/kubestellar-mcp, kubestellar/console-marketplace. Query open issues AND open PRs on EVERY repo (oldest-first), dispatch fix agents for 4-6 oldest across ALL repos, merge green PRs. Do NOT stand by — if issues exist on ANY repo, work them. 'Not actionable' and 'not a code fix' are NOT valid reasons to skip an open issue — dispatch a fix agent with a best-effort PR. Deferred beads older than 1 pass MUST be retried. NEVER run vitest, npm test, npm run build, tsc, or any test/build locally — dispatch fix agents instead, they read CI logs. Beads: ~/scanner-beads"
+SCANNER_MSG="[agent:scanner] [KICK] git pull /tmp/hive. ${_SCANNER_POLICY_INSTR} ${_ENUM_SUMMARY}${_MERGE_SUMMARY} Read /var/run/hive-metrics/actionable.json for the canonical issue/PR list (pre-filtered, hold/ADOPTERS excluded). NEVER run gh issue list or gh pr list directly — the enumerator is your only source. Read /var/run/hive-metrics/merge-eligible.json for merge-ready PRs. Dispatch fix agents for 4-6 oldest issues across ALL repos, merge only from the merge-eligible list. Do NOT stand by — if issues exist, work them. Deferred beads older than 1 pass MUST be retried. NEVER run vitest, npm test, npm run build, tsc, or any test/build locally — dispatch fix agents instead, they read CI logs. Beads: ~/scanner-beads"
 
 # Build live health preamble for reviewer — tells it exactly what's red RIGHT NOW
 _rh_json=$(/tmp/hive/dashboard/health-check.sh 2>/dev/null || echo '{}')
