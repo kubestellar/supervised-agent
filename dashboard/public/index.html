@@ -1323,12 +1323,9 @@ function intensityGauge() {
 
   const polyline = pts.map(p => p.join(',')).join(' ');
 
-  const firstTime = new Date(rates[0].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
-  const lastTime = new Date(rates[rates.length - 1].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
-
-  return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:260px">
+  return `<div class="burn-chart-wrap">
     <div class="burn-chart-title">burn rate (tok/hr)</div>
-    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px">
       <line x1="${PAD}" y1="${yPeak}" x2="${W - PAD}" y2="${yPeak}" stroke="#f85149" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.5"/>
       <line x1="${PAD}" y1="${yAvg}" x2="${W - PAD}" y2="${yAvg}" stroke="#d29922" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.5"/>
       <line x1="${PAD}" y1="${yLow}" x2="${W - PAD}" y2="${yLow}" stroke="#58a6ff" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.5"/>
@@ -1338,7 +1335,6 @@ function intensityGauge() {
       <polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="${lastPt[0]}" cy="${lastPt[1]}" r="3" fill="${color}" stroke="#0d1117" stroke-width="1"/>
     </svg>
-    <div style="display:flex;justify-content:space-between;width:100%;font-size:0.6rem;color:var(--muted)">${firstTime}<span>${lastTime}</span></div>
     <div class="burn-context">
       <div class="bc-stat"><span class="bc-val" style="color:#f85149">${fmtTokens(peak)}</span><span class="bc-label">peak/hr</span></div>
       <div class="bc-stat"><span class="bc-val" style="color:#d29922">${fmtTokens(avg)}</span><span class="bc-label">avg/hr</span></div>
@@ -1404,9 +1400,6 @@ function burnAreaChart() {
   const belowBand = nowVal < buckets[buckets.length - 1].p25;
   const dotColor = aboveBand ? '#f85149' : belowBand ? '#58a6ff' : '#3fb950';
 
-  const firstTime = new Date(rates[0].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
-  const lastTime = new Date(rates[rates.length - 1].t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
-
   return `<div class="burn-area-wrap">
     <div class="burn-area-title" style="text-align:center">burn rate distribution · <span style="color:rgba(57,210,192,0.6)">p25–p75 band</span> · <span style="color:#39d2c0">actual</span></div>
     <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px">
@@ -1415,7 +1408,6 @@ function burnAreaChart() {
       <polyline points="${nowPts.join(' ')}" fill="none" stroke="#39d2c0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="${lastNow.split(',')[0]}" cy="${lastNow.split(',')[1]}" r="3" fill="${dotColor}" stroke="#0d1117" stroke-width="1"/>
     </svg>
-    <div style="display:flex;justify-content:space-between;font-size:0.6rem;color:var(--muted)">${firstTime}<span>${lastTime}</span></div>
   </div>`;
 }
 
@@ -1476,9 +1468,9 @@ function burnAreaChart() {
 
       el.innerHTML = `<div class="token-panel">
         <div class="token-title">Token Usage <span class="lookback">${tokens.lookbackHours || 24}h window · ${t.sessions} sessions</span></div>
-        <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+        <div style="margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)">
           ${intensityGauge()}
-          <div style="flex:1;min-width:280px">${burnAreaChart()}</div>
+          ${burnAreaChart()}
         </div>
         <div class="token-grid">
           <div class="token-stat"><div class="spark-row"><span class="tval" style="color:var(--cyan)">${fmtTokens(totalTokens)}</span>${totalSpark}</div><div class="tlabel">total tokens</div></div>
