@@ -27,6 +27,7 @@ git pull --rebase origin main --quiet 2>/dev/null || {
 AFTER=$(git rev-parse HEAD)
 
 SYNCED=""
+DASHBOARD_CHANGED=""
 
 if [ "$BEFORE" != "$AFTER" ]; then
   CHANGED_FILES=$(git diff --name-only "$BEFORE" "$AFTER")
@@ -41,6 +42,7 @@ if [ "$BEFORE" != "$AFTER" ]; then
       SYNCED="$SYNCED $filename"
     fi
   done
+  DASHBOARD_CHANGED=$(echo "$CHANGED_FILES" | grep '^dashboard/' || true)
 fi
 
 # Drift check: even if HEAD unchanged, installed files may be stale
@@ -54,6 +56,13 @@ for src in "$HIVE_REPO"/bin/*.sh; do
     SYNCED="$SYNCED $filename(drift)"
   fi
 done
+
+# Restart dashboard if any dashboard/ files changed
+if [ -n "$DASHBOARD_CHANGED" ]; then
+  sudo systemctl restart hive-dashboard.service 2>/dev/null && \
+    SYNCED="$SYNCED dashboard(restart)" || \
+    log "WARN: failed to restart hive-dashboard"
+fi
 
 if [ -n "$SYNCED" ]; then
   log "DEPLOY ${BEFORE:0:7}→${AFTER:0:7} — synced:$SYNCED"
