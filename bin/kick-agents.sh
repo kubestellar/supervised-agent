@@ -745,8 +745,9 @@ fi
 SCANNER_MSG="[agent:scanner] [KICK] git pull /tmp/hive. ${_SCANNER_POLICY_INSTR}
 YOUR WORK LIST (pre-filtered — hold/ADOPTERS/drafts excluded, classified):
 ${_WORK_LIST}${_CLUSTER_SECTION}${_MERGE_INLINE}
-⛔ NEVER run gh issue list or gh pr list — the work list above is your ONLY source. You may use gh issue view, gh pr view, gh pr merge, gh pr create on individual items.
-Use the model_recommendation for each issue (S=haiku, M=sonnet, C=opus). Bundle clustered issues into 1 agent per cluster. Skip issues with lane!=scanner. Dispatch fix agents for 4-6 oldest issues across ALL repos, merge only from the merge-ready list. Do NOT stand by — if issues exist, work them. NEVER run vitest, npm test, npm run build, tsc, or any test/build locally. Beads: ~/scanner-beads"
+⛔ NEVER run gh issue list, gh pr list, gh search issues, or gh search prs — the work list above is your ONLY source. You may use gh issue view, gh pr view, gh pr merge, gh pr create on individual items.
+⛔ NEVER post @copilot or @claude comments on issues. NEVER use gh issue comment to dispatch work. NEVER assign copilot-swe-agent[bot]. Posting @copilot comments does nothing and wastes cycles.
+WORKFLOW: For each issue, dispatch a sub-agent (Task tool or background agent) that does: 1) git worktree add /tmp/fix-NNNN -b fix/NNNN from the repo checkout, 2) cd into the worktree and make the fix, 3) git commit -s, 4) git push origin fix/NNNN, 5) gh pr create linking the issue. Dispatch 4-6 agents IN PARALLEL — do not single-thread. Use the model_recommendation for each issue (S=haiku, M=sonnet, C=opus). Bundle clustered issues into 1 agent per cluster. Skip issues with lane!=scanner. Merge only from the merge-ready list. Do NOT stand by — if issues exist, work them. NEVER run vitest, npm test, npm run build, tsc, or any test/build locally. Beads: ~/scanner-beads"
 
 # Build live health preamble for reviewer — tells it exactly what's red RIGHT NOW
 _rh_json=$(/tmp/hive/dashboard/health-check.sh 2>/dev/null || echo '{}')
