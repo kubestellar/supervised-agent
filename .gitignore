@@ -4,3 +4,6 @@
 /agent.env
 /config/agent.env
 examples/kubestellar/agents/agent.env
+
+# Beads ledger — runtime state, not source code
+.beads/
