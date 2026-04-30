@@ -3,7 +3,7 @@ Description=Pull and deploy hive repo every 5 minutes
 
 [Timer]
 OnBootSec=60
-OnUnitActiveSec=300
+OnUnitActiveSec=60
 Persistent=true
 
 [Install]
