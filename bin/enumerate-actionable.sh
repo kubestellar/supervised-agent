@@ -313,10 +313,12 @@ for marker_file in "${SHA_HOLD_MARKER}"_*; do
   mid="${marker_base#sha_hold_posted_}"
   mid="${mid%_${num}}"
   repo="${mid/_//}"
-  # Fetch current issue body + comments and check for SHA
-  body=$(gh_api_retry "repos/${repo}/issues/${num}" --jq '.body // ""' || echo "")
-  comments_text=$(gh_api_retry "repos/${repo}/issues/${num}/comments" --jq '[.[].body // ""] | join("\n")' || echo "")
-  has_sha=$(printf '%s\n%s' "$body" "$comments_text" | python3 -c "
+  # Fetch issue body + reporter login, then only check comments from the reporter
+  issue_json=$(gh_api_retry "repos/${repo}/issues/${num}" --jq '{body: (.body // ""), reporter: .user.login}' || echo '{"body":"","reporter":""}')
+  reporter=$(echo "$issue_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('reporter',''))" 2>/dev/null || echo "")
+  body=$(echo "$issue_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('body',''))" 2>/dev/null || echo "")
+  reporter_comments=$(gh_api_retry "repos/${repo}/issues/${num}/comments" --jq "[.[] | select(.user.login == \"${reporter}\") | .body // \"\"] | join(\"\\n\")" || echo "")
+  has_sha=$(printf '%s\n%s' "$body" "$reporter_comments" | python3 -c "
 import sys, re
 SHA_PATTERN = re.compile(r'[0-9a-f]{7,40}\b')
 print('yes' if SHA_PATTERN.search(sys.stdin.read()) else 'no')
