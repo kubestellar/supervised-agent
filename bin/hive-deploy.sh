@@ -1,6 +1,6 @@
 #!/bin/bash
 # hive-deploy.sh — pull latest hive repo and sync scripts to /usr/local/bin.
-# Called by systemd timer every 5 minutes. Ensures the installed scripts
+# Called by systemd timer every 60 seconds. Ensures the installed scripts
 # always match the repo without manual SCP or copy steps.
 
 set -euo pipefail
