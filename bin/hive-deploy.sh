@@ -26,30 +26,35 @@ git pull --rebase origin main --quiet 2>/dev/null || {
 }
 AFTER=$(git rev-parse HEAD)
 
-if [ "$BEFORE" = "$AFTER" ]; then
-  exit 0
-fi
-
-CHANGED_FILES=$(git diff --name-only "$BEFORE" "$AFTER")
-SCRIPTS_CHANGED=$(echo "$CHANGED_FILES" | grep '^bin/' || true)
-
-if [ -z "$SCRIPTS_CHANGED" ]; then
-  log "PULL $BEFORE→$AFTER — no bin/ changes, skipping sync"
-  exit 0
-fi
-
 SYNCED=""
-for script in $SCRIPTS_CHANGED; do
-  filename=$(basename "$script")
-  src="$HIVE_REPO/$script"
+
+if [ "$BEFORE" != "$AFTER" ]; then
+  CHANGED_FILES=$(git diff --name-only "$BEFORE" "$AFTER")
+  SCRIPTS_CHANGED=$(echo "$CHANGED_FILES" | grep '^bin/' || true)
+  for script in $SCRIPTS_CHANGED; do
+    filename=$(basename "$script")
+    src="$HIVE_REPO/$script"
+    dst="$INSTALL_DIR/$filename"
+    if [ -f "$src" ] && [ -f "$dst" ]; then
+      cp "$src" "$dst"
+      chmod +x "$dst"
+      SYNCED="$SYNCED $filename"
+    fi
+  done
+fi
+
+# Drift check: even if HEAD unchanged, installed files may be stale
+for src in "$HIVE_REPO"/bin/*.sh; do
+  filename=$(basename "$src")
   dst="$INSTALL_DIR/$filename"
-  if [ -f "$src" ] && [ -f "$dst" ]; then
+  [ -f "$dst" ] || continue
+  if ! cmp -s "$src" "$dst"; then
     cp "$src" "$dst"
     chmod +x "$dst"
-    SYNCED="$SYNCED $filename"
+    SYNCED="$SYNCED $filename(drift)"
   fi
 done
 
 if [ -n "$SYNCED" ]; then
-  log "DEPLOY $BEFORE→$AFTER — synced:$SYNCED"
+  log "DEPLOY ${BEFORE:0:7}→${AFTER:0:7} — synced:$SYNCED"
 fi
