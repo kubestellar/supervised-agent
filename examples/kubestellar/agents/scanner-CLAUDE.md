@@ -129,9 +129,28 @@ Scanner owns ONLY: ${PROJECT_ORG} GitHub issues and PRs (triage, bug fixes, CI h
 1. **ONLY merge PRs that appear in the MERGE-READY section of your kick message.** The deterministic pipeline pre-validates which PRs are safe to merge. If no MERGE-READY section exists in your kick, merge NOTHING.
 2. **NEVER merge a PR you created in this session.** Your PRs must pass CI and appear in a future kick's MERGE-READY list before being eligible.
 3. **NEVER merge a PR until ALL required CI checks show SUCCESS.** Run `gh pr checks <number> --repo <repo>` and verify every line says `pass` before merging. If any check is `pending` or `fail`, WAIT. **The only exception is `tide`** — Prow's merge queue stays pending without `lgtm`/`approved` labels. If `tide` is the only non-passing check, treat CI as green.
-4. **NEVER merge multiple PRs in rapid succession.** After merging one PR, wait for the next PR's CI to re-run against the updated base branch. PRs that were green before a merge may conflict after.
-5. **Merge sequence:** merge one → wait for next PR's CI to re-trigger and pass → merge next. Never batch-merge.
-6. **If CI fails after merge:** immediately file a bug issue and alert the supervisor.
+4. **CHECK COPILOT COMMENTS BEFORE MERGING.** After CI passes but before running `gh pr merge`, fetch Copilot review comments:
+   ```bash
+   unset GITHUB_TOKEN && gh api "repos/${REPO}/pulls/${PR_NUM}/comments" \
+     --jq '[.[] | select(.user.login == "Copilot")] | length'
+   ```
+   - If **0 comments**: proceed to merge.
+   - If **>0 comments**: dispatch a fix agent to address them on the same branch:
+     ```
+     Agent(subagent_type="general-purpose",
+           description="Address Copilot comments on PR #NNNN",
+           prompt="PR ${REPO}#NNNN has Copilot review comments that need addressing.
+                   Clone/worktree, checkout the PR branch, read the Copilot comments via
+                   gh api repos/${REPO}/pulls/NNNN/comments --jq '[.[] | select(.user.login == \"Copilot\")] | .[] | {body, path, line}',
+                   fix each finding, commit -s, push to the same branch. Return 'done' when complete.
+                   ⛔ HARD GATE: Do NOT run npm run build, npm run lint, tsc, vitest locally.",
+           run_in_background=true)
+     ```
+   - After the fix agent pushes, CI re-runs. On the NEXT kick, if CI is green and no new Copilot comments, merge.
+   - **Do NOT loop**: if Copilot comments persist after one fix attempt, merge anyway and let the reviewer handle post-merge. One attempt is enough.
+5. **NEVER merge multiple PRs in rapid succession.** After merging one PR, wait for the next PR's CI to re-run against the updated base branch. PRs that were green before a merge may conflict after.
+6. **Merge sequence:** merge one → wait for next PR's CI to re-trigger and pass → merge next. Never batch-merge.
+7. **If CI fails after merge:** immediately file a bug issue and alert the supervisor.
 
 ### Claim Protocol — Bead Per Dispatch (MANDATORY)
 
