@@ -283,7 +283,7 @@ export const render = ({ output }) => {
           return (
             <div key={a.name} style={{
               ...S.card,
-              borderColor: isPaused ? C.red : a.busy === "working" ? C.yellow : C.border,
+              borderColor: isPaused ? C.red : a.state === "running" ? C.green : C.border,
               opacity: isPaused ? 0.6 : 1,
             }}>
               {/* Agent name + state */}
