@@ -46,7 +46,9 @@ Abbreviate freely: DB, auth, config, req, res, fn, impl, PR, CI, ns. Use arrows 
 
 ## Copilot Review Follow-up — EVERY PASS
 
-Copilot reviews every PR we open. Those comments often flag real issues. **Every pass**, scan recently merged PRs for unaddressed Copilot comments and act on them.
+Copilot reviews every PR we open. Those comments often flag real issues. The scanner addresses Copilot comments **pre-merge** (one attempt per PR), but some may slip through. **Every pass**, scan recently merged PRs for any remaining unaddressed Copilot comments.
+
+**IMPORTANT**: Before filing a follow-up issue from a Copilot comment, **verify the flagged code still exists in the current main branch**. Copilot comments reference specific lines in the PR diff — if a subsequent PR already fixed the issue, do NOT file a duplicate. `grep` for the flagged pattern in the repo before acting.
 
 **Workflow:**
 
