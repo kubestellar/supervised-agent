@@ -110,12 +110,20 @@ class DashboardBridge {
       if (old.busy !== agent.busy) {
         const doing = agent.doing ? ` — ${agent.doing.slice(0, 100)}` : '';
         if (agent.busy === 'idle' && old.busy === 'working') {
-          this.sendMessage(agentMessage(name, `Completed${doing}`));
+          const summary = (agent.liveSummary || '').split('\n').slice(0, 3).join('\n').slice(0, 300);
+          this.sendMessage(agentMessage(name, `Completed${doing}${summary ? '\n```\n' + summary + '\n```' : ''}`));
         } else if (agent.busy === 'working' && old.busy === 'idle') {
           this.sendMessage(agentMessage(name, `Working${doing}`));
         } else if (agent.cadence === 'paused' && old.cadence !== 'paused') {
           this.sendMessage(agentMessage(name, 'Paused'));
         }
+      }
+
+      const oldSummary = (old.liveSummary || '').trim();
+      const newSummary = (agent.liveSummary || '').trim();
+      if (newSummary && newSummary !== oldSummary) {
+        const lines = newSummary.split('\n').slice(0, 4).join('\n').slice(0, 400);
+        this.sendMessage(agentMessage(name, `\n\`\`\`\n${lines}\n\`\`\``));
       }
     }
   }
