@@ -46,7 +46,14 @@ results = []
 for p in prs:
     repo = p['repo']
     num = p['number']
-    age = p.get('age_minutes', 0)
+
+    # Compute age from created_at (age_minutes may not exist in actionable.json)
+    from datetime import datetime, timezone
+    try:
+        created = datetime.fromisoformat(p.get('created_at', '').replace('Z', '+00:00'))
+        age = (datetime.now(timezone.utc) - created).total_seconds() / 60
+    except Exception:
+        age = p.get('age_minutes', 0)
 
     # Only sweep PRs older than threshold
     if age < $CONFLICT_AGE_MINUTES:
