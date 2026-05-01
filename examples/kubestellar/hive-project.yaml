@@ -235,6 +235,17 @@ governor:
     - changes-requested
     - waiting-on-author
 
+discord:
+  enabled: true
+  bot_token_env: "DISCORD_BOT_TOKEN"
+  channels:
+    primary: ""    # set via DISCORD_CHANNEL_PRIMARY env var
+    alerts: ""     # set via DISCORD_CHANNEL_ALERTS env var (falls back to primary)
+  post_pipeline_results: true
+  post_agent_transitions: true
+  post_governor_mode_changes: true
+  command_prefix: "!"
+
 dashboard:
   title: "KubeStellar Console Hive"
   port: 3001

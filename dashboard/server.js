@@ -605,12 +605,9 @@ app.post('/api/kick/:agent', (req, res) => {
     if (!session) {
       return res.status(400).json({ error: `no tmux session for ${agent}` });
     }
-    execFile('tmux', ['send-keys', '-t', session, '-l', `OPERATOR DIRECTIVE: ${extraPrompt}`], { timeout: 10000 }, (err) => {
+    execFile('tmux', ['send-keys', '-t', session, '-l', `OPERATOR DIRECTIVE: ${extraPrompt}\n`], { timeout: 10000 }, (err) => {
       if (err) return res.status(500).json({ error: err.message });
-      execFile('tmux', ['send-keys', '-t', session, 'Enter'], { timeout: 5000 }, (err2) => {
-        if (err2) return res.status(500).json({ error: err2.message });
-        res.json({ ok: true, output: `Sent custom prompt to ${agent}` });
-      });
+      res.json({ ok: true, output: `Sent custom prompt to ${agent}` });
     });
   } else {
     execFile('/usr/local/bin/hive', ['kick', agent], { timeout: 30000 }, (err, stdout) => {
