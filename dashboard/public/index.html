@@ -1605,6 +1605,7 @@ function burnAreaChart() {
       const SECONDS_PER_MINUTE = 60;
       const MINUTES_PER_HOUR = 60;
       const active = alerts.filter(a => {
+        if (a.api_reset_epoch && a.api_reset_epoch > 0) return now < a.api_reset_epoch;
         const ttl = a.ttl_seconds || GH_RATE_DEFAULT_TTL;
         return now - (a.detected_epoch || 0) < ttl;
       });

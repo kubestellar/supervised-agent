@@ -106,8 +106,12 @@ import json, sys
 data = json.load(sys.stdin)
 now = $now_epoch
 ttl = $TTL_SECONDS
-alerts = [a for a in data.get('alerts', [])
-          if now - a.get('detected_epoch', 0) < ttl]
+def is_active(a):
+    reset = a.get('api_reset_epoch', 0)
+    if reset > 0:
+        return now < reset
+    return now - a.get('detected_epoch', 0) < ttl
+alerts = [a for a in data.get('alerts', []) if is_active(a)]
 print(json.dumps(alerts))
 " 2>/dev/null || echo '[]')
 
