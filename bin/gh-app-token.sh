@@ -9,8 +9,8 @@
 
 set -euo pipefail
 
-APP_ID="${GH_APP_ID:-3568013}"
-INSTALLATION_ID="${GH_INSTALLATION_ID:-128685788}"
+APP_ID="${GH_APP_ID:?GH_APP_ID must be set (GitHub App → General → App ID)}"
+INSTALLATION_ID="${GH_APP_INSTALLATION_ID:?GH_APP_INSTALLATION_ID must be set (org settings → Installed GitHub Apps → URL tail)}"
 PRIVATE_KEY_FILE="${GH_APP_KEY_FILE:-/etc/hive/gh-app-key.pem}"
 CACHE_FILE="/var/run/hive-metrics/gh-app-token.cache"
 CACHE_MAX_AGE_SECONDS=3300  # refresh 5 min before expiry (tokens last 3600s)
