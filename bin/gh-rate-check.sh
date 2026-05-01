@@ -54,6 +54,16 @@ now_iso=$(date -Is)
 
 log() { echo "[$(date -Is)] GH-RATE-CHECK $*" >> /var/log/kick-agents.log; }
 
+# Fetch GitHub API rate limit reset times (cached per invocation)
+GH_BIN="${GH_BIN:-/usr/bin/gh}"
+_api_reset_cache=""
+get_api_reset_epoch() {
+  if [ -z "$_api_reset_cache" ]; then
+    _api_reset_cache=$($GH_BIN api rate_limit --jq '[.resources.graphql.reset, .resources.core.reset] | max' 2>/dev/null || echo "0")
+  fi
+  echo "$_api_reset_cache"
+}
+
 # --- Phase 1: Check and expire existing pullbacks ---
 for pullback_file in "$PULLBACK_STATE_DIR"/pullback_*.json; do
   [ -f "$pullback_file" ] || continue
@@ -63,6 +73,10 @@ for pullback_file in "$PULLBACK_STATE_DIR"/pullback_*.json; do
     paused_by_us=$(python3 -c "import json; print(' '.join(json.load(open('$pullback_file')).get('paused_agents', [])))" 2>/dev/null || echo "")
     cli_name=$(python3 -c "import json; print(json.load(open('$pullback_file')).get('cli', 'unknown'))" 2>/dev/null || echo "unknown")
     for agent in $paused_by_us; do
+      if [ -f "$GOVERNOR_FLAG_DIR/operator_paused_${agent}" ]; then
+        log "PULLBACK-SKIP $agent — operator-paused, not resuming after pullback for cli=$cli_name"
+        continue
+      fi
       if [ -f "$GOVERNOR_FLAG_DIR/paused_${agent}" ]; then
         rm -f "$GOVERNOR_FLAG_DIR/paused_${agent}"
         log "PULLBACK-RESUME $agent — rate-limit pullback expired for cli=$cli_name"
@@ -130,7 +144,10 @@ print('yes' if found else 'no')
     continue
   fi
 
-  # Add new alert with CLI info
+  # Fetch API reset time when we detect a rate limit
+  api_reset=$(get_api_reset_epoch)
+
+  # Add new alert with CLI info and API reset time
   new_alerts=$(echo "$new_alerts" | python3 -c "
 import json, sys
 alerts = json.load(sys.stdin)
@@ -141,10 +158,11 @@ alerts.append({
     'detected_epoch': int(sys.argv[4]),
     'message': sys.argv[5][:200],
     'ttl_seconds': int(sys.argv[6]),
-    'pullback_seconds': int(sys.argv[7])
+    'pullback_seconds': int(sys.argv[7]),
+    'api_reset_epoch': int(sys.argv[8])
 })
 print(json.dumps(alerts))
-" "$agent" "$agent_cli" "$now_iso" "$now_epoch" "$match_msg" "$TTL_SECONDS" "$PULLBACK_SECONDS" 2>/dev/null || echo "$new_alerts")
+" "$agent" "$agent_cli" "$now_iso" "$now_epoch" "$match_msg" "$TTL_SECONDS" "$PULLBACK_SECONDS" "$api_reset" 2>/dev/null || echo "$new_alerts")
 
   log "GH-RATE-LIMIT $agent (cli=$agent_cli) — $match_msg"
 
@@ -180,12 +198,14 @@ state = {
     'triggered_at': sys.argv[3],
     'expiry_epoch': int(sys.argv[4]),
     'paused_agents': sys.argv[5].split(',') if sys.argv[5] else [],
-    'already_paused': sys.argv[6].split(',') if sys.argv[6] else []
+    'already_paused': sys.argv[6].split(',') if sys.argv[6] else [],
+    'api_reset_epoch': int(sys.argv[7])
 }
 print(json.dumps(state, indent=2))
 " "$agent_cli" "$agent" "$now_iso" "$expiry_epoch" \
   "$(IFS=,; echo "${paused_by_pullback[*]}")" \
-  "$(IFS=,; echo "${already_paused[*]}")" > "$pullback_file" 2>/dev/null
+  "$(IFS=,; echo "${already_paused[*]}")" \
+  "$api_reset" > "$pullback_file" 2>/dev/null
 
     if [ ${#paused_by_pullback[@]} -gt 0 ]; then
       curl -s \
