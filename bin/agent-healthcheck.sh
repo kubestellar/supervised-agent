@@ -6,7 +6,7 @@
 # session (the supervisor will respawn it within ~10s) and push an alert.
 # After AGENT_MAX_RESPAWNS consecutive failed respawns we stop respawning and
 # send an escalation alert — manual intervention time.
-set -u
+set -euo pipefail
 
 : "${AGENT_SESSION_NAME:?AGENT_SESSION_NAME is required}"
 : "${AGENT_LOG_FILE:?AGENT_LOG_FILE is required}"

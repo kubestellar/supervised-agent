@@ -17,6 +17,9 @@
 #   GH_APP_ID, GH_APP_INSTALLATION_ID, GH_APP_KEY_FILE,
 #   HIVE_GITHUB_TOKEN (auto-generated if GitHub App is configured), GH_TOKEN
 
+HIVE_REPO_DIR="${HIVE_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd || echo /tmp/hive)}"
+export HIVE_REPO_DIR
+
 _HIVE_CONFIG="${HIVE_PROJECT_CONFIG:-/etc/hive/hive-project.yaml}"
 
 _hive_yq() {
