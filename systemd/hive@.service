@@ -5,13 +5,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=__AGENT_USER__
-Group=__AGENT_USER__
+User=dev
+Group=dev
 # Per-instance env file; default to /etc/hive/<instance>.env.
 # %i is the instance name from hive@<name>.service.
 EnvironmentFile=/etc/hive/%i.env
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=/usr/local/bin/agent-supervisor.sh
+ExecStart=/usr/local/bin/supervisor.sh
 Restart=always
 RestartSec=5
 StandardOutput=journal
