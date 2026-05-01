@@ -11,14 +11,26 @@ class CommandRouter {
 
   async handle(content, authorTag) {
     const parts = content.trim().split(/\s+/);
-    const cmd = (parts[0] || '').toLowerCase();
+    let cmd = (parts[0] || '').toLowerCase();
+
+    const ALIASES = {
+      s: 'status', st: 'status',
+      g: 'governor', gov: 'governor',
+      h: 'help', '?': 'help',
+      k: 'kick',
+      p: 'pause',
+      r: 'resume',
+      sc: 'scanner', rv: 'reviewer', ar: 'architect', ou: 'outreach', su: 'supervisor',
+    };
+    cmd = ALIASES[cmd] || cmd;
 
     if (cmd === 'status') return this._status();
     if (cmd === 'governor') return this._governor();
     if (cmd === 'help') return this._help();
 
     if (this.validAgents.includes(cmd)) {
-      const action = (parts[1] || '').toLowerCase();
+      let action = (parts[1] || '').toLowerCase();
+      action = ALIASES[action] || action;
       const rest = parts.slice(2).join(' ');
 
       if (action === 'kick' || (!action && !rest)) {
@@ -31,7 +43,8 @@ class CommandRouter {
     }
 
     if (['kick', 'pause', 'resume'].includes(cmd)) {
-      const agent = (parts[1] || '').toLowerCase();
+      let agent = (parts[1] || '').toLowerCase();
+      agent = ALIASES[agent] || agent;
       if (!this.validAgents.includes(agent)) {
         return commandResponse(false, `Unknown agent: ${agent}. Valid: ${this.validAgents.join(', ')}`);
       }
@@ -79,7 +92,7 @@ class CommandRouter {
     for (const agent of agents) {
       const name = agent.name || '?';
       const busy = agent.busy || agent.state || 'unknown';
-      const cadence = agent.cadence || '';
+      const cadence = agent.cadence || agent.nextKick || 'active';
       const doing = agent.doing ? ` — ${agent.doing.slice(0, 80)}` : '';
       lines.push(`  ${agentPrefix(name)} ${busy} (${cadence})${doing}`);
     }
