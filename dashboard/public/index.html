@@ -1634,8 +1634,15 @@ function burnAreaChart() {
         const remainSec = (p.expiry_epoch || 0) - now;
         const remainMin = Math.max(0, Math.ceil(remainSec / SECONDS_PER_MINUTE));
         const paused = (p.paused_agents || []).join(', ') || 'none';
+        let resetStr = '';
+        if (p.api_reset_epoch && p.api_reset_epoch > now) {
+          const resetDate = new Date(p.api_reset_epoch * 1000);
+          resetStr = ` · API quota resets ${resetDate.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`;
+        } else if (p.api_reset_epoch && p.api_reset_epoch <= now) {
+          resetStr = ' · API quota restored';
+        }
         return `<div style="font-size:0.72rem;color:#d29922;margin-top:6px;padding-top:6px;border-top:1px solid rgba(210,153,34,0.25)">
-          ⏸ Pullback (${esc(p.cli || '?')}): paused <strong>${esc(paused)}</strong> — resumes in ${remainMin}m
+          ⏸ Pullback (${esc(p.cli || '?')}): paused <strong>${esc(paused)}</strong> — resumes in ${remainMin}m${resetStr}
         </div>`;
       }).join('');
       el.innerHTML = `<div class="gh-rate-alert-title">GitHub API Rate Limit (${active.length} agent${active.length > 1 ? 's' : ''})</div>${items}${pullbackHtml}`;
