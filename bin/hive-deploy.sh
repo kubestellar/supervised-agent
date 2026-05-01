@@ -156,6 +156,35 @@ if echo "$SYNCED" | grep -q '\.service\|\.timer'; then
   sudo systemctl daemon-reload 2>/dev/null || true
 fi
 
+# Ensure per-agent watchdog services are enabled and running.
+# Each agent gets its own hive@<name>.service backed by agent-supervisor.sh,
+# which monitors the tmux session and restarts if it dies.
+# Migrate from monolithic hive.service to per-agent hive@<name>.service.
+# The old hive.service only watchdogged the supervisor; per-agent units
+# give each agent its own watchdog with Restart=always.
+# Don't stop the old service mid-run (its tmux sessions are independent),
+# just disable it so it won't start on next boot.
+if systemctl is-enabled --quiet hive.service 2>/dev/null; then
+  sudo systemctl disable hive.service 2>/dev/null || true
+  SYNCED="$SYNCED hive.service(disabled)"
+fi
+
+HIVE_AGENTS="supervisor scanner reviewer architect outreach"
+for agent in $HIVE_AGENTS; do
+  unit="hive@${agent}.service"
+  envfile="/etc/hive/${agent}.env"
+  [ -f "$envfile" ] || continue
+  if ! systemctl is-enabled --quiet "$unit" 2>/dev/null; then
+    sudo systemctl enable "$unit" 2>/dev/null && \
+      SYNCED="$SYNCED ${unit}(enabled)" || true
+  fi
+  if ! systemctl is-active --quiet "$unit" 2>/dev/null; then
+    sudo systemctl start "$unit" 2>/dev/null && \
+      SYNCED="$SYNCED ${unit}(started)" || \
+      log "WARN: failed to start $unit"
+  fi
+done
+
 if [ -n "$SYNCED" ]; then
   log "DEPLOY ${BEFORE:0:7}→${AFTER:0:7} — synced:$SYNCED"
 fi

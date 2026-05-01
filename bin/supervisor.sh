@@ -364,7 +364,11 @@ agent_alive() {
 trap 'log "supervisor exiting"; exit 0' TERM INT
 
 log "supervisor started (session=$SESSION, cli=$CLI, poll=${POLL_SEC}s, failover=$RATE_LIMIT_FAILOVER)"
-start_session
+if session_alive && agent_alive; then
+  log "existing session $SESSION is healthy; adopting without restart"
+else
+  start_session
+fi
 while true; do
   if ! session_alive; then
     log "session $SESSION gone; restarting"
