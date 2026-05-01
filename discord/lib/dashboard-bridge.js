@@ -7,7 +7,7 @@ const SSE_RECONNECT_BASE_MS = 5000;
 const SSE_RECONNECT_MAX_MS = 60000;
 const DASHBOARD_STALE_WARN_MS = 30000;
 const TOPIC_DEBOUNCE_MS = 5000;
-const TOPIC_AGENT_ORDER = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+const TOPIC_AGENT_ORDER_DEFAULT = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
 const TOPIC_STATE_ICONS = { working: '🟢', idle: '⚪', paused: '🔴' };
 
 class DashboardBridge {
@@ -142,7 +142,10 @@ class DashboardBridge {
     const agentMap = {};
     for (const a of agents) { if (a.name) agentMap[a.name] = a; }
 
-    const parts = TOPIC_AGENT_ORDER.map(name => {
+    const agentOrder = agents.length > 0
+      ? agents.map(a => a.name).filter(Boolean)
+      : TOPIC_AGENT_ORDER_DEFAULT;
+    const parts = agentOrder.map(name => {
       const a = agentMap[name];
       if (!a) return null;
       const emoji = (AGENTS[name] || {}).emoji || '?';

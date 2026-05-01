@@ -3,6 +3,8 @@
 # Installed at /usr/local/bin/gh (ahead of /usr/bin/gh in PATH).
 # Agents must read from /var/run/hive-metrics/actionable.json for listings.
 
+set -euo pipefail
+
 REAL_GH="/usr/bin/gh"
 
 # Inject GitHub App token for agent gh calls when available.

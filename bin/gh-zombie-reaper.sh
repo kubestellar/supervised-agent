@@ -6,6 +6,8 @@
 # running longer than the threshold (default 120s). Legitimate gh calls
 # complete in <10s; anything older is stuck in a rate-limit retry loop.
 
+set -euo pipefail
+
 MAX_AGE_SECONDS="${GH_ZOMBIE_MAX_AGE:-120}"
 LOG="/var/log/gh-zombie-reaper.log"
 KILLED=0
@@ -19,7 +21,7 @@ while IFS= read -r line; do
     cmdline=$(ps -p "$pid" -o args= 2>/dev/null)
     kill "$pid" 2>/dev/null
     echo "$(date -Iseconds) KILLED pid=$pid age=${age_seconds}s cmd=$cmdline" >> "$LOG"
-    ((KILLED++))
+    KILLED=$((KILLED + 1))
   fi
 done < <(ps -eo pid,etimes,comm | awk '$3 == "gh" {print $1, $2}')
 

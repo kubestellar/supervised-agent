@@ -26,6 +26,9 @@ const PROJECT_NAME = (projectConfig.project || {}).name || '';
 const PROJECT_PRIMARY_REPO = (projectConfig.project || {}).primary_repo || '';
 const PROJECT_ORG = (projectConfig.project || {}).org || '';
 const DASHBOARD_TITLE = ((projectConfig.dashboard || {}).title) || (PROJECT_NAME ? PROJECT_NAME + ' Hive' : 'Hive');
+const HIVE_REPO_DIR = process.env.HIVE_REPO_DIR || path.resolve(__dirname, '..');
+const ENABLED_AGENTS = ((projectConfig.agents || {}).enabled || ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach']);
+const ENABLED_AGENTS_PLUS_ALL = [...ENABLED_AGENTS, 'all'];
 
 // ── Centralized backend/model config (JS equivalent of backends.conf) ──────
 const KNOWN_BACKENDS = ['claude', 'copilot', 'gemini', 'codex', 'amazonq', 'goose', 'aider'];
@@ -458,7 +461,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 let gitVersionCache = { hash: '?', short: '?', behind: 0, dirty: false, ts: 0 };
 const GIT_VERSION_REFRESH_MS = 300000;
 function refreshGitVersion() {
-  const hiveDir = '/tmp/hive';
+  const hiveDir = HIVE_REPO_DIR;
   execFile('git', ['-C', hiveDir, 'rev-parse', 'HEAD'], { timeout: 5000 }, (err, hash) => {
     if (err) return;
     gitVersionCache.hash = hash.trim();
@@ -596,7 +599,7 @@ const TMUX_SESSION = {
 // Control endpoints
 app.post('/api/kick/:agent', (req, res) => {
   const agent = req.params.agent;
-  const allowed = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor', 'all'];
+  const allowed = ENABLED_AGENTS_PLUS_ALL;
   if (!allowed.includes(agent)) {
     return res.status(400).json({ error: `invalid agent: ${agent}` });
   }
@@ -629,7 +632,7 @@ app.post('/api/kick/:agent', (req, res) => {
 
 app.post('/api/switch/:agent/:backend', (req, res) => {
   const { agent, backend } = req.params;
-  const allowedAgents = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+  const allowedAgents = ENABLED_AGENTS;
   const allowedBackends = ['copilot', 'claude', 'gemini', 'goose'];
   if (!allowedAgents.includes(agent)) {
     return res.status(400).json({ error: `invalid agent: ${agent}` });
@@ -668,7 +671,7 @@ app.post('/api/switch/:agent/:backend', (req, res) => {
   }
   // Keep backend state file in sync for kick-agents.sh
   try { fs.writeFileSync(`/var/run/agent-backends/${agent}`, backend); } catch (_) {}
-  execFile('/tmp/hive/bin/kick-agents.sh', [agent], { timeout: 60000 }, (err, stdout) => {
+  execFile(`${HIVE_REPO_DIR}/bin/kick-agents.sh`, [agent], { timeout: 60000 }, (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ ok: true, output: `switched ${agent} backend to ${backend}` });
   });
@@ -676,7 +679,7 @@ app.post('/api/switch/:agent/:backend', (req, res) => {
 
 app.post('/api/model/:agent/:model', (req, res) => {
   const { agent, model } = req.params;
-  const allowedAgents = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+  const allowedAgents = ENABLED_AGENTS;
   if (!allowedAgents.includes(agent)) {
     return res.status(400).json({ error: `invalid agent: ${agent}` });
   }
@@ -739,7 +742,7 @@ app.post('/api/model/:agent/:model', (req, res) => {
   // Keep backend state file in sync for kick-agents.sh
   const BACKEND_STATE_DIR = '/var/run/agent-backends';
   try { fs.writeFileSync(`${BACKEND_STATE_DIR}/${agent}`, currentBackend); } catch (_) {}
-  execFile('/tmp/hive/bin/kick-agents.sh', [agent], { timeout: 60000 }, (err, stdout) => {
+  execFile(`${HIVE_REPO_DIR}/bin/kick-agents.sh`, [agent], { timeout: 60000 }, (err, stdout) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ ok: true, output: `switched ${agent} model to ${decodedModel} (backend: ${currentBackend})` });
   });
@@ -750,7 +753,7 @@ const GOVERNOR_CADENCE_DIR = '/var/run/kick-governor';
 
 app.post('/api/pause/:agent', (req, res) => {
   const agent = req.params.agent;
-  const allowed = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+  const allowed = ENABLED_AGENTS;
   if (!allowed.includes(agent)) {
     return res.status(400).json({ error: `cannot pause ${agent}` });
   }
@@ -791,7 +794,7 @@ app.post('/api/pause/:agent', (req, res) => {
 
 app.post('/api/resume/:agent', (req, res) => {
   const agent = req.params.agent;
-  const allowed = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+  const allowed = ENABLED_AGENTS;
   if (!allowed.includes(agent)) {
     return res.status(400).json({ error: `cannot resume ${agent}` });
   }
@@ -921,7 +924,7 @@ app.post('/api/unpin/:agent{/:dimension}', (req, res) => {
 // Restart agent — kill tmux session so supervised-agent@.service respawns it
 app.post('/api/restart/:agent', (req, res) => {
   const agent = req.params.agent;
-  const allowed = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+  const allowed = ENABLED_AGENTS;
   if (!allowed.includes(agent)) {
     return res.status(400).json({ error: `invalid agent: ${agent}` });
   }
@@ -938,7 +941,7 @@ app.post('/api/restart/:agent', (req, res) => {
 // Reset restart counter for an agent
 app.post('/api/reset-restarts/:agent', (req, res) => {
   const agent = req.params.agent;
-  const allowed = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+  const allowed = ENABLED_AGENTS;
   if (!allowed.includes(agent)) {
     return res.status(400).json({ error: `invalid agent: ${agent}` });
   }

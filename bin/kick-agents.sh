@@ -491,7 +491,7 @@ send_chunked() {
   if [ ${#message} -le "$MAX_CHUNK" ]; then
     $TMUX_BIN send-keys -t "$session" -l "$message"
     sleep "$CHUNK_DELAY"
-    $TMUX_BIN send-keys -t "$session" Enter
+    hive_send_enter "$session"
     return
   fi
 
@@ -503,7 +503,7 @@ send_chunked() {
     (( offset += MAX_CHUNK ))
     sleep "$CHUNK_DELAY"
   done
-  $TMUX_BIN send-keys -t "$session" Enter
+  hive_send_enter "$session"
 }
 
 kick() {

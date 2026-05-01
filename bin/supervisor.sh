@@ -5,7 +5,7 @@
 #
 # Supports optional rate-limit failover between CLI backends (set
 # AGENT_RATE_LIMIT_FAILOVER=true and AGENT_FAILOVER_CMD in env).
-set -u
+set -euo pipefail
 
 # Source shared config (provides hive_log, hive_is_paused, etc.)
 _SUP_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

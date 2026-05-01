@@ -134,7 +134,7 @@ if [ -n "$DISCORD_RESTART_NEEDED" ] && [ -z "$DISCORD_CHANGED" ]; then
 fi
 
 # Sync hive-project.yaml to /etc/hive if changed
-HIVE_PROJECT="$HIVE_REPO/examples/kubestellar/hive-project.yaml"
+HIVE_PROJECT="${HIVE_PROJECT_CONFIG_SRC:-$HIVE_REPO/examples/kubestellar/hive-project.yaml}"
 HIVE_PROJECT_INSTALLED="/etc/hive/hive-project.yaml"
 if [ -f "$HIVE_PROJECT" ] && ! cmp -s "$HIVE_PROJECT" "$HIVE_PROJECT_INSTALLED" 2>/dev/null; then
   sudo cp "$HIVE_PROJECT" "$HIVE_PROJECT_INSTALLED" && \
@@ -169,7 +169,11 @@ if systemctl is-enabled --quiet hive.service 2>/dev/null; then
   SYNCED="$SYNCED hive.service(disabled)"
 fi
 
-HIVE_AGENTS="supervisor scanner reviewer architect outreach"
+_DEPLOY_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+for _cf in "${_DEPLOY_SCRIPT_DIR}/hive-config.sh" /usr/local/bin/hive-config.sh; do
+  if [[ -f "$_cf" ]]; then source "$_cf"; break; fi
+done
+HIVE_AGENTS="${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}"
 for agent in $HIVE_AGENTS; do
   unit="hive@${agent}.service"
   envfile="/etc/hive/${agent}.env"
