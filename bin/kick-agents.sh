@@ -682,12 +682,17 @@ STATUSEOF
 # Policy hash compression: if CLAUDE.md (and skill files) are unchanged since
 # the last kick, we tell the agent to skip re-reading to save tokens.
 
-# --- Sync project config from repo to deployed location ---
-# /etc/hive/hive-project.yaml is the live config read by run-pipeline.sh.
-# After git pull updates the repo copy, sync it so new pipeline stages take effect.
+# --- Sync repo files to deployed locations ---
+# Scripts source hive-config.sh from $SCRIPT_DIR and /usr/local/bin/.
+# Pipeline reads hive-project.yaml from /etc/hive/.
+# Both must stay in sync with the repo after git pull.
 _REPO_PROJECT_YAML=$(find /tmp/hive/examples -name 'hive-project.yaml' -type f 2>/dev/null | head -1)
 if [ -n "$_REPO_PROJECT_YAML" ] && [ -f "$_REPO_PROJECT_YAML" ]; then
   sudo cp "$_REPO_PROJECT_YAML" /etc/hive/hive-project.yaml 2>/dev/null || true
+fi
+if [ -f "/tmp/hive/bin/hive-config.sh" ]; then
+  sudo cp /tmp/hive/bin/hive-config.sh /usr/local/bin/hive-config.sh 2>/dev/null || true
+  source /usr/local/bin/hive-config.sh 2>/dev/null || true
 fi
 
 # --- Pre-kick pipeline: enumerators → classifiers → gates → monitors ---
