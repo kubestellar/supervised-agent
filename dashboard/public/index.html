@@ -479,6 +479,8 @@
     .toast.success { background: #1a7f37; border: 1px solid #238636; }
     .toast.error { background: #8b1a1a; border: 1px solid #f85149; }
     .toast.info { background: #1a3a5c; border: 1px solid #1f6feb; }
+    .toast-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes toast-in { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
     @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
   </style>
@@ -1682,13 +1684,34 @@ function burnAreaChart() {
     }
 
     const TOAST_DURATION_MS = 3000;
-    function showToast(msg, type = 'info') {
+    const TOAST_PROGRESS_MAX_MS = 60000;
+    function showToast(msg, type = 'info', persistent = false) {
       const container = document.getElementById('toast-container');
       const el = document.createElement('div');
       el.className = `toast ${type}`;
       el.textContent = msg;
       container.appendChild(el);
-      setTimeout(() => { el.style.animation = 'toast-out 0.3s ease-in forwards'; setTimeout(() => el.remove(), 300); }, TOAST_DURATION_MS);
+      if (persistent) {
+        const spinner = document.createElement('span');
+        spinner.className = 'toast-spinner';
+        el.prepend(spinner);
+        el._persistent = true;
+        setTimeout(() => { if (el.parentNode) dismissToast(el); }, TOAST_PROGRESS_MAX_MS);
+        return el;
+      }
+      setTimeout(() => dismissToast(el), TOAST_DURATION_MS);
+      return el;
+    }
+    function dismissToast(el, newMsg, newType) {
+      if (!el || !el.parentNode) return;
+      if (newMsg) {
+        el.textContent = newMsg;
+        el.className = `toast ${newType || 'success'}`;
+        setTimeout(() => { el.style.animation = 'toast-out 0.3s ease-in forwards'; setTimeout(() => el.remove(), 300); }, TOAST_DURATION_MS);
+      } else {
+        el.style.animation = 'toast-out 0.3s ease-in forwards';
+        setTimeout(() => el.remove(), 300);
+      }
     }
 
     async function kick(agent) {
@@ -1706,44 +1729,47 @@ function burnAreaChart() {
 
     async function toggleAgent(agent, currentlyPaused) {
       const action = currentlyPaused ? 'resume' : 'pause';
+      const label = currentlyPaused ? 'Resuming' : 'Pausing';
+      const toast = showToast(`${label} ${agent}...`, 'info', true);
       const res = await fetch(`/api/${action}/${agent}`, { method: 'POST' });
       const data = await res.json();
-      if (!data.ok) { showToast(`${action} failed: ` + (data.error || 'unknown'), 'error'); return; }
-      showToast(`${agent} ${action}d`, 'success');
+      if (!data.ok) { dismissToast(toast, `${action} failed: ${data.error || 'unknown'}`, 'error'); return; }
+      dismissToast(toast, `${agent} ${action}d`, 'success');
     }
 
     async function restartAgent(agent) {
       if (!confirm(`Restart ${agent}? This will kill the current session and start fresh.`)) return;
-      showToast(`Restarting ${agent}...`, 'info');
+      const toast = showToast(`Restarting ${agent}...`, 'info', true);
       const res = await fetch(`/api/restart/${agent}`, { method: 'POST' });
       const data = await res.json();
-      if (!data.ok) { showToast('Restart failed: ' + (data.error || 'unknown'), 'error'); return; }
-      showToast(`${agent} restarted — supervisor will respawn`, 'success');
+      if (!data.ok) { dismissToast(toast, `Restart failed: ${data.error || 'unknown'}`, 'error'); return; }
+      dismissToast(toast, `${agent} restarted — supervisor will respawn`, 'success');
     }
 
     async function resetRestarts(agent) {
+      const toast = showToast(`Resetting ${agent} restart counter...`, 'info', true);
       const res = await fetch(`/api/reset-restarts/${agent}`, { method: 'POST' });
       const data = await res.json();
-      if (!data.ok) { showToast('Reset failed: ' + (data.error || 'unknown'), 'error'); return; }
-      showToast(`${agent} restart counter reset`, 'success');
+      if (!data.ok) { dismissToast(toast, `Reset failed: ${data.error || 'unknown'}`, 'error'); return; }
+      dismissToast(toast, `${agent} restart counter reset`, 'success');
     }
 
     async function switchCli(agent, backend) {
       if (!backend) return;
-      showToast(`Switching ${agent} → ${backend}...`, 'info');
+      const toast = showToast(`Switching ${agent} → ${backend}...`, 'info', true);
       const res = await fetch(`/api/switch/${agent}/${backend}`, { method: 'POST' });
       const data = await res.json();
-      if (!data.ok) { showToast('Switch failed: ' + (data.error || 'unknown'), 'error'); return; }
-      showToast(`${agent} CLI → ${backend}`, 'success');
+      if (!data.ok) { dismissToast(toast, `Switch failed: ${data.error || 'unknown'}`, 'error'); return; }
+      dismissToast(toast, `${agent} CLI → ${backend}`, 'success');
     }
 
     async function switchModel(agent, model) {
       if (!model) return;
-      showToast(`Switching ${agent} model → ${model}...`, 'info');
+      const toast = showToast(`Switching ${agent} model → ${model}...`, 'info', true);
       const res = await fetch(`/api/model/${agent}/${encodeURIComponent(model)}`, { method: 'POST' });
       const data = await res.json();
-      if (!data.ok) { showToast('Model switch failed: ' + (data.error || 'unknown'), 'error'); return; }
-      showToast(`${agent} model → ${model}`, 'success');
+      if (!data.ok) { dismissToast(toast, `Model switch failed: ${data.error || 'unknown'}`, 'error'); return; }
+      dismissToast(toast, `${agent} model → ${model}`, 'success');
     }
 
     const PIN_OVERRIDE_TTL_MS = 8000;
