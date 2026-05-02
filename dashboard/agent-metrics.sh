@@ -142,8 +142,15 @@ outreach_json=$(jq -n --arg doing "$outreach_doing" --arg model "$outreach_model
 # ── Reviewer: coverage from README badge gist (authoritative source) ──
 COVERAGE_BADGE_URL="$BADGE_URL"
 coverage_target=91
-coverage_value=$(curl -sf "$COVERAGE_BADGE_URL" 2>/dev/null | jq -r '.message // "0"' | tr -d '%' || echo 0)
+coverage_value=$(curl -sf --max-time 5 "$COVERAGE_BADGE_URL" 2>/dev/null | jq -r '.message // "0"' | tr -d '%' || echo 0)
 coverage_value=${coverage_value:-0}
+# Fall back to last known value if badge fetch failed
+if [[ "$coverage_value" == "0" ]]; then
+  GITHUB_CACHE_CVG="${HIVE_METRICS_DIR:-/var/run/hive-metrics}/coverage-last.txt"
+  [[ -f "$GITHUB_CACHE_CVG" ]] && coverage_value=$(cat "$GITHUB_CACHE_CVG" 2>/dev/null || echo 0)
+elif [[ "$coverage_value" -gt 0 ]] 2>/dev/null; then
+  echo "$coverage_value" > "${HIVE_METRICS_DIR:-/var/run/hive-metrics}/coverage-last.txt" 2>/dev/null || true
+fi
 reviewer_json=$(echo "$reviewer_json" | jq --argjson cv "$coverage_value" --argjson ct "$coverage_target" '. + {coverage: $cv, coverageTarget: $ct}')
 
 # ── Outreach: read from centralized api-collector cache (no extra API calls) ──
