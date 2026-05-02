@@ -861,7 +861,12 @@ cmd_status_json() {
   _timer_next=$(systemctl list-timers kick-governor.timer --no-pager 2>/dev/null \
        | awk 'NR==2{print $1,$2,$3,$4}')
   if [[ "$_timer_next" == -* || -z "$_timer_next" ]]; then
-    gov_next="running"
+    # Service is running — compute next 5-minute boundary from OnCalendar=*:00/5
+    local _gov_interval=300
+    local _now_epoch _next_epoch
+    _now_epoch=$(date +%s)
+    _next_epoch=$(( _now_epoch - (_now_epoch % _gov_interval) + _gov_interval ))
+    gov_next=$(TZ="$HIVE_TZ" date -d "@$_next_epoch" "+%-m/%-d %-I:%M %p %Z" 2>/dev/null || echo "")
   else
     gov_next=$(bash -c "TZ=\"$HIVE_TZ\" date -d \"$_timer_next\" \"+%-m/%-d %-I:%M %p %Z\"" 2>/dev/null || echo "")
   fi
