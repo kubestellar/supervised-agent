@@ -174,6 +174,16 @@ acmm=$(cat "$tmpdir/acmm" 2>/dev/null || echo 0)
 outreach_open=$(cat "$tmpdir/outreach_open" 2>/dev/null || echo 0)
 outreach_merged=$(cat "$tmpdir/outreach_merged" 2>/dev/null || echo 0)
 
+# Fall back to previous cache if search API failed (returns 0 or empty)
+if [[ "${outreach_open:-0}" == "0" ]] && [[ -f "$CACHE_FILE" ]]; then
+  cached_open=$(jq -r '.outreach.open // 0' "$CACHE_FILE" 2>/dev/null || echo 0)
+  [[ "$cached_open" -gt 0 ]] 2>/dev/null && outreach_open="$cached_open"
+fi
+if [[ "${outreach_merged:-0}" == "0" ]] && [[ -f "$CACHE_FILE" ]]; then
+  cached_merged=$(jq -r '.outreach.merged // 0' "$CACHE_FILE" 2>/dev/null || echo 0)
+  [[ "$cached_merged" -gt 0 ]] 2>/dev/null && outreach_merged="$cached_merged"
+fi
+
 now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 cat > "$CACHE_TMP" <<ENDJSON
