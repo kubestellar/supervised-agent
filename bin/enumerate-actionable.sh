@@ -16,6 +16,13 @@ set -euo pipefail
 OUTPUT_FILE="/var/run/hive-metrics/actionable.json"
 TMP_FILE="${OUTPUT_FILE}.tmp"
 LOG="/var/log/kick-agents.log"
+LOCK_FILE="/var/run/hive-metrics/enumerate-actionable.lock"
+
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+  echo "[$(date -Is)] ENUM SKIP — another instance is running" >> "$LOG"
+  exit 0
+fi
 
 # Read repos from hive-project.yaml (single source of truth)
 PROJECT_YAML="${HIVE_PROJECT_YAML:-/etc/hive/hive-project.yaml}"
