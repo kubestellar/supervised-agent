@@ -123,13 +123,14 @@ const GH_AUTH_CHECK_MS = 60000;
 let ghAuthOk = true;
 let ghAuthLastChecked = null;
 function checkGhAuth() {
-  execFile('bash', ['-c', 'unset GITHUB_TOKEN && gh api user --jq .login 2>&1'], { timeout: 15000 }, (err, stdout, stderr) => {
+  execFile('bash', ['-c', 'gh api rate_limit --jq .rate.limit 2>&1'], { timeout: 15000 }, (err, stdout, stderr) => {
     const output = (stdout || '') + (stderr || '');
     const was = ghAuthOk;
-    ghAuthOk = !err && !output.includes('401') && !output.includes('auth') && stdout.trim().length > 0;
+    const limit = parseInt(stdout.trim(), 10);
+    ghAuthOk = !err && limit > 0;
     ghAuthLastChecked = new Date().toISOString();
     if (was && !ghAuthOk) console.error('gh auth DOWN:', output.trim());
-    if (!was && ghAuthOk) console.log('gh auth recovered');
+    if (!was && ghAuthOk) console.log('gh auth recovered (limit=' + limit + ')');
   });
 }
 checkGhAuth();
