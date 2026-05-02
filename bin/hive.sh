@@ -857,9 +857,14 @@ cmd_status_json() {
   gov_active=$(systemctl is-active kick-governor.timer 2>/dev/null || echo "inactive")
   gov_qi=$(  cat /var/run/kick-governor/queue_issues 2>/dev/null || echo "0")
   gov_qp=$(  cat /var/run/kick-governor/queue_prs    2>/dev/null || echo "0")
-  gov_next=$(systemctl list-timers kick-governor.timer --no-pager 2>/dev/null \
-       | awk 'NR==2{print $1,$2,$3,$4}' \
-       | xargs -I{} bash -c "TZ=\"$HIVE_TZ\" date -d \"{}\" \"+%-m/%-d %-I:%M %p %Z\"" 2>/dev/null || echo "")
+  local _timer_next
+  _timer_next=$(systemctl list-timers kick-governor.timer --no-pager 2>/dev/null \
+       | awk 'NR==2{print $1,$2,$3,$4}')
+  if [[ "$_timer_next" == -* || -z "$_timer_next" ]]; then
+    gov_next="running"
+  else
+    gov_next=$(bash -c "TZ=\"$HIVE_TZ\" date -d \"$_timer_next\" \"+%-m/%-d %-I:%M %p %Z\"" 2>/dev/null || echo "")
+  fi
 
   # Repos — read from centralized api-collector cache
   local GITHUB_CACHE="${HIVE_METRICS_DIR:-/var/run/hive-metrics}/github-cache.json"
