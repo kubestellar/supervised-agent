@@ -819,7 +819,7 @@ app.post('/api/resume/:agent', (req, res) => {
   // Start the systemd service first (hive stop killed it), then kick after CLI is ready
   // supervisor.sh handles /rename via AGENT_CLAUDE_RENAME_TO on startup
   const RESUME_KICK_DELAY_MS = 20000;
-  execFile('sudo', ['systemctl', 'start', `supervised-agent@${agent}`], { timeout: 30000 }, (startErr) => {
+  execFile('sudo', ['systemctl', 'start', `hive@${agent}`], { timeout: 30000 }, (startErr) => {
     if (startErr) return res.status(500).json({ error: `failed to start ${agent}: ${startErr.message}` });
     setTimeout(() => {
       execFile('/usr/local/bin/kick-agents.sh', [agent], { timeout: 30000 }, (kickErr) => {
@@ -929,7 +929,7 @@ app.post('/api/unpin/:agent{/:dimension}', (req, res) => {
   }
 });
 
-// Restart agent — kill tmux session so supervised-agent@.service respawns it
+// Restart agent — kill tmux session so hive@.service respawns it
 app.post('/api/restart/:agent', (req, res) => {
   const agent = req.params.agent;
   const allowed = ENABLED_AGENTS;
