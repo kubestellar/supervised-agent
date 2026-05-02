@@ -759,6 +759,33 @@ app.post('/api/model/:agent/:model', (req, res) => {
 // Pause / Resume agent — uses a flag file that the governor respects
 const GOVERNOR_CADENCE_DIR = '/var/run/kick-governor';
 
+// Cadence matrix (seconds) — mirrors kick-governor.sh defaults.
+// 0 means paused in that mode.
+const CADENCE_MATRIX = {
+  scanner:    { surge: 900, busy: 900,  quiet: 900,  idle: 900  },
+  reviewer:   { surge: 0,   busy: 3600, quiet: 2700, idle: 900  },
+  architect:  { surge: 0,   busy: 0,    quiet: 0,    idle: 1800 },
+  outreach:   { surge: 0,   busy: 0,    quiet: 0,    idle: 7200 },
+  supervisor: { surge: 300, busy: 600,  quiet: 900,  idle: 1800 },
+};
+
+const SEC_TO_LABEL = (s) => {
+  if (s <= 0) return 'paused';
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${s / 60}min`;
+  return `${s / 3600}h`;
+};
+
+function lookupCadenceForAgent(agent) {
+  const modeFile = path.join(GOVERNOR_CADENCE_DIR, 'mode');
+  let mode = 'busy';
+  try { if (fs.existsSync(modeFile)) mode = fs.readFileSync(modeFile, 'utf8').trim(); } catch (_) {}
+  const agentMatrix = CADENCE_MATRIX[agent];
+  if (!agentMatrix) return '15min';
+  const secs = agentMatrix[mode] || 0;
+  return SEC_TO_LABEL(secs);
+}
+
 app.post('/api/pause/:agent', (req, res) => {
   const agent = req.params.agent;
   const allowed = ENABLED_AGENTS;
@@ -809,10 +836,15 @@ app.post('/api/resume/:agent', (req, res) => {
   const pauseFlag = path.join(GOVERNOR_CADENCE_DIR, `paused_${agent}`);
   const operatorFlag = path.join(GOVERNOR_CADENCE_DIR, `operator_paused_${agent}`);
   const cadenceFlag = path.join(GOVERNOR_CADENCE_DIR, `cadence_${agent}`);
+  const wasPausedFlag = path.join(GOVERNOR_CADENCE_DIR, `was_paused_${agent}`);
   try {
     if (fs.existsSync(pauseFlag)) fs.unlinkSync(pauseFlag);
     if (fs.existsSync(operatorFlag)) fs.unlinkSync(operatorFlag);
-    if (fs.existsSync(cadenceFlag)) fs.unlinkSync(cadenceFlag);
+    if (fs.existsSync(wasPausedFlag)) fs.unlinkSync(wasPausedFlag);
+    // Write the correct cadence for the current governor mode instead of deleting.
+    // Governor will overwrite on next cycle; this prevents a gap where interval shows "?".
+    const cadenceForMode = lookupCadenceForAgent(agent);
+    fs.writeFileSync(cadenceFlag, cadenceForMode);
   } catch (e) {
     return res.status(500).json({ error: `failed to remove pause flag: ${e.message}` });
   }

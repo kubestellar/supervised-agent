@@ -483,6 +483,27 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes toast-in { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
     @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
+
+    /* Mobile: prevent title and sessions from overflowing viewport */
+    @media (max-width: 600px) {
+      body { padding: 10px; }
+      h1 { flex-wrap: wrap; font-size: 1rem; gap: 4px; }
+      .timestamp { margin-left: 0; }
+      .git-version { margin-left: 0; width: 100%; }
+      .header-spacer { display: none; }
+      .token-session-row { flex-wrap: wrap; gap: 4px; }
+      .token-session-row .sid { min-width: auto; font-size: 0.6rem; }
+      .token-session-row .smodel { min-width: auto; }
+      .token-session-row .stokens { min-width: auto; text-align: left; }
+      .token-session-row .smsgs { min-width: auto; }
+      .token-session-row .sproj { min-width: 0; }
+      .token-sessions { overflow-x: auto; max-width: 100%; }
+      .agent-card { padding: 10px; }
+      .agent-name { flex-wrap: wrap; gap: 4px; font-size: 0.85rem; }
+      .agent-actions { flex-wrap: wrap; }
+      .kick-prompt { min-width: 0; width: 100%; }
+      .burn-context { flex-wrap: wrap; gap: 8px; }
+    }
   </style>
 </head>
 <body>
