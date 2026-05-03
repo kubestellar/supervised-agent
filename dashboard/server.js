@@ -1151,8 +1151,8 @@ app.get('/api/config/agent/:name', (req, res) => {
 
     const general = {
       launchCmd: agentEnv.AGENT_LAUNCH_CMD || '',
-      cliPinned: agentEnv.AGENT_CLI_PINNED === 'true',
-      cliPinValue: agentEnv.AGENT_CLI_PIN_VALUE || deriveCli(agentEnv.AGENT_LAUNCH_CMD || ''),
+      cliPinned: agentEnv.AGENT_CLI_PINNED === 'true' || agentEnv.AGENT_PIN_CLI === 'true',
+      cliPinValue: agentEnv.AGENT_CLI_PIN_VALUE || agentEnv.AGENT_CLI || deriveCli(agentEnv.AGENT_LAUNCH_CMD || ''),
       staleTimeout: parseInt(agentEnv.AGENT_STALE_TIMEOUT_SEC || '1200', 10),
       restartStrategy: agentEnv.AGENT_RESTART_STRATEGY || 'immediate',
     };
