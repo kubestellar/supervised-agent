@@ -8,19 +8,16 @@ set -euo pipefail
 REAL_GH="/usr/bin/gh"
 
 # Inject GitHub App token for agent gh calls (15k/hr vs PAT's 5k/hr).
-# HIVE_GITHUB_TOKEN is set by hive-config.sh (sourced via agent-launch.sh).
-# Always override GH_TOKEN here — agent-launch.sh unsets it to protect Copilot
-# CLI auth, but gh CLI still falls back to ~/.config/gh/hosts.yml PAT (5k limit).
+# Always read from the cache file written by gh-app-token.sh — this is
+# refreshed every 55 minutes and is always fresh, unlike HIVE_GITHUB_TOKEN
+# which is set at session launch and can go stale after token expiry (1hr).
 # This per-call injection ensures gh uses the App token without polluting the
 # agent's persistent env (Copilot CLI never calls this wrapper).
-#
-# Fallback: if HIVE_GITHUB_TOKEN is unset (agent launched without hive-config.sh),
-# read from the token cache file written by gh-app-token.sh.
 GH_APP_TOKEN_CACHE="/var/run/hive-metrics/gh-app-token.cache"
-if [[ -z "${HIVE_GITHUB_TOKEN:-}" && -f "$GH_APP_TOKEN_CACHE" ]]; then
-  HIVE_GITHUB_TOKEN=$(cat "$GH_APP_TOKEN_CACHE")
-fi
-if [[ -n "${HIVE_GITHUB_TOKEN:-}" ]]; then
+if [[ -f "$GH_APP_TOKEN_CACHE" ]]; then
+  export GH_TOKEN="$(cat "$GH_APP_TOKEN_CACHE")"
+elif [[ -n "${HIVE_GITHUB_TOKEN:-}" ]]; then
+  # Fallback: session env var if cache file is missing
   export GH_TOKEN="$HIVE_GITHUB_TOKEN"
 fi
 
