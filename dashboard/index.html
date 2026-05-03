@@ -2101,7 +2101,7 @@ function burnAreaChart() {
     // ── Configuration Dialog ──────────────────────────────────────────
     let _configState = { type: null, agent: null, tab: null, data: {}, dirty: {} };
 
-    const AGENT_CONFIG_TABS = ['General', 'Cadences', 'Models', 'Pipeline', 'Hooks', 'Restrictions', 'Prompts'];
+    const AGENT_CONFIG_TABS = ['General', 'Cadences', 'Pipeline', 'Hooks', 'Restrictions', 'Prompts'];
     const GOVERNOR_CONFIG_TABS = ['Agents', 'Thresholds', 'Labels', 'Budget', 'Notifications', 'Health'];
     const PIPELINE_STAGES = ['resolve-beads', 'track-prs', 'stale-check', 'repo-scan', 'coverage-gate', 'prompt-compose', 'budget-check', 'api-collect', 'final-compose'];
     const RESTART_STRATEGIES = ['immediate', 'backoff', 'none'];
@@ -2166,7 +2166,6 @@ function burnAreaChart() {
       switch (tab) {
         case 'General': return renderAgentGeneral(d.general || {});
         case 'Cadences': return renderAgentCadences(d.cadences || {});
-        case 'Models': return renderAgentModels(d.models || {});
         case 'Pipeline': return renderAgentPipeline(d.pipeline || {});
         case 'Hooks': return renderAgentHooks(d.hooks || {});
         case 'Restrictions': return renderAgentRestrictions(d.restrictions || []);
@@ -2216,6 +2215,13 @@ function burnAreaChart() {
               ${RESTART_STRATEGIES.map(s => `<option value="${s}" ${g.restartStrategy === s ? 'selected' : ''}>${s}</option>`).join('')}
             </select>
           </div>
+        </div>
+        <div class="config-field">
+          <label>Model</label>
+          <select id="cfg-model" onchange="markDirty('general','model',this.value)">
+            <option value="">(from launch command)</option>
+            ${KNOWN_MODELS.map(m => `<option value="${m.value}" ${g.model === m.value ? 'selected' : ''}>${m.label}</option>`).join('')}
+          </select>
         </div>`;
     }
 
@@ -2227,20 +2233,6 @@ function burnAreaChart() {
           <div class="config-field"><label>Busy</label><input type="number" value="${c.busy || 0}" onchange="markDirty('cadences','busy',this.value)"></div>
           <div class="config-field"><label>Quiet</label><input type="number" value="${c.quiet || 0}" onchange="markDirty('cadences','quiet',this.value)"></div>
           <div class="config-field"><label>Idle</label><input type="number" value="${c.idle || 0}" onchange="markDirty('cadences','idle',this.value)"></div>
-        </div>`;
-    }
-
-    function renderAgentModels(m) {
-      const opts = (sel) => KNOWN_MODELS.map(mod =>
-        `<option value="${mod.value}" ${sel === mod.value ? 'selected' : ''}>${mod.label}</option>`
-      ).join('');
-      return `
-        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Model assigned to this agent per governor mode.</p>
-        <div class="config-field-row4">
-          <div class="config-field"><label>Surge</label><select onchange="markDirty('models','surge',this.value)">${opts(m.surge)}</select></div>
-          <div class="config-field"><label>Busy</label><select onchange="markDirty('models','busy',this.value)">${opts(m.busy)}</select></div>
-          <div class="config-field"><label>Quiet</label><select onchange="markDirty('models','quiet',this.value)">${opts(m.quiet)}</select></div>
-          <div class="config-field"><label>Idle</label><select onchange="markDirty('models','idle',this.value)">${opts(m.idle)}</select></div>
         </div>`;
     }
 
