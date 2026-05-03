@@ -1149,19 +1149,22 @@ app.get('/api/config/agent/:name', (req, res) => {
     const govEnv = parseEnvFile(GOVERNOR_ENV_PATH);
     const upper = name.toUpperCase();
 
+    const launchCmd = agentEnv.AGENT_LAUNCH_CMD || '';
+    const modelMatch = launchCmd.match(/--model\s+(\S+)/);
     const general = {
-      launchCmd: agentEnv.AGENT_LAUNCH_CMD || '',
+      launchCmd,
       cliPinned: agentEnv.AGENT_CLI_PINNED === 'true' || agentEnv.AGENT_PIN_CLI === 'true',
-      cliPinValue: agentEnv.AGENT_CLI_PIN_VALUE || agentEnv.AGENT_CLI || deriveCli(agentEnv.AGENT_LAUNCH_CMD || ''),
-      staleTimeout: parseInt(agentEnv.AGENT_STALE_TIMEOUT_SEC || '1200', 10),
+      cliPinValue: agentEnv.AGENT_CLI_PIN_VALUE || agentEnv.AGENT_CLI || deriveCli(launchCmd),
+      staleTimeout: parseInt(agentEnv.AGENT_STALE_TIMEOUT_SEC || agentEnv.AGENT_STALE_MAX_SEC || '1200', 10),
       restartStrategy: agentEnv.AGENT_RESTART_STRATEGY || 'immediate',
+      model: modelMatch ? modelMatch[1] : '',
     };
 
     const cadences = {
-      surge: parseInt(govEnv[`CADENCE_${upper}_SURGE_SEC`] || '0', 10),
-      busy: parseInt(govEnv[`CADENCE_${upper}_BUSY_SEC`] || '0', 10),
-      quiet: parseInt(govEnv[`CADENCE_${upper}_QUIET_SEC`] || '0', 10),
-      idle: parseInt(govEnv[`CADENCE_${upper}_IDLE_SEC`] || '0', 10),
+      surge: parseInt(govEnv[`CADENCE_${upper}_SURGE_SEC`] || String((CADENCE_MATRIX[name] || {}).surge || 0), 10),
+      busy: parseInt(govEnv[`CADENCE_${upper}_BUSY_SEC`] || String((CADENCE_MATRIX[name] || {}).busy || 0), 10),
+      quiet: parseInt(govEnv[`CADENCE_${upper}_QUIET_SEC`] || String((CADENCE_MATRIX[name] || {}).quiet || 0), 10),
+      idle: parseInt(govEnv[`CADENCE_${upper}_IDLE_SEC`] || String((CADENCE_MATRIX[name] || {}).idle || 0), 10),
     };
 
     const models = {
@@ -1187,8 +1190,24 @@ app.get('/api/config/agent/:name', (req, res) => {
     let prompt = '';
     try {
       const kickScript = fs.readFileSync(path.join(HIVE_REPO_DIR, 'bin', 'kick-agents.sh'), 'utf8');
-      const agentSection = kickScript.match(new RegExp(`${name}\\)([\\s\\S]*?);;`, 'i'));
-      if (agentSection) prompt = agentSection[1].trim().slice(0, 2000);
+      const msgVar = `${upper}_MSG=`;
+      const msgIdx = kickScript.indexOf(msgVar);
+      if (msgIdx !== -1) {
+        const afterEq = kickScript.indexOf('"', msgIdx);
+        if (afterEq !== -1) {
+          let depth = 0;
+          let end = afterEq + 1;
+          while (end < kickScript.length) {
+            if (kickScript[end] === '\\') { end += 2; continue; }
+            if (kickScript[end] === '"' && depth === 0) break;
+            if (kickScript[end] === '$' && kickScript[end + 1] === '{') depth++;
+            if (kickScript[end] === '}' && depth > 0) depth--;
+            end++;
+          }
+          const raw = kickScript.slice(afterEq + 1, end);
+          prompt = raw.replace(/\$\{[^}]+\}/g, '(…)').slice(0, 4000);
+        }
+      }
     } catch (_) {}
 
     res.json({ general, cadences, models, pipeline, hooks, restrictions, prompt });
@@ -1201,12 +1220,19 @@ app.put('/api/config/agent/:name/general', (req, res) => {
   const { name } = req.params;
   const envFile = `${ENV_DIR}/${name}.env`;
   try {
-    const { launchCmd, cliPinned, cliPinValue, staleTimeout, restartStrategy } = req.body;
+    const { launchCmd, cliPinned, cliPinValue, staleTimeout, restartStrategy, model } = req.body;
     if (launchCmd !== undefined) writeEnvVar(envFile, 'AGENT_LAUNCH_CMD', launchCmd);
     if (cliPinned !== undefined) writeEnvVar(envFile, 'AGENT_CLI_PINNED', String(cliPinned));
     if (cliPinValue !== undefined) writeEnvVar(envFile, 'AGENT_CLI_PIN_VALUE', cliPinValue);
     if (staleTimeout !== undefined) writeEnvVar(envFile, 'AGENT_STALE_TIMEOUT_SEC', String(staleTimeout));
     if (restartStrategy !== undefined) writeEnvVar(envFile, 'AGENT_RESTART_STRATEGY', restartStrategy);
+    if (model !== undefined) {
+      const currentCmd = parseEnvFile(envFile).AGENT_LAUNCH_CMD || '';
+      const updatedCmd = currentCmd.includes('--model')
+        ? currentCmd.replace(/--model\s+\S+/, `--model ${model}`)
+        : `${currentCmd} --model ${model}`;
+      writeEnvVar(envFile, 'AGENT_LAUNCH_CMD', updatedCmd.trim());
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1290,8 +1316,27 @@ app.get('/api/config/agent/:name/prompt', (req, res) => {
   const { name } = req.params;
   try {
     const kickScript = fs.readFileSync(path.join(HIVE_REPO_DIR, 'bin', 'kick-agents.sh'), 'utf8');
-    const agentSection = kickScript.match(new RegExp(`${name}\\)([\\s\\S]*?);;`, 'i'));
-    res.json({ prompt: agentSection ? agentSection[1].trim() : '' });
+    const upper = name.toUpperCase();
+    const msgVar = `${upper}_MSG=`;
+    const msgIdx = kickScript.indexOf(msgVar);
+    let prompt = '';
+    if (msgIdx !== -1) {
+      const afterEq = kickScript.indexOf('"', msgIdx);
+      if (afterEq !== -1) {
+        let depth = 0;
+        let end = afterEq + 1;
+        while (end < kickScript.length) {
+          if (kickScript[end] === '\\') { end += 2; continue; }
+          if (kickScript[end] === '"' && depth === 0) break;
+          if (kickScript[end] === '$' && kickScript[end + 1] === '{') depth++;
+          if (kickScript[end] === '}' && depth > 0) depth--;
+          end++;
+        }
+        const raw = kickScript.slice(afterEq + 1, end);
+        prompt = raw.replace(/\$\{[^}]+\}/g, '(…)').slice(0, 4000);
+      }
+    }
+    res.json({ prompt });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
