@@ -56,6 +56,9 @@ if command -v $GH &>/dev/null; then
     ($p.body | match("(?i)(fixes|closes|resolves) #([0-9]+)"; "g") // null) as $m |
     if $m then { issue: ($m.captures[1].string | tonumber), pr: $p.pr, prTitle: $p.title, state: $p.state, created: ($p.created // null), merged: ($p.merged // null) } else empty end
   ]' 2>/dev/null || echo "[]")
+  # ── Standalone merged PRs: merged recently but no Fixes/Closes reference ──
+  paired_pr_nums=$(echo "$scanner_pairs_json" | jq -r '.[].pr' 2>/dev/null | sort -un)
+  scanner_standalone_merged=$(echo "$merged_prs" | jq --argjson paired "$(echo "$paired_pr_nums" | jq -Rn '[inputs | select(length>0) | tonumber]')" '[.[] | select(([.pr] - $paired) | length > 0) | {pr: .pr, prTitle: .title, state: .state, merged: .merged}]' 2>/dev/null || echo "[]")
   # ── In-progress issues: mentioned in scanner tmux but no PR yet ──
   scanner_tmux=$(tmux capture-pane -t scanner -p -S -200 2>/dev/null || echo "")
   dispatched_issues=$(echo "$scanner_tmux" | grep -oP '#\K\d{4,5}' | sort -un)
@@ -134,7 +137,7 @@ if command -v $GH &>/dev/null; then
 fi
 
 # Build agent JSON with live summaries and model
-scanner_json=$(jq -n --arg doing "$scanner_doing" --arg model "$scanner_model" --argjson pairs "$scanner_pairs_json" --argjson inProgress "$scanner_inprogress_json" '{doing: $doing, model: $model, pairs: $pairs, inProgress: $inProgress}')
+scanner_json=$(jq -n --arg doing "$scanner_doing" --arg model "$scanner_model" --argjson pairs "$scanner_pairs_json" --argjson inProgress "$scanner_inprogress_json" --argjson mergedPrs "$scanner_standalone_merged" '{doing: $doing, model: $model, pairs: $pairs, inProgress: $inProgress, mergedPrs: $mergedPrs}')
 reviewer_json=$(jq -n --arg doing "$reviewer_doing" --arg model "$reviewer_model" '{doing: $doing, model: $model}')
 architect_json=$(jq -n --arg doing "$architect_doing" --arg model "$architect_model" '{doing: $doing, model: $model}')
 outreach_json=$(jq -n --arg doing "$outreach_doing" --arg model "$outreach_model" '{doing: $doing, model: $model}')

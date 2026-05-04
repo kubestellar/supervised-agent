@@ -855,10 +855,19 @@
           <a class="ind-tag ind-wip" href="https://github.com/kubestellar/console/issues/${ip.number}" target="_blank" title="${ip.title ? esc(ip.title) : ''}">${label}</a>
         </div>`;
         };
+        const standaloneMerged = m.mergedPrs || [];
+        const renderStandalonePr = (p) => {
+          const title = p.prTitle ? esc(p.prTitle.length > 55 ? p.prTitle.slice(0, 55) + '…' : p.prTitle) : '';
+          const tip = p.prTitle ? esc(p.prTitle) : '';
+          return `<div class="ind-pair">
+          <a class="ind-tag ind-pr ind-merged" href="https://github.com/kubestellar/console/pull/${p.pr}" target="_blank" title="${tip}">✓ #${p.pr} — ${title}</a>
+        </div>`;
+        };
+        const allMergedCount = mergedPairs.length + standaloneMerged.length;
         let html = '';
         if (inProgress.length > 0) html += `<div class="agent-indicators"><span class="ind-label">Working on (${inProgress.length}):</span>${inProgress.map(renderWip).join('')}</div>`;
         if (openPairs.length > 0) html += `<div class="agent-indicators"><span class="ind-label">PR open (${openPairs.length}):</span>${openPairs.map(renderPair).join('')}</div>`;
-        if (mergedPairs.length > 0) html += `<div class="agent-indicators"><span class="ind-label">Merged today (${mergedPairs.length}):</span>${mergedPairs.map(renderPair).join('')}</div>`;
+        if (allMergedCount > 0) html += `<div class="agent-indicators"><span class="ind-label">Merged today (${allMergedCount}):</span>${mergedPairs.map(renderPair).join('')}${standaloneMerged.map(renderStandalonePr).join('')}</div>`;
         if (!html) html = '<div class="agent-indicators"><span class="ind-empty">no active fixes</span></div>';
         return html;
       }
@@ -971,7 +980,7 @@
       if (!m) return 0;
       if (name === 'scanner') {
         const pairs = m.pairs || [];
-        return pairs.filter(p => p.state === 'merged').length;
+        return pairs.filter(p => p.state === 'merged').length + (m.mergedPrs || []).length;
       }
       if (name === 'outreach') return m.outreachMerged || 0;
       if (name === 'architect') return m.prs || m.closed || 0;
