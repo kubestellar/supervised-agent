@@ -382,13 +382,22 @@ fi
 
 log "supervisor started (session=$SESSION, cli=$CLI, poll=${POLL_SEC}s, failover=$RATE_LIMIT_FAILOVER)"
 sync_launch_cmd_from_governor
-if session_alive && agent_alive; then
+if is_paused; then
+  log "agent $SESSION is paused — not starting session"
+  tmux kill-session -t "$SESSION" 2>/dev/null || true
+elif session_alive && agent_alive; then
   log "existing session $SESSION is healthy; adopting without restart"
 else
   start_session
 fi
 while true; do
-  if ! session_alive; then
+  if is_paused; then
+    # Paused agents should not have a running session
+    if session_alive; then
+      log "agent $SESSION paused — killing session"
+      tmux kill-session -t "$SESSION" 2>/dev/null || true
+    fi
+  elif ! session_alive; then
     log "session $SESSION gone; restarting"
     sync_launch_cmd_from_governor
     start_session
