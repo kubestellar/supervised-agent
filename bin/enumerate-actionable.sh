@@ -295,7 +295,9 @@ if [ -n "$missing_sha_issues" ]; then
       gh issue comment "$num" --repo "$repo" --body "$(cat <<COMMENT
 Thanks for filing this issue! To help us reproduce and investigate, could you please include the **commit SHA** of the build you're running.
 
-You can find it by:
+**Easiest way:** Use the bug report feature built into the console — click the 🐛 icon in the top navbar. It automatically includes the SHA, browser info, and other diagnostic details so you don't have to look anything up.
+
+Or find the SHA manually:
 - **Git**: \`git rev-parse HEAD\` in your repo checkout
 - **Git log**: \`git log --oneline -1\`
 - **GitHub CLI**: \`/usr/bin/gh api repos/${repo}/commits/main --jq .sha\`
