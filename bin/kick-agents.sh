@@ -641,6 +641,7 @@ kick() {
   fi
 
   log "KICK $session (${#message} chars)"
+  echo "$message" > "/var/run/hive-metrics/last_prompt_${agent}"
   send_chunked "$session" "$message"
   # Deterministic status heartbeat — refresh timestamp on every kick
   cat > "$HOME/.hive/${agent}_status.txt" <<STATUSEOF
