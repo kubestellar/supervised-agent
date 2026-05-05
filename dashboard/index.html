@@ -1969,6 +1969,26 @@ function burnAreaChart() {
       const res = await fetch(`/api/${action}/${agent}`, { method: 'POST' });
       const data = await res.json();
       if (!data.ok) { dismissToast(toast, `${action} failed: ${data.error || 'unknown'}`, 'error'); return; }
+      // Optimistic DOM update — reflect state immediately without waiting for SSE
+      const cards = document.querySelectorAll('.agent-card');
+      for (const card of cards) {
+        const nameEl = card.querySelector('.agent-name');
+        if (!nameEl || !nameEl.textContent.includes(agent)) continue;
+        const nowPaused = action === 'pause';
+        card.className = card.className.replace(/\b(paused|idle|working|stopped)\b/g, '').trim() + (nowPaused ? ' paused' : ' idle');
+        const stateEl = card.querySelector('.agent-state');
+        if (stateEl) { stateEl.className = `agent-state ${nowPaused ? 'paused' : 'idle'}`; stateEl.textContent = nowPaused ? 'paused' : 'idle'; }
+        const fields = card.querySelectorAll('.agent-field');
+        for (const f of fields) {
+          const lbl = f.querySelector('.label')?.textContent;
+          const val = f.querySelector('.value');
+          if (!lbl || !val) continue;
+          if (lbl === 'interval' || lbl === 'next run') val.textContent = nowPaused ? 'paused' : '—';
+        }
+        const btn = card.querySelector('.btn-toggle');
+        if (btn) { btn.className = `btn-toggle ${nowPaused ? 'paused' : 'running'}`; btn.textContent = nowPaused ? '▶ resume' : '⏸ pause'; btn.setAttribute('onclick', `toggleAgent('${agent}', ${nowPaused})`); }
+        break;
+      }
       dismissToast(toast, `${agent} ${action}d`, 'success');
     }
 
