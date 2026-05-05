@@ -89,6 +89,8 @@ let statusCache = null;
 let lastFetch = 0;
 // Last known good beads values (bd timeout returns -1)
 let lastGoodBeads = { workers: 0, supervisor: 0 };
+// Last known good cli/model per agent (hive status returns '?' when paused)
+const lastGoodAgentInfo = {};
 let ciPassRate = 0;
 let healthChecks = {};
 let agentMetrics = {};
@@ -334,6 +336,13 @@ function fetchStatus() {
               a.govReason = m.REASON || '';
             }
           } catch (_) {}
+          // Cache last-known-good cli/model; restore when hive status returns '?'
+          if (a.cli && a.cli !== '?') {
+            lastGoodAgentInfo[a.name] = { cli: a.cli, model: a.model };
+          } else if (lastGoodAgentInfo[a.name]) {
+            a.cli = lastGoodAgentInfo[a.name].cli;
+            a.model = lastGoodAgentInfo[a.name].model;
+          }
           try {
             const pf = path.join(GOVERNOR_STATE_DIR, `paused_${a.name}`);
             const opf = path.join(GOVERNOR_STATE_DIR, `operator_paused_${a.name}`);
@@ -854,7 +863,10 @@ app.post('/api/resume/:agent', (req, res) => {
   } catch (e) {
     return res.status(500).json({ error: `failed to remove pause flag: ${e.message}` });
   }
-  // No tmux keystrokes on resume either — kick script handles the prompt.
+  // Clear "agent is paused" placeholder text, then kick.
+  try {
+    execSync(`tmux send-keys -t ${agent} C-u`, { timeout: 5000 });
+  } catch (_) { /* session may not exist */ }
   execFile('/usr/local/bin/kick-agents.sh', [agent], { timeout: 30000 }, (kickErr) => {
     if (kickErr) console.error(`resume kick error for ${agent}:`, kickErr.message);
   });
