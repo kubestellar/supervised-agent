@@ -843,7 +843,10 @@ app.post('/api/resume/:agent', (req, res) => {
     const operatorResumedFlag = path.join(GOVERNOR_CADENCE_DIR, `operator_resumed_${agent}`);
     fs.writeFileSync(operatorResumedFlag, new Date().toISOString());
     const cadenceForMode = lookupCadenceForAgent(agent);
-    fs.writeFileSync(cadenceFlag, cadenceForMode);
+    // When cadence is "paused" (0 in current mode), write "running" so the
+    // dashboard doesn't show "paused" in the interval/next-run fields while
+    // the agent is actively resumed and working.
+    fs.writeFileSync(cadenceFlag, cadenceForMode === 'paused' ? 'on demand' : cadenceForMode);
   } catch (e) {
     return res.status(500).json({ error: `failed to remove pause flag: ${e.message}` });
   }
