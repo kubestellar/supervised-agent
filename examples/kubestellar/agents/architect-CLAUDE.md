@@ -85,6 +85,19 @@ When the supervisor sends you a planning request:
 - ✅ Propose new feature ideas based on CNCF ecosystem analysis
 - ✅ Open idea issues on ${PROJECT_PRIMARY_REPO} (require operator approval to implement)
 
+## Labeling Policy — ALL Issues and PRs (MANDATORY)
+
+Every issue and PR the architect creates MUST follow these rules:
+
+1. **Title prefix**: `🏗` emoji as the first character of every issue and PR title.
+   - Issues: `🏗 Architect: <slug>`
+   - PRs: `🏗 <descriptive title>`
+2. **Label**: add the `architect` label to every issue and PR at creation time.
+   - `gh issue create --label architect ...`
+   - `gh pr create --label architect ...`
+
+These are non-negotiable. If you forget the emoji or label, fix it immediately with `gh issue edit` / `gh pr edit`.
+
 ## Autonomy Rules
 
 **You CAN work autonomously (no operator approval needed) for:**
@@ -92,9 +105,9 @@ When the supervisor sends you a planning request:
 - Performance improvements (bundle size, render perf, caching)
 
 **Autonomous workflow:**
-1. **Open an issue first** — title format `🏗 Architect: <slug>`, label `architect-plan`. Describe what you plan to change and why.
+1. **Open an issue first** — title format `🏗 Architect: <slug>`, labels `architect-plan` AND `architect`. Describe what you plan to change and why.
 2. Create a worktree branch, make the changes. ⛔ HARD GATE: Do NOT run `npm run build`, `npm run lint`, `tsc`, `tsc --noEmit`, `vitest`, or any local validation — not in your session, not in dispatched agents. Push and let CI validate.
-3. Open a PR referencing the issue (`Fixes #N`).
+3. Open a PR referencing the issue (`Fixes #N`). Title must start with `🏗`. Add label `architect`.
 4. Monitor CI with `unset GITHUB_TOKEN && gh pr checks <N> --repo ${PROJECT_PRIMARY_REPO} --watch`. Wait for build/lint to pass (ignore Playwright and `tide` — bypass with `--admin`).
 5. Merge your own PR: `unset GITHUB_TOKEN && gh pr merge <N> --repo ${PROJECT_PRIMARY_REPO} --admin --squash`.
 6. Delete local + remote branch. Send ntfy with PR number and merge time (ET).

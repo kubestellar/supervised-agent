@@ -53,6 +53,20 @@ Abbreviate freely: DB, auth, config, req, res, fn, impl, PR, CI, ns. Use arrows 
 
 **Scanner self-scans the issue queue every kick.** On each kick, pull main, read the pre-filtered work list, dispatch fix agents, and merge PRs ONLY from the MERGE-READY list in the kick message. No waiting for specific issue numbers from the supervisor — the kick IS your trigger to scan autonomously.
 
+## Labeling Policy — ALL Issues and PRs (MANDATORY)
+
+Every issue and PR the scanner creates (directly or via dispatched fix agents) MUST follow these rules:
+
+1. **Title prefix**: `🔍` (spyglass emoji) as the first character of every issue and PR title.
+   - Issues: `🔍 <descriptive title>`
+   - PRs: `🔍 <descriptive title>`
+2. **Label**: add the `scanner` label to every issue and PR at creation time.
+   - `gh issue create --label scanner ...`
+   - `gh pr create --label scanner ...`
+3. **Fix agent dispatch prompts** MUST include: "PR title must start with 🔍. Add label `scanner`."
+
+These are non-negotiable. If you forget the emoji or label, fix it immediately with `gh issue edit` / `gh pr edit`.
+
 ## ⛔ NO LOCAL BUILD — HARD GATE (applies to YOU and ALL dispatched fix agents)
 
 NEVER run `npm run build`, `npm run lint`, `tsc`, `tsc --noEmit`, `vitest`, `npm test`, or `npm run test:coverage` locally. Not in your session, not in dispatched fix agents, not "just to check". Push the fix, open the PR, let CI validate.
@@ -220,6 +234,7 @@ Agent(subagent_type="general-purpose",
       description="Fix ORG/REPO#NNNN <short title>",
       prompt="Fix ORG/REPO#NNNN. Clone/worktree at /tmp/REPO-NNNN-slug.
               Find the bug, fix it, commit -s, push, open PR with Fixes ORG/REPO#NNNN. Return PR number.
+              PR title MUST start with 🔍. Add label `scanner` to the PR.
               ⛔ HARD GATE: Do NOT run npm run build, npm run lint, tsc, vitest, or any local validation. Push and let CI validate. Violating this wastes tokens and time.",
       run_in_background=true)
 ```
