@@ -816,7 +816,7 @@ app.post('/api/pause/:agent', (req, res) => {
     } catch (_) { /* ignore */ }
     setTimeout(() => {
       try {
-        execSync(`tmux send-keys -t ${agent} 'agent is paused' Enter`, { timeout: 5000 });
+        execSync(`tmux send-keys -t ${agent} -l 'agent is paused'`, { timeout: 5000 });
       } catch (_) { /* ignore */ }
       res.json({ ok: true, output: `${agent} paused` });
     }, PAUSE_CLEAR_TO_MSG_MS);
@@ -844,7 +844,10 @@ app.post('/api/resume/:agent', (req, res) => {
   } catch (e) {
     return res.status(500).json({ error: `failed to remove pause flag: ${e.message}` });
   }
-  // Agent session is still alive (soft pause didn't kill it) — kick immediately
+  // Clear "agent is paused" text from input line, then kick
+  try {
+    execSync(`tmux send-keys -t ${agent} C-u`, { timeout: 5000 });
+  } catch (_) { /* ignore */ }
   const RESUME_KICK_DELAY_MS = 2000;
   setTimeout(() => {
     execFile('/usr/local/bin/kick-agents.sh', [agent], { timeout: 30000 }, (kickErr) => {
