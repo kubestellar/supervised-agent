@@ -806,25 +806,25 @@ app.post('/api/pause/:agent', (req, res) => {
   } catch (e) {
     return res.status(500).json({ error: `failed to write pause flag: ${e.message}` });
   }
-  // Soft pause: single Esc cancels in-progress tool call without exiting Claude.
-  // Multiple Esc presses on an idle Claude will EXIT the program — only send one.
-  // Ctrl-U clears input line, then type status text (no Enter).
-  const PAUSE_ESC_TO_CLEAR_MS = 2000;
-  const PAUSE_CLEAR_TO_MSG_MS = 1000;
-  try {
-    execSync(`tmux send-keys -t ${agent} Escape`, { timeout: 5000 });
-  } catch (_) { /* session may not exist */ }
+  // Only send Esc if agent is actively working — Esc on idle Claude exits the program.
+  const agentStatus = (statusCache?.agents || []).find(a => a.name === agent);
+  const isWorking = agentStatus?.busy === 'working';
+  if (isWorking) {
+    try {
+      execSync(`tmux send-keys -t ${agent} Escape`, { timeout: 5000 });
+    } catch (_) { /* session may not exist */ }
+  }
+  // Type placeholder text (no Enter) so operator sees status in the tmux pane.
+  const PAUSE_TYPE_DELAY_MS = 500;
   setTimeout(() => {
     try {
       execSync(`tmux send-keys -t ${agent} C-u`, { timeout: 5000 });
     } catch (_) { /* ignore */ }
-    setTimeout(() => {
-      try {
-        execSync(`tmux send-keys -t ${agent} -l 'agent is paused'`, { timeout: 5000 });
-      } catch (_) { /* ignore */ }
-      res.json({ ok: true, output: `${agent} paused` });
-    }, PAUSE_CLEAR_TO_MSG_MS);
-  }, PAUSE_ESC_TO_CLEAR_MS);
+    try {
+      execSync(`tmux send-keys -t ${agent} -l 'agent is paused'`, { timeout: 5000 });
+    } catch (_) { /* ignore */ }
+    res.json({ ok: true, output: `${agent} paused (interrupted: ${isWorking})` });
+  }, PAUSE_TYPE_DELAY_MS);
 });
 
 app.post('/api/resume/:agent', (req, res) => {
@@ -854,16 +854,10 @@ app.post('/api/resume/:agent', (req, res) => {
   } catch (e) {
     return res.status(500).json({ error: `failed to remove pause flag: ${e.message}` });
   }
-  // Clear "agent is paused" text from input line, then kick
-  try {
-    execSync(`tmux send-keys -t ${agent} C-u`, { timeout: 5000 });
-  } catch (_) { /* ignore */ }
-  const RESUME_KICK_DELAY_MS = 2000;
-  setTimeout(() => {
-    execFile('/usr/local/bin/kick-agents.sh', [agent], { timeout: 30000 }, (kickErr) => {
-      if (kickErr) console.error(`resume kick error for ${agent}:`, kickErr.message);
-    });
-  }, RESUME_KICK_DELAY_MS);
+  // No tmux keystrokes on resume either — kick script handles the prompt.
+  execFile('/usr/local/bin/kick-agents.sh', [agent], { timeout: 30000 }, (kickErr) => {
+    if (kickErr) console.error(`resume kick error for ${agent}:`, kickErr.message);
+  });
   res.json({ ok: true, output: `${agent} resumed` });
 });
 
