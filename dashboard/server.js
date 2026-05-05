@@ -800,6 +800,9 @@ app.post('/api/pause/:agent', (req, res) => {
     fs.writeFileSync(pauseFlag, new Date().toISOString());
     fs.writeFileSync(operatorFlag, new Date().toISOString());
     fs.writeFileSync(path.join(GOVERNOR_CADENCE_DIR, `cadence_${agent}`), 'paused');
+    // Clear operator-resume override so governor can re-pause normally
+    const resumeOverride = path.join(GOVERNOR_CADENCE_DIR, `operator_resumed_${agent}`);
+    try { if (fs.existsSync(resumeOverride)) fs.unlinkSync(resumeOverride); } catch (_) {}
   } catch (e) {
     return res.status(500).json({ error: `failed to write pause flag: ${e.message}` });
   }

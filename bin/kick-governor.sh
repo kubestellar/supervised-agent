@@ -673,13 +673,11 @@ maybe_kick() {
   fi
 
   if [ "$cadence" -eq 0 ]; then
-    # Operator resume override — dashboard resume wrote this flag to prevent
-    # governor from immediately re-pausing an agent whose cadence is 0.
-    # The flag is consumed (one-shot) so the next tick will re-pause normally.
+    # Operator resume override — persists until the next explicit pause.
+    # Dashboard resume writes this flag; dashboard pause removes it.
     if [[ -f "$STATE_DIR/operator_resumed_${agent}" ]]; then
-      rm -f "$STATE_DIR/operator_resumed_${agent}"
       rm -f "$STATE_DIR/cadence_paused_${agent}"
-      log "SKIP ${agent} (mode=${mode} cadence=0 — operator resume override, deferring re-pause)"
+      log "SKIP ${agent} (mode=${mode} cadence=0 — operator override active, not re-pausing)"
       audit_kick "$agent" "SKIP" "operator-resume-override" "governor"
       return
     fi
