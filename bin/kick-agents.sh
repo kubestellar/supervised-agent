@@ -73,6 +73,7 @@ log() { echo "[$TIMESTAMP] $*" | tee -a "$LOG"; }
 ntfy() { notify "$1" "$2"; }  # legacy shim — use notify() directly for new code
 # Structured audit log — every kick decision records pause state
 KICK_AUDIT_LOG="/var/log/kick-audit.jsonl"
+[[ -f "$KICK_AUDIT_LOG" ]] || { touch "$KICK_AUDIT_LOG" 2>/dev/null || true; }
 audit_kick() {
   local agent="$1" action="$2" reason="$3" caller="${4:-kick-agents}"
   local paused_gov=false paused_op=false paused_etc=false

@@ -154,6 +154,7 @@ _is_agent_paused() { hive_is_paused "$1"; }
 
 # Structured audit log — every governor kick decision records pause state
 KICK_AUDIT_LOG="/var/log/kick-audit.jsonl"
+[[ -f "$KICK_AUDIT_LOG" ]] || { touch "$KICK_AUDIT_LOG" 2>/dev/null || true; }
 audit_kick() {
   local agent="$1" action="$2" reason="$3" caller="${4:-governor}"
   local paused_gov=false paused_op=false paused_etc=false

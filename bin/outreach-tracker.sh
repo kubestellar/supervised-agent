@@ -43,6 +43,7 @@ INTERNAL_REPOS=$(echo "$CONFIG" | python3 -c "import json,sys; print(' '.join(js
 _OT_PAUSED_GOV=false; [[ -f "/var/run/kick-governor/paused_outreach" ]] && _OT_PAUSED_GOV=true
 _OT_PAUSED_OP=false; [[ -f "/var/run/kick-governor/operator_paused_outreach" ]] && _OT_PAUSED_OP=true
 log "START — tracking outreach PRs by $AI_AUTHOR outside $ORG (paused_gov=$_OT_PAUSED_GOV paused_op=$_OT_PAUSED_OP)"
+[[ -f "/var/log/kick-audit.jsonl" ]] || { touch "/var/log/kick-audit.jsonl" 2>/dev/null || true; }
 printf '{"ts":"%s","agent":"outreach","action":"TRACK","reason":"outreach-tracker","caller":"outreach-tracker","paused_governor":%s,"paused_operator":%s,"paused_etc":false}\n' \
   "$(date -u +%Y-%m-%dT%H:%M:%S+00:00)" "$_OT_PAUSED_GOV" "$_OT_PAUSED_OP" >> "/var/log/kick-audit.jsonl"
 
