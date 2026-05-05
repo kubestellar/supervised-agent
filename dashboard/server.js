@@ -839,6 +839,9 @@ app.post('/api/resume/:agent', (req, res) => {
     if (fs.existsSync(wasPausedFlag)) fs.unlinkSync(wasPausedFlag);
     const cadencePausedFlag = path.join(GOVERNOR_CADENCE_DIR, `cadence_paused_${agent}`);
     if (fs.existsSync(cadencePausedFlag)) fs.unlinkSync(cadencePausedFlag);
+    // Tell governor not to immediately re-pause if cadence is 0 in current mode
+    const operatorResumedFlag = path.join(GOVERNOR_CADENCE_DIR, `operator_resumed_${agent}`);
+    fs.writeFileSync(operatorResumedFlag, new Date().toISOString());
     const cadenceForMode = lookupCadenceForAgent(agent);
     fs.writeFileSync(cadenceFlag, cadenceForMode);
   } catch (e) {
