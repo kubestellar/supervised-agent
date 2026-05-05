@@ -823,13 +823,16 @@
         const inProgress = m.inProgress || [];
         const openPairs = pairs.filter(p => p.state !== 'merged');
         const mergedPairs = pairs.filter(p => p.state === 'merged');
+        const _org = (window._primaryRepo || 'kubestellar/console').split('/')[0];
+        const _defaultRepo = (window._primaryRepo || 'kubestellar/console').split('/')[1];
+        const _ghUrl = (p, type) => `https://github.com/${_org}/${p.repo || _defaultRepo}/${type}/${type === 'issues' ? p.issue : p.pr}`;
+        const _repoTag = (p) => (p.repo && p.repo !== _defaultRepo) ? `<span style="color:var(--muted);font-size:0.65rem">${p.repo}/</span>` : '';
         const renderPair = (p) => {
           const issueLabel = p.issueTitle ? `⊙ #${p.issue} — ${esc(p.issueTitle.length > 48 ? p.issueTitle.slice(0, 48) + '…' : p.issueTitle)}` : `⊙ #${p.issue}`;
           const issueTip = p.issueTitle ? esc(p.issueTitle) : '';
           const prIcon = p.state === 'merged' ? '✓' : '⎇';
           const prCls = p.state === 'merged' ? 'ind-pr ind-merged' : 'ind-pr';
           const prTip = p.prTitle ? esc(p.prTitle) : '';
-          // Show token cost annotation for merged issues when data is available
           let costHtml = '';
           if (p.state === 'merged') {
             const cost = issueCosts[String(p.issue)];
@@ -843,16 +846,16 @@
             }
           }
           return `<div class="ind-pair">
-          <a class="ind-tag ind-issue" href="https://github.com/kubestellar/console/issues/${p.issue}" target="_blank" title="${issueTip}">${issueLabel}</a>
+          ${_repoTag(p)}<a class="ind-tag ind-issue" href="${_ghUrl(p,'issues')}" target="_blank" title="${issueTip}">${issueLabel}</a>
           <span class="ind-arrow">→</span>
-          <a class="ind-tag ${prCls}" href="https://github.com/kubestellar/console/pull/${p.pr}" target="_blank" title="${prTip}">${prIcon} #${p.pr}</a>${costHtml}
+          <a class="ind-tag ${prCls}" href="${_ghUrl(p,'pull')}" target="_blank" title="${prTip}">${prIcon} #${p.pr}</a>${costHtml}
         </div>`;
         };
         const renderWip = (ip) => {
           const title = ip.title ? esc(ip.title.length > 48 ? ip.title.slice(0, 48) + '…' : ip.title) : '';
           const label = title ? `⏳ #${ip.number} — ${title}` : `⏳ #${ip.number}`;
           return `<div class="ind-pair">
-          <a class="ind-tag ind-wip" href="https://github.com/kubestellar/console/issues/${ip.number}" target="_blank" title="${ip.title ? esc(ip.title) : ''}">${label}</a>
+          <a class="ind-tag ind-wip" href="https://github.com/${_org}/${_defaultRepo}/issues/${ip.number}" target="_blank" title="${ip.title ? esc(ip.title) : ''}">${label}</a>
         </div>`;
         };
         const standaloneMerged = m.mergedPrs || [];
@@ -860,7 +863,7 @@
           const title = p.prTitle ? esc(p.prTitle.length > 55 ? p.prTitle.slice(0, 55) + '…' : p.prTitle) : '';
           const tip = p.prTitle ? esc(p.prTitle) : '';
           return `<div class="ind-pair">
-          <a class="ind-tag ind-pr ind-merged" href="https://github.com/kubestellar/console/pull/${p.pr}" target="_blank" title="${tip}">✓ #${p.pr} — ${title}</a>
+          ${_repoTag(p)}<a class="ind-tag ind-pr ind-merged" href="${_ghUrl(p,'pull')}" target="_blank" title="${tip}">✓ #${p.pr} — ${title}</a>
         </div>`;
         };
         const allMergedCount = mergedPairs.length + standaloneMerged.length;
