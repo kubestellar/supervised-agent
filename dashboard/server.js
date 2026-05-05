@@ -806,13 +806,13 @@ app.post('/api/pause/:agent', (req, res) => {
   } catch (e) {
     return res.status(500).json({ error: `failed to write pause flag: ${e.message}` });
   }
-  // Soft pause: Esc cancels in-progress work, Ctrl-U clears input line,
-  // then type status text (no Enter — just sits in input as visible marker).
-  // No Ctrl-C — it sends SIGINT which kills the Claude process.
+  // Soft pause: single Esc cancels in-progress tool call without exiting Claude.
+  // Multiple Esc presses on an idle Claude will EXIT the program — only send one.
+  // Ctrl-U clears input line, then type status text (no Enter).
   const PAUSE_ESC_TO_CLEAR_MS = 2000;
   const PAUSE_CLEAR_TO_MSG_MS = 1000;
   try {
-    execSync(`tmux send-keys -t ${agent} Escape Escape Escape Escape`, { timeout: 5000 });
+    execSync(`tmux send-keys -t ${agent} Escape`, { timeout: 5000 });
   } catch (_) { /* session may not exist */ }
   setTimeout(() => {
     try {
