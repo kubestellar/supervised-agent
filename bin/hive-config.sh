@@ -179,11 +179,13 @@ hive_log() { printf '[%s] %s\n' "$(date -Is)" "$*"; }
 hive_log_to() { local f="$1"; shift; printf '[%s] %s\n' "$(date -Is)" "$*" >> "$f"; }
 
 # Canonical pause state checks — single source of truth for all scripts.
-# An agent is paused if EITHER file exists. Operator pause survives system resume.
+# An agent is paused if ANY pause file exists. Operator pause survives system resume.
+# cadence_paused is written by governor when cadence=0 in current mode.
 hive_is_paused() {
   local agent="${1:?agent name required}"
   [[ -f "${GOVERNOR_STATE_DIR}/paused_${agent}" ]] || \
-  [[ -f "${GOVERNOR_STATE_DIR}/operator_paused_${agent}" ]]
+  [[ -f "${GOVERNOR_STATE_DIR}/operator_paused_${agent}" ]] || \
+  [[ -f "${GOVERNOR_STATE_DIR}/cadence_paused_${agent}" ]]
 }
 hive_is_operator_paused() {
   local agent="${1:?agent name required}"

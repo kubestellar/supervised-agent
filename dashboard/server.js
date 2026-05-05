@@ -337,7 +337,8 @@ function fetchStatus() {
           try {
             const pf = path.join(GOVERNOR_STATE_DIR, `paused_${a.name}`);
             const opf = path.join(GOVERNOR_STATE_DIR, `operator_paused_${a.name}`);
-            if (fs.existsSync(pf) || fs.existsSync(opf)) { a.paused = true; a.cadence = 'paused'; }
+            const cpf = path.join(GOVERNOR_STATE_DIR, `cadence_paused_${a.name}`);
+            if (fs.existsSync(pf) || fs.existsSync(opf) || fs.existsSync(cpf)) { a.paused = true; a.cadence = 'paused'; }
           } catch (_) {}
           // Pin state
           try {
@@ -842,6 +843,8 @@ app.post('/api/resume/:agent', (req, res) => {
     if (fs.existsSync(pauseFlag)) fs.unlinkSync(pauseFlag);
     if (fs.existsSync(operatorFlag)) fs.unlinkSync(operatorFlag);
     if (fs.existsSync(wasPausedFlag)) fs.unlinkSync(wasPausedFlag);
+    const cadencePausedFlag = path.join(GOVERNOR_CADENCE_DIR, `cadence_paused_${agent}`);
+    if (fs.existsSync(cadencePausedFlag)) fs.unlinkSync(cadencePausedFlag);
     // Write the correct cadence for the current governor mode instead of deleting.
     // Governor will overwrite on next cycle; this prevents a gap where interval shows "?".
     const cadenceForMode = lookupCadenceForAgent(agent);
