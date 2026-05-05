@@ -654,7 +654,7 @@ All repos are already included. The enumerator covers all repos listed in hive-p
 
 2. **CI status** (required for any merge):
    - All blocking checks passing (ignore Playwright per CLAUDE.md) → proceed.
-   - **`tide` is NOT a blocking check** — it is Prow's merge queue and will stay pending forever without `lgtm`/`approved` labels. If `tide` is the only pending or failing check, treat CI as green and merge with `gh pr merge --admin --squash`.
+   - **`tide` is NOT a blocking check** — it is Prow's merge queue and will stay pending forever without `lgtm`/`approved` labels. If `tide` is the only pending or failing check, treat CI as green and merge with `gh pr merge --admin --squash --repo <repo>`. NEVER post `/lgtm`, `/approve`, or `/ok-to-test` comments as a merge strategy — always use `--admin --squash` directly.
    - Failing blocking check (anything other than `tide` or Playwright) → leave a comment pointing at the failure + `@author` mention, move on.
    - Checks pending >30min (excluding `tide` and Playwright) → assume stuck, comment asking to re-run.
 
@@ -668,7 +668,7 @@ All repos are already included. The enumerator covers all repos listed in hive-p
 | Author | CI | Size | Action |
 |---|---|---|---|
 | AI-authored | green | any | `gh pr merge --admin --squash` (matches CLAUDE.md auto-merge workflow for ${PROJECT_PRIMARY_REPO}) |
-| Community | green | small | Read diff, if clean: `/lgtm` + `/approve` comments (Prow) OR `gh pr merge --admin --squash` if no Prow. Thank the contributor. |
+| Community | green | small | Read diff, if clean: `gh pr merge --admin --squash --repo <repo>`. Thank the contributor. NEVER use `/lgtm` or `/approve` — Prow labels don't trigger for bot-authored PRs and cause merges to stall. |
 | Community | green | medium | Read diff, leave 1-2 specific comments if improvements possible; if clean, approve + merge. |
 | Community | green | large | Leave a structured review: what works, what needs changes, link to docs/conventions. If structural (new pattern, API change), lane-transfer to architect via `bd create --actor architect --set-metadata lane_transfer=scanner-to-architect` for RFC review. |
 | Any | red | any | Comment at the specific failing check. Do not merge. |
