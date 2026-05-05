@@ -28,6 +28,7 @@ fi
 GH=/usr/bin/gh
 
 REPO="${PROJECT_PRIMARY_REPO:-kubestellar/console}"
+ALL_REPOS="${PROJECT_REPOS:-$REPO}"
 AI_AUTHOR="${PROJECT_AI_AUTHOR:-${AI_AUTHOR}}"
 PROJECT="${PROJECT_NAME:-KubeStellar}"
 BADGE_URL="${OUTREACH_COVERAGE_BADGE_URL:-https://gist.githubusercontent.com/${AI_AUTHOR}/b9a9ae8469f1897a22d5a40629bc1e82/raw/coverage-badge.json}"
@@ -46,29 +47,36 @@ outreach_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "outr
 outreach_model=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "outreach") | .model' 2>/dev/null || echo "?")
 
 # ── Scanner: issue→PR pairs from open + recently merged AI-authored PRs ──
+# Queries ALL monitored repos, not just the primary repo.
 RECENT_MERGED_HOURS=24
 scanner_pairs_json="[]"
 if command -v $GH &>/dev/null; then
-  # Open PRs
-  open_prs=$($GH api "repos/${REPO}/pulls?state=open&per_page=50" \
-    --jq "[.[] | select(.user.login == \"${AI_AUTHOR}\") | {pr: .number, title: .title, body: (.body // \"\"), created: .created_at, state: \"open\"}]" 2>/dev/null || echo "[]")
-  # Recently merged PRs (last 24h)
-  since=$(date -u -d "-${RECENT_MERGED_HOURS} hours" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-${RECENT_MERGED_HOURS}H '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "")
+  open_prs="[]"
   merged_prs="[]"
-  if [ -n "$since" ]; then
-    merged_prs=$($GH api "repos/${REPO}/pulls?state=closed&per_page=30&sort=updated&direction=desc" \
-      --jq "[.[] | select(.user.login == \"${AI_AUTHOR}\" and .merged_at != null and .merged_at >= \"$since\") | {pr: .number, title: .title, body: (.body // \"\"), merged: .merged_at, state: \"merged\"}]" 2>/dev/null || echo "[]")
-  fi
+  since=$(date -u -d "-${RECENT_MERGED_HOURS} hours" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-${RECENT_MERGED_HOURS}H '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "")
+  for _repo in $ALL_REPOS; do
+    _repo_short="${_repo##*/}"
+    # Open PRs
+    _open=$($GH api "repos/${_repo}/pulls?state=open&per_page=50" \
+      --jq "[.[] | select(.user.login == \"${AI_AUTHOR}\") | {pr: .number, title: .title, body: (.body // \"\"), created: .created_at, state: \"open\", repo: \"${_repo_short}\"}]" 2>/dev/null || echo "[]")
+    open_prs=$(echo "$open_prs" "$_open" | jq -s 'add' 2>/dev/null || echo "$open_prs")
+    # Recently merged PRs (last 24h)
+    if [ -n "$since" ]; then
+      _merged=$($GH api "repos/${_repo}/pulls?state=closed&per_page=30&sort=updated&direction=desc" \
+        --jq "[.[] | select(.user.login == \"${AI_AUTHOR}\" and .merged_at != null and .merged_at >= \"$since\") | {pr: .number, title: .title, body: (.body // \"\"), merged: .merged_at, state: \"merged\", repo: \"${_repo_short}\"}]" 2>/dev/null || echo "[]")
+      merged_prs=$(echo "$merged_prs" "$_merged" | jq -s 'add' 2>/dev/null || echo "$merged_prs")
+    fi
+  done
   all_prs=$(echo "$open_prs" "$merged_prs" | jq -s 'add' 2>/dev/null || echo "[]")
   scanner_pairs_json=$(echo "$all_prs" | jq '[
     .[] |
     . as $p |
     ($p.body | match("(?i)(fixes|closes|resolves) #([0-9]+)"; "g") // null) as $m |
-    if $m then { issue: ($m.captures[1].string | tonumber), pr: $p.pr, prTitle: $p.title, state: $p.state, created: ($p.created // null), merged: ($p.merged // null) } else empty end
+    if $m then { issue: ($m.captures[1].string | tonumber), pr: $p.pr, prTitle: $p.title, state: $p.state, created: ($p.created // null), merged: ($p.merged // null), repo: ($p.repo // "") } else empty end
   ]' 2>/dev/null || echo "[]")
   # ── Standalone merged PRs: merged recently but no Fixes/Closes reference ──
   paired_pr_nums=$(echo "$scanner_pairs_json" | jq -r '.[].pr' 2>/dev/null | sort -un)
-  scanner_standalone_merged=$(echo "$merged_prs" | jq --argjson paired "$(echo "$paired_pr_nums" | jq -Rn '[inputs | select(length>0) | tonumber]')" '[.[] | select(([.pr] - $paired) | length > 0) | {pr: .pr, prTitle: .title, state: .state, merged: .merged}]' 2>/dev/null || echo "[]")
+  scanner_standalone_merged=$(echo "$merged_prs" | jq --argjson paired "$(echo "$paired_pr_nums" | jq -Rn '[inputs | select(length>0) | tonumber]')" '[.[] | select(([.pr] - $paired) | length > 0) | {pr: .pr, prTitle: .title, state: .state, merged: .merged, repo: (.repo // "")}]' 2>/dev/null || echo "[]")
   # ── In-progress issues: mentioned in scanner tmux but no PR yet ──
   scanner_tmux=$(tmux capture-pane -t scanner -p -S -200 2>/dev/null || echo "")
   dispatched_issues=$(echo "$scanner_tmux" | grep -oP '#\K\d{4,5}' | sort -un)
@@ -93,48 +101,53 @@ if command -v $GH &>/dev/null; then
     # Validate JSON — corrupt cache shouldn't break the pipeline
     echo "$title_cache" | jq . >/dev/null 2>&1 || title_cache='{}'
 
-    unique_issues=$(echo "$scanner_pairs_json" | jq -r '.[].issue' | sort -un | grep -v '^0$')
-    merged_issues=$(echo "$scanner_pairs_json" | jq -r '.[] | select(.state == "merged") | .issue' | sort -un | grep -v '^0$')
+    # Build repo-qualified issue list: "repo:number" pairs for cache keying
+    unique_issue_keys=$(echo "$scanner_pairs_json" | jq -r '.[] | "\(.repo // "console"):\(.issue)"' | sort -u | grep -v ':0$')
+    merged_issue_keys=$(echo "$scanner_pairs_json" | jq -r '.[] | select(.state == "merged") | "\(.repo // "console"):\(.issue)"' | sort -u | grep -v ':0$')
 
     # Determine which issues need a fetch: skip merged issues already in cache
-    fetch_issues=""
-    for inum in $unique_issues; do
-      cached_title=$(echo "$title_cache" | jq -r --arg k "$inum" '.[$k].title // empty' 2>/dev/null)
-      is_merged=$(echo "$merged_issues" | grep -qx "$inum" && echo "yes" || echo "no")
+    fetch_issue_keys=""
+    for ikey in $unique_issue_keys; do
+      cached_title=$(echo "$title_cache" | jq -r --arg k "$ikey" '.[$k].title // empty' 2>/dev/null)
+      is_merged=$(echo "$merged_issue_keys" | grep -qx "$ikey" && echo "yes" || echo "no")
       if [ "$is_merged" = "yes" ] && [ -n "$cached_title" ]; then
         continue
       fi
-      fetch_issues="$fetch_issues $inum"
+      fetch_issue_keys="$fetch_issue_keys $ikey"
     done
 
     # Fetch only uncached issues in parallel
     title_map="{}"
     state_map="{}"
-    if [ -n "$fetch_issues" ]; then
+    if [ -n "$fetch_issue_keys" ]; then
       issue_tmp=$(mktemp -d)
-      for inum in $fetch_issues; do
-        ($GH api "repos/${REPO}/issues/${inum}" --jq '{title: .title, state: .state}' > "$issue_tmp/$inum" 2>/dev/null || echo '{"title":"","state":"open"}' > "$issue_tmp/$inum") &
+      for ikey in $fetch_issue_keys; do
+        _irepo="${ikey%%:*}"
+        _inum="${ikey##*:}"
+        _full_repo="${PROJECT_ORG:-kubestellar}/${_irepo}"
+        ($GH api "repos/${_full_repo}/issues/${_inum}" --jq '{title: .title, state: .state}' > "$issue_tmp/${_irepo}_${_inum}" 2>/dev/null || echo '{"title":"","state":"open"}' > "$issue_tmp/${_irepo}_${_inum}") &
       done
       wait
-      for inum in $fetch_issues; do
-        ititle=$(cat "$issue_tmp/$inum" 2>/dev/null | jq -r '.title // ""')
-        istate=$(cat "$issue_tmp/$inum" 2>/dev/null | jq -r '.state // "open"')
-        title_map=$(echo "$title_map" | jq --arg k "$inum" --arg v "$ititle" '. + {($k): $v}')
-        state_map=$(echo "$state_map" | jq --arg k "$inum" --arg v "$istate" '. + {($k): $v}')
-        # Write to cache (merged titles persist forever; open titles update each cycle)
-        title_cache=$(echo "$title_cache" | jq --arg k "$inum" --arg t "$ititle" --arg s "$istate" '. + {($k): {title: $t, state: $s}}')
+      for ikey in $fetch_issue_keys; do
+        _irepo="${ikey%%:*}"
+        _inum="${ikey##*:}"
+        ititle=$(cat "$issue_tmp/${_irepo}_${_inum}" 2>/dev/null | jq -r '.title // ""')
+        istate=$(cat "$issue_tmp/${_irepo}_${_inum}" 2>/dev/null | jq -r '.state // "open"')
+        title_map=$(echo "$title_map" | jq --arg k "$ikey" --arg v "$ititle" '. + {($k): $v}')
+        state_map=$(echo "$state_map" | jq --arg k "$ikey" --arg v "$istate" '. + {($k): $v}')
+        title_cache=$(echo "$title_cache" | jq --arg k "$ikey" --arg t "$ititle" --arg s "$istate" '. + {($k): {title: $t, state: $s}}')
       done
       rm -rf "$issue_tmp"
     fi
 
     # Fill title_map and state_map from cache for issues we didn't fetch
-    for inum in $unique_issues; do
-      existing=$(echo "$title_map" | jq -r --arg k "$inum" '.[$k] // empty' 2>/dev/null)
+    for ikey in $unique_issue_keys; do
+      existing=$(echo "$title_map" | jq -r --arg k "$ikey" '.[$k] // empty' 2>/dev/null)
       if [ -z "$existing" ]; then
-        ctitle=$(echo "$title_cache" | jq -r --arg k "$inum" '.[$k].title // ""' 2>/dev/null)
-        cstate=$(echo "$title_cache" | jq -r --arg k "$inum" '.[$k].state // "open"' 2>/dev/null)
-        title_map=$(echo "$title_map" | jq --arg k "$inum" --arg v "$ctitle" '. + {($k): $v}')
-        state_map=$(echo "$state_map" | jq --arg k "$inum" --arg v "$cstate" '. + {($k): $v}')
+        ctitle=$(echo "$title_cache" | jq -r --arg k "$ikey" '.[$k].title // ""' 2>/dev/null)
+        cstate=$(echo "$title_cache" | jq -r --arg k "$ikey" '.[$k].state // "open"' 2>/dev/null)
+        title_map=$(echo "$title_map" | jq --arg k "$ikey" --arg v "$ctitle" '. + {($k): $v}')
+        state_map=$(echo "$state_map" | jq --arg k "$ikey" --arg v "$cstate" '. + {($k): $v}')
       fi
     done
 
@@ -142,7 +155,8 @@ if command -v $GH &>/dev/null; then
     echo "$title_cache" > "$TITLE_CACHE_FILE" 2>/dev/null || true
 
     # Merge titles into pairs; drop open PRs where the issue is already closed
-    scanner_pairs_json=$(echo "$scanner_pairs_json" | jq --argjson titles "$title_map" --argjson states "$state_map" '[.[] | .issueTitle = ($titles[(.issue|tostring)] // "") | select(.state == "merged" or ($states[(.issue|tostring)] // "open") != "closed")]')
+    # Cache keys are "repo:issue" — build the lookup key from each pair's repo field
+    scanner_pairs_json=$(echo "$scanner_pairs_json" | jq --argjson titles "$title_map" --argjson states "$state_map" '[.[] | ((.repo // "console") + ":" + (.issue|tostring)) as $key | .issueTitle = ($titles[$key] // "") | select(.state == "merged" or ($states[$key] // "open") != "closed")]')
   fi
 fi
 
