@@ -2,8 +2,7 @@
 # Build a dashboard snapshot and push it to the docs repo.
 # Designed to run as a cron job on the hive server.
 #
-# Uses a branch + PR + admin-merge workflow because kubestellar/docs
-# has branch protection on main requiring status checks.
+# Pushes directly to main (no PR) to avoid branch protection check delays.
 #
 # Usage: ./publish-snapshot.sh
 # Env vars:
@@ -17,9 +16,7 @@ DASHBOARD_URL="${HIVE_DASHBOARD_URL:-http://localhost:3001}"
 DOCS_REPO="${DOCS_REPO_DIR:-/tmp/kubestellar-docs-snapshot}"
 OUTPUT_DIR="${DOCS_REPO}/public/live/hive"
 BRANCH="main"
-SNAPSHOT_BRANCH="chore/hive-snapshot"
 DOCS_REPO_SLUG="kubestellar/docs"
-GH_CLI="/usr/bin/gh"
 
 GH_APP_TOKEN_FILE="/var/run/hive-metrics/gh-app-token.cache"
 if [ -f "$GH_APP_TOKEN_FILE" ]; then
@@ -54,34 +51,20 @@ fi
 
 TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M UTC')
 
-# Create snapshot branch from current main
-git checkout -B "$SNAPSHOT_BRANCH"
+# Commit and push directly to main
 git add public/live/hive/index.html
 git commit -s -m "chore: update hive dashboard snapshot $TIMESTAMP"
-git push origin "$SNAPSHOT_BRANCH" --force
 
-# Close any existing snapshot PR before creating a new one
-EXISTING_PR=$($GH_CLI pr list --repo "$DOCS_REPO_SLUG" --head "$SNAPSHOT_BRANCH" --json number --jq '.[0].number' 2>/dev/null || true)
-if [ -n "$EXISTING_PR" ]; then
-  $GH_CLI pr close "$EXISTING_PR" --repo "$DOCS_REPO_SLUG" 2>/dev/null || true
-fi
+MAX_RETRIES=3
+RETRY_DELAY_SECONDS=5
+for i in $(seq 1 $MAX_RETRIES); do
+  if git pull --rebase origin "$BRANCH" && git push origin "$BRANCH"; then
+    echo "Snapshot published directly to main."
+    exit 0
+  fi
+  echo "Push attempt $i/$MAX_RETRIES failed, retrying in ${RETRY_DELAY_SECONDS}s..."
+  sleep "$RETRY_DELAY_SECONDS"
+done
 
-# Create PR and immediately admin-merge
-PR_URL=$($GH_CLI pr create --repo "$DOCS_REPO_SLUG" \
-  --head "$SNAPSHOT_BRANCH" --base "$BRANCH" \
-  --title "chore: hive dashboard snapshot $TIMESTAMP" \
-  --body "Automated snapshot update from hive dashboard." 2>&1)
-
-PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-
-if [ -n "$PR_NUM" ]; then
-  $GH_CLI pr merge "$PR_NUM" --repo "$DOCS_REPO_SLUG" --admin --squash --delete-branch 2>&1 && \
-    echo "Snapshot published via PR #$PR_NUM." || \
-    echo "WARN: PR #$PR_NUM created but merge failed — manual merge needed."
-else
-  echo "ERROR: could not create PR. Output: $PR_URL"
-  exit 1
-fi
-
-# Return to main for next run
-git checkout "$BRANCH" 2>/dev/null || true
+echo "ERROR: all $MAX_RETRIES push attempts failed."
+exit 1
