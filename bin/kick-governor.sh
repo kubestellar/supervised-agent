@@ -673,10 +673,13 @@ maybe_kick() {
   fi
 
   if [ "$cadence" -eq 0 ]; then
+    touch "$STATE_DIR/cadence_paused_${agent}"
     log "SKIP ${agent} (mode=${mode} — PAUSED)"
     audit_kick "$agent" "SKIP" "cadence-zero" "governor"
     return
   fi
+
+  rm -f "$STATE_DIR/cadence_paused_${agent}"
 
   if [ "$elapsed" -ge "$cadence" ]; then
     local next_et
