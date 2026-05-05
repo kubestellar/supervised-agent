@@ -1986,6 +1986,11 @@ function burnAreaChart() {
       const res = await fetch(`/api/reset-restarts/${agent}`, { method: 'POST' });
       const data = await res.json();
       if (!data.ok) { dismissToast(toast, `Reset failed: ${data.error || 'unknown'}`, 'error'); return; }
+      const btn = document.querySelector(`.restart-reset[onclick="resetRestarts('${agent}')"]`);
+      if (btn) {
+        const el = btn.closest('.value');
+        if (el) { el.className = 'value'; el.innerHTML = '0<span class="restart-label">24h</span><span class="restart-spark"></span>'; }
+      }
       dismissToast(toast, `${agent} restart counter reset`, 'success');
     }
 
