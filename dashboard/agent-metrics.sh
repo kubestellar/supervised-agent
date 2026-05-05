@@ -56,14 +56,14 @@ if command -v $GH &>/dev/null; then
   since=$(date -u -d "-${RECENT_MERGED_HOURS} hours" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-${RECENT_MERGED_HOURS}H '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "")
   for _repo in $ALL_REPOS; do
     _repo_short="${_repo##*/}"
-    # Open PRs
+    # Open PRs (all authors)
     _open=$($GH api "repos/${_repo}/pulls?state=open&per_page=50" \
-      --jq "[.[] | select(.user.login == \"${AI_AUTHOR}\") | {pr: .number, title: .title, body: (.body // \"\"), created: .created_at, state: \"open\", repo: \"${_repo_short}\"}]" 2>/dev/null || echo "[]")
+      --jq "[.[] | {pr: .number, title: .title, body: (.body // \"\"), created: .created_at, state: \"open\", repo: \"${_repo_short}\", author: .user.login}]" 2>/dev/null || echo "[]")
     open_prs=$(echo "$open_prs" "$_open" | jq -s 'add' 2>/dev/null || echo "$open_prs")
-    # Recently merged PRs (last 24h)
+    # Recently merged PRs (last 24h, all authors)
     if [ -n "$since" ]; then
-      _merged=$($GH api "repos/${_repo}/pulls?state=closed&per_page=30&sort=updated&direction=desc" \
-        --jq "[.[] | select(.user.login == \"${AI_AUTHOR}\" and .merged_at != null and .merged_at >= \"$since\") | {pr: .number, title: .title, body: (.body // \"\"), merged: .merged_at, state: \"merged\", repo: \"${_repo_short}\"}]" 2>/dev/null || echo "[]")
+      _merged=$($GH api "repos/${_repo}/pulls?state=closed&per_page=100&sort=updated&direction=desc" \
+        --jq "[.[] | select(.merged_at != null and .merged_at >= \"$since\") | {pr: .number, title: .title, body: (.body // \"\"), merged: .merged_at, state: \"merged\", repo: \"${_repo_short}\", author: .user.login}]" 2>/dev/null || echo "[]")
       merged_prs=$(echo "$merged_prs" "$_merged" | jq -s 'add' 2>/dev/null || echo "$merged_prs")
     fi
   done
