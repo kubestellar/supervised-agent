@@ -38,11 +38,18 @@ ci=$(gh run list --repo "$REPO" --status completed --limit 10 --json conclusion 
   --jq 'if length > 0 then ([.[] | select(.conclusion=="success" or .conclusion=="skipped")] | length) * 100 / length | floor else 0 end' 2>/dev/null || echo 0)
 
 # ── Brew formula freshness ───────────────────────────────────────────────────
+# Nightly releases set the formula to e.g. "0.3.26-nightly.20260505".
+# Green when: nightly suffix matches today's date, OR stable version matches latest release.
 if [ -n "$BREW_TAP" ] && [ -n "$BREW_FORMULA" ]; then
   formula_ver=$(gh api "repos/${BREW_TAP}/contents/Formula/${BREW_FORMULA}" \
     --jq '.content' 2>/dev/null | base64 -d 2>/dev/null | grep 'version "' | sed 's/.*version "//;s/".*//' | sed 's/^v//' || echo "?")
-  latest_rel=$(gh api "repos/${REPO}/releases/latest" --jq '.tag_name' 2>/dev/null | sed 's/^v//' || echo "?")
-  brew_ok=$( [ "$formula_ver" = "$latest_rel" ] && echo 1 || echo 0 )
+  today=$(date -u +%Y%m%d)
+  if echo "$formula_ver" | grep -q "nightly\.${today}$"; then
+    brew_ok=1
+  else
+    latest_rel=$(gh api "repos/${REPO}/releases/latest" --jq '.tag_name' 2>/dev/null | sed 's/^v//' || echo "?")
+    brew_ok=$( [ "$formula_ver" = "$latest_rel" ] && echo 1 || echo 0 )
+  fi
 else
   brew_ok=-1
 fi
