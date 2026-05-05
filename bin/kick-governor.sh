@@ -737,7 +737,11 @@ for _agent in scanner reviewer architect outreach supervisor; do
   fi
   _secs=$(get_cadence "$_agent" "$mode")
   if [ "$_secs" -eq 0 ]; then
-    echo "paused"
+    if [[ -f "$STATE_DIR/operator_resumed_${_agent}" ]]; then
+      echo "on demand"
+    else
+      echo "paused"
+    fi
   else
     secs_to_label "$_secs"
   fi > "$STATE_DIR/cadence_${_agent}"
