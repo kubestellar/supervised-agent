@@ -379,13 +379,13 @@ print(json.dumps(kept))
 issue_count=$(echo "$all_issues" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
 pr_count=$(echo "$all_prs" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
 
-python3 -c "
+printf '%s\n%s\n' "$all_issues" "$all_prs" | python3 -c "
 import json, os, sys
 from datetime import datetime, timezone
 
-issues = json.loads(sys.argv[1])
-prs = json.loads(sys.argv[2])
-primary_repo = sys.argv[3] if len(sys.argv) > 3 else os.environ.get('PROJECT_PRIMARY_REPO', '')
+issues = json.loads(sys.stdin.readline())
+prs = json.loads(sys.stdin.readline())
+primary_repo = sys.argv[1] if len(sys.argv) > 1 else os.environ.get('PROJECT_PRIMARY_REPO', '')
 
 now = datetime.now(timezone.utc)
 
@@ -424,7 +424,7 @@ result = {
     }
 }
 print(json.dumps(result, indent=2))
-" "$all_issues" "$all_prs" "${PROJECT_PRIMARY_REPO:-}" > "$TMP_FILE"
+" "${PROJECT_PRIMARY_REPO:-}" > "$TMP_FILE"
 
 mv "$TMP_FILE" "$OUTPUT_FILE"
 
