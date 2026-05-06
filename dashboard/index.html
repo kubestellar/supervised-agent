@@ -123,6 +123,7 @@
     body.openclaw-mode > .gh-rate-alert { margin-left: 0; }
     body.openclaw-mode .repo-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
     body.openclaw-mode .beads { flex-wrap: wrap; }
+    body.openclaw-mode .agents { grid-template-columns: 1fr; }
 
     /* OpenClaw agent detail panel (shown when agent selected in sidebar) */
     .oc-agent-detail {
@@ -210,7 +211,7 @@
     body.openclaw-mode.oc-agent-focused .governor,
     body.openclaw-mode.oc-agent-focused .token-usage,
     body.openclaw-mode.oc-agent-focused .repos,
-    body.openclaw-mode.oc-agent-focused #beads-wrapper { display: none; }
+    body.openclaw-mode.oc-agent-focused #beads-section { display: none; }
     body.openclaw-mode.oc-agent-focused .agent-card.oc-hidden { display: none; }
 
     /* OpenClaw card overrides */
@@ -1019,8 +1020,8 @@
     </div>
     <div class="oc-nav-group">
       <div class="oc-nav-label">Resources</div>
-      <a class="oc-nav-item" data-section="repos" onclick="ocNavigate('repos')">📦 Repos</a>
-      <a class="oc-nav-item" data-section="beads" onclick="ocNavigate('beads')">🔮 Beads</a>
+      <a class="oc-nav-item" data-section="repos-section" onclick="ocNavigate('repos-section')">📦 Repos</a>
+      <a class="oc-nav-item" data-section="beads-section" onclick="ocNavigate('beads-section')">🔮 Beads</a>
     </div>
     <div class="oc-nav-group" style="margin-top:auto">
       <div class="oc-nav-label">Settings</div>
@@ -1058,12 +1059,12 @@
 
   <div class="token-usage" id="token-panel" style="margin-bottom: 24px;"></div>
 
-  <div class="repos">
+  <div class="repos" id="repos-section">
     <h2>Repositories</h2>
     <div class="repo-grid" id="repos"></div>
   </div>
 
-  <div id="beads-wrapper" style="margin-top: 16px; margin-bottom: 24px;">
+  <div id="beads-section" style="margin-top: 16px; margin-bottom: 24px;">
     <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 8px;">Beads</h2>
     <div class="beads" id="beads"></div>
   </div>
@@ -1167,9 +1168,9 @@
       if (!a) { detail.classList.remove('active'); return; }
       detail.classList.add('active');
 
-      const isWorking = a.state === 'working';
-      const isPaused = a.paused;
-      const isOff = a.off;
+      const isOff = a.offByCadence === true;
+      const isPaused = a.paused === true && !isOff;
+      const isWorking = a.busy === 'working';
       const dotCls = isWorking ? 'running' : isPaused ? 'paused' : isOff ? 'idle' : 'idle';
       const stateLabel = isWorking ? 'working' : isPaused ? 'paused' : isOff ? 'off' : 'idle';
 
@@ -1227,7 +1228,9 @@
       if (!nav) return;
       const agents = window._lastAgents || [];
       const html = agents.map(a => {
-        const dotCls = a.state === 'working' ? 'running' : a.paused ? 'paused' : a.off ? 'off' : 'idle';
+        const isOff = a.offByCadence === true;
+        const isPaused = a.paused === true && !isOff;
+        const dotCls = a.busy === 'working' ? 'running' : isPaused ? 'paused' : isOff ? 'off' : 'idle';
         const isActive = _ocSelectedAgent === a.name ? ' active' : '';
         return `<a class="oc-nav-item${isActive}" data-agent-nav="${a.name}" onclick="ocSelectAgent('${a.name}')"><span class="oc-agent-dot ${dotCls}"></span> ${a.name}</a>`;
       }).join('');
