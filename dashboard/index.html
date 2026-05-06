@@ -479,6 +479,18 @@
     .repo-stat .label { color: var(--muted); font-size: 0.7rem; }
     .repo-stat a:hover { text-decoration: underline !important; }
     .repo-stat a:hover .label { color: var(--fg); }
+    .repo-issues { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); }
+    .repo-issue-pill {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 0.65rem; padding: 2px 6px; border-radius: 4px;
+      background: rgba(88,166,255,0.12); color: #58a6ff;
+      border: 1px solid rgba(88,166,255,0.25);
+      text-decoration: none; max-width: 100%;
+      transition: background 0.15s;
+    }
+    .repo-issue-pill:hover { background: rgba(88,166,255,0.25); text-decoration: none; }
+    .repo-issue-pill .pill-num { font-weight: 700; white-space: nowrap; }
+    .repo-issue-pill .pill-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* Sparklines */
     .sparkline { display: inline-block; vertical-align: middle; margin-left: 6px; flex-shrink: 0; }
@@ -1800,13 +1812,19 @@
         const iSpark = sparkSvg(historyData.map(s => s.repos?.[r.name]?.issues ?? 0), '#58a6ff');
         const pSpark = sparkSvg(historyData.map(s => s.repos?.[r.name]?.prs ?? 0), '#bc8cff');
         const repoUrl = 'https://github.com/' + (r.full || r.name);
+        const MAX_PILL_TITLE_LEN = 50;
+        const pills = (r.actionableIssues || []).map(i => {
+          const title = i.title && i.title.length > MAX_PILL_TITLE_LEN ? i.title.slice(0, MAX_PILL_TITLE_LEN) + '…' : (i.title || '');
+          return `<a class="repo-issue-pill" href="${esc(i.url)}" target="_blank" rel="noopener" title="${esc(i.title || '')}"><span class="pill-num">#${i.number}</span><span class="pill-title">${esc(title)}</span></a>`;
+        }).join('');
+        const pillsHtml = pills ? `<div class="repo-issues">${pills}</div>` : '';
         return `
         <div class="repo-card">
           <div class="repo-name"><a href="${repoUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${r.full || r.name}</a></div>
           <div class="repo-stats">
             <div class="repo-stat"><a href="${repoUrl}/issues" target="_blank" rel="noopener" style="color:inherit;text-decoration:none"><div class="spark-row"><span class="num">${r.issues >= 0 ? r.issues : '?'}</span>${iSpark}</div><div class="label">issues</div></a></div>
             <div class="repo-stat"><a href="${repoUrl}/pulls" target="_blank" rel="noopener" style="color:inherit;text-decoration:none"><div class="spark-row"><span class="num">${r.prs >= 0 ? r.prs : '?'}</span>${pSpark}</div><div class="label">PRs</div></a></div>
-          </div>
+          </div>${pillsHtml}
         </div>`;
       }).join(''));
     }
