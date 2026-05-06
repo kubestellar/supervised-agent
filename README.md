@@ -10,6 +10,14 @@
 
 ---
 
+## What is hive?
+
+Hive is an autonomous multi-agent CI/CD companion that watches your GitHub repos, triages issues and PRs, merges what's ready, and escalates what isn't. It runs 5 specialized agents (scanner, reviewer, architect, outreach, supervisor) coordinated by an adaptive governor that scales effort up and down based on queue depth.
+
+The core idea: **if a human would give the same answer every time, it belongs in infrastructure, not in a prompt.** A deterministic pipeline of shell scripts handles filtering, classification, merge-gating, and enforcement *before* any LLM agent sees the work. Agents only handle judgment calls — reading code, reasoning about fixes, writing PRs.
+
+---
+
 ## Setup
 
 ```bash
@@ -20,13 +28,14 @@ sudo apt install tmux
 curl -fsSL https://raw.githubusercontent.com/kubestellar/hive/main/install.sh | sudo bash
 
 # 3. configure
-sudo nano /etc/hive/hive.conf
+sudo cp config/hive-project.yaml.example /etc/hive/hive-project.yaml
+sudo nano /etc/hive/hive-project.yaml
 
 # 4. start
 hive supervisor
 ```
 
-That's it. `hive supervisor` installs missing tools, starts all agents, sets the kick cadence, and launches the supervisor. No tmux knowledge needed.
+`hive supervisor` installs missing tools, starts all agents in tmux sessions, launches the governor, and begins the supervisor loop. No tmux knowledge needed.
 
 ---
 
@@ -50,6 +59,8 @@ hive switch scanner claude  # switch CLI backend (pins it)
 hive switch reviewer copilot
 hive unpin scanner          # let governor manage CLI again
 
+hive model scanner claude-opus-4-6  # switch model for an agent
+
 hive logs governor          # tail governor decisions
 hive logs scanner           # tail any agent's service log
 
@@ -58,52 +69,42 @@ hive stop all               # stop everything
 
 ---
 
-## Web Dashboard
+## Agents
 
-`hive dashboard` launches a real-time web dashboard on port 3001.
+| Agent | Role | Default cadence (idle) |
+|-------|------|----------------------|
+| **scanner** | Triages issues, fixes bugs, opens PRs, merges merge-eligible PRs | 15 min |
+| **reviewer** | Code review, health check monitoring, nightly quality checks | 15 min |
+| **architect** | Structural changes, refactors, API surface design | 30 min |
+| **outreach** | Directory submissions, coverage tracking, community engagement | 2 h |
+| **supervisor** | Monitors agent health, bead ledger, sweeps for rotting issues | 30 min |
 
-- **Live updates** via SSE — agent states, governor mode, repo counts, and beads refresh every 5 seconds
-- **Sparkline history** — per-agent busy time and restart count sparklines with rolling history
-- **Restart tracking** — 24-hour restart count per agent with color-coded thresholds (yellow >0, red >5)
-- **Kick buttons** — one-click kick for any agent
-- **Switch dropdown** — switch agent CLI backend from the UI (auto-pins to prevent governor override)
-- **CLI pinning** — `hive switch` pins the backend so the governor won't override it; `hive unpin` releases it
-- **Intensity gauge** — half-circle speedometer comparing recent vs trailing token rates (cooling → steady → surging)
-- **Coverage tracking** — shows test coverage progress toward the configured target
-- **Übersicht widget** — download a macOS desktop widget from the button in the header
-- **Fast/slow refresh** — agent status refreshes every 5s; GitHub repo data refreshes every 60s to avoid API rate limits
-
-The dashboard runs as a systemd service (`hive-dashboard.service`) and auto-restarts on failure.
-
-```bash
-# Manual access
-open http://192.168.4.56:3001    # from LAN
-open http://localhost:3001       # from hive itself
-
-# Install Übersicht widget (macOS)
-curl -sf http://192.168.4.56:3001/api/widget | tar xzf - -C "$HOME/Library/Application Support/Übersicht/widgets/"
-```
+Each agent runs in its own tmux session with a dedicated CLAUDE.md policy file. Agent policies support template variables (`${PROJECT_ORG}`, `${PROJECT_PRIMARY_REPO}`, etc.) that are substituted at kick time from `hive-project.yaml`.
 
 ---
 
-## How it works
+## Governor
 
-The **kick-governor** measures issue and PR backlog across your repos every 5 minutes and picks a mode:
+The **kick-governor** measures the issue queue across your repos and picks a mode:
 
 | Mode | Trigger | Scanner | Reviewer | Architect | Outreach | Supervisor |
 |------|---------|---------|----------|-----------|----------|-----------|
-| SURGE | queue > 20 | 10 min | 10 min | **paused** | **paused** | 5 min |
-| BUSY  | queue > 10 | 15 min | 15 min | **paused** | **paused** | 5 min |
-| QUIET | queue > 2  | 15 min | 30 min | 1 h        | 2 h        | 5 min |
-| IDLE  | queue ≤ 2  | 30 min | 1 h    | 30 min     | 30 min     | 5 min |
+| **SURGE** | issues > 20 | 15 min | paused | paused | paused | 5 min |
+| **BUSY** | issues > 10 | 15 min | 1 h | paused | paused | 10 min |
+| **QUIET** | issues > 2 | 15 min | 45 min | paused | paused | 15 min |
+| **IDLE** | issues ≤ 2 | 15 min | 15 min | 30 min | 2 h | 30 min |
 
-Architect and outreach are **opportunistic** — they fill idle cycles and pause entirely under load. Supervisor runs every 5 min regardless of mode.
+Architect and outreach are **opportunistic** — they activate in idle mode and pause entirely under load.
 
-Cadences are tunable in `/etc/hive/governor.env` — no restart needed.
+The governor also manages **model selection** per mode. Priority agents (scanner, reviewer) get metered Claude backends in surge/busy. Non-priority agents use Copilot (free tier). Budget tracking projects weekly token spend and throttles to a safety threshold.
 
-### Restart tracking
+All cadences, thresholds, and model assignments are tunable in `/etc/hive/governor.env` — no restart needed.
 
-Each supervisor process tracks agent restarts in `/var/run/kick-governor/restarts_<session>`. The count is a rolling 24-hour window — old timestamps are pruned automatically. The dashboard and `hive status --json` both expose the `restarts` field per agent.
+### Exempt labels
+
+Issues with these labels are excluded from the actionable queue and don't affect mode thresholds:
+
+`hold`, `do-not-merge`, `nightly-tests`, `LFX*`, `auto-qa-tuning-report`, `meta-tracker`, `adopters`, `changes-requested`, `waiting-on-author`
 
 ---
 
@@ -114,23 +115,26 @@ Hive separates work into two layers:
 - **Deterministic layer** (shell scripts + JSON + config) — handles every decision where a human would give the same answer every time. Runs before agents wake up.
 - **Non-deterministic layer** (LLM agents) — receives pre-computed data and focuses on judgment calls: reading code, reasoning about fixes, writing PRs.
 
-The rule: **if a human would give the same answer every time, it belongs in infrastructure, not in a prompt.**
-
 LLMs treat "NEVER" rules as suggestions. No amount of prompt engineering reliably prevents an agent from closing a hold-labeled issue or merging an untested PR. The deterministic pipeline removes those decisions from the agent entirely.
 
 ### Pipeline stages
 
 Each stage runs as a shell script, declared in `hive-project.yaml`, with explicit dependencies:
 
-| Category | What it does | Example |
-|----------|-------------|---------|
-| **Enumerator** | Fetches and filters the canonical work list | `enumerate-actionable.sh` — queries GitHub, excludes hold/exempt labels, filters by author |
-| **Classifier** | Enriches items with deterministic metadata | `issue-classifier.sh` — complexity, model tier, lane assignment based on label/title patterns |
-| **Gate** | Pre-checks eligibility before action | `merge-gate.sh` — CI green? Author authorized? Required reviews in? |
-| **Monitor** | Detects state in external systems | `ga4-anomaly-detector.sh` — production error spikes; `copilot-comment-checker.sh` — unaddressed review comments |
-| **Enforcer** | Blocks agents from forbidden operations | `gh` wrapper — prevents merging to main, closing hold issues, pushing to protected branches |
+| Phase | Stage | What it does |
+|-------|-------|-------------|
+| **Enumerator** | `enumerate-actionable.sh` | Queries GitHub, excludes hold/exempt labels, filters drafts, outputs canonical work list |
+| **Classifier** | `issue-classifier.sh` | Assigns complexity, model tier, and lane based on label/title patterns |
+| **Gate** | `merge-gate.sh` | Checks CI status, excludes drafts, validates author — outputs merge-eligible PRs |
+| **Monitor** | `conflict-sweeper.sh` | Detects merge conflicts across open PRs |
+| **Monitor** | `pr-cluster-detector.sh` | Groups related PRs by file overlap |
+| **Monitor** | `architecture-detector.sh` | Identifies architecture-scope multi-directory refactors |
+| **Monitor** | `copilot-comment-checker.sh` | Finds unaddressed Copilot review comments (high/medium/low severity) |
+| **Monitor** | `ga4-anomaly-detector.sh` | Detects GA4 property anomalies |
+| **Monitor** | `outreach-tracker.sh` | Tracks outreach-labeled PRs and GA4 metrics |
+| **Enforcer** | `gh-wrapper.sh` | Wraps all `gh` calls — prevents merging to main, closing hold issues, pushing to protected branches |
 
-Stages declare their consumers and dependencies. The pipeline runner resolves the DAG and executes in parallel where possible.
+Stages declare their consumers and dependencies. The pipeline runner (`run-pipeline.sh`) resolves the DAG and executes in parallel where possible.
 
 ### Adding a pipeline stage
 
@@ -145,6 +149,163 @@ Classification patterns, clustering signals, severity keywords, and exempt label
 
 ---
 
+## Web Dashboard
+
+`hive dashboard` launches a real-time web dashboard on port 3001.
+
+**Live monitoring:**
+- Agent states, governor mode, repo counts, and beads refresh every 5 seconds via SSE
+- Per-agent sparkline history (busy time, restart counts, rolling 24-hour window)
+- Restart tracking with color-coded thresholds (yellow > 0, red > 5)
+- Intensity gauge comparing recent vs trailing token rates
+- Coverage tracking toward configured target
+
+**Agent controls:**
+- One-click kick for any agent
+- CLI backend switcher dropdown (auto-pins to prevent governor override)
+- Model switcher
+- Pause / Resume (soft pause keeps session alive, operator pause persists until explicit unpause)
+- Pin / Unpin (lock CLI or model to prevent governor changes)
+- Restart counter reset
+
+**Infrastructure health:**
+- CI pass rate, nightly/weekly workflow status
+- Homebrew formula freshness, Helm chart presence
+- Release freshness (nightly within 24h, stable within 7 days)
+- Deploy job status from CI workflow
+- GitHub API rate limit monitoring with alerts
+- GitHub App token status
+
+**Configuration dialog:**
+- Gear icon on every agent card and the governor block
+- Agent config: general settings, cadences, models, pipeline toggles, hooks, restrictions, current prompt
+- Governor config: thresholds, exempt labels, budget, notifications, health settings, agent CRUD
+
+**Other features:**
+- Token budget tracking with issue cost breakdown and model advisor
+- Agent action summaries extracted from logs
+- Live tmux pane capture per agent
+- macOS Ubersicht widget (download from header button)
+
+The dashboard runs as a systemd service (`hive-dashboard.service`) and auto-restarts on failure.
+
+```bash
+open http://<hive-ip>:3001        # from LAN
+open http://localhost:3001        # from hive itself
+
+# Install Ubersicht widget (macOS)
+curl -sf http://<hive-ip>:3001/api/widget \
+  | tar xzf - -C "$HOME/Library/Application Support/Übersicht/widgets/"
+```
+
+---
+
+## Backends
+
+Set `HIVE_BACKENDS` in `hive.conf`. `HIVE_AUTO_INSTALL=true` installs missing backends on startup.
+
+| Backend | Type | Description |
+|---------|------|-------------|
+| `claude` | Native | Anthropic's CLI — runs Claude models directly (metered) |
+| `gemini` | Native | Google's CLI — runs Gemini models directly |
+| `copilot` | Aggregate | GitHub Copilot — routes to Claude, GPT, Gemini via GitHub's free tier |
+| `goose` | Aggregate | Block's Goose — routes to any model via config: qwen, deepseek, llama, and more |
+
+**Native backends** are single-vendor tools. **Aggregate backends** are multi-vendor routers that can call models from different providers through a single interface.
+
+### Model selection per mode
+
+The governor assigns backend:model pairs based on the current mode:
+
+| Mode | Scanner | Reviewer | Architect | Outreach | Supervisor |
+|------|---------|----------|-----------|----------|-----------|
+| SURGE | claude:sonnet | claude:sonnet | claude:opus | copilot:opus | claude:haiku |
+| BUSY | claude:sonnet | claude:sonnet | copilot:sonnet | copilot:sonnet | claude:haiku |
+| QUIET | claude:haiku | copilot:sonnet | copilot:opus | copilot:sonnet | claude:haiku |
+| IDLE | copilot:sonnet | copilot:sonnet | copilot:opus | copilot:sonnet | copilot:sonnet |
+
+Priority agents get metered Claude under load for reliability. Everything else falls back to Copilot's free tier. When rate-limited, agents automatically fall back to the alternate backend with a 30-minute cooldown.
+
+### Local models (optional)
+
+Set `HIVE_MODEL_SERVICES="ollama litellm"` to run models on-device with no API costs.
+
+```
+ollama        → runs local models (llama3, codestral, qwen2.5-coder, ...)
+    └── litellm proxy :4000  ← unified OpenAI-compatible endpoint
+            └── goose        ← points here when AGENT_BACKEND=goose
+```
+
+Ollama and litellm start as background services before any agent session launches.
+
+---
+
+## GitHub App Integration
+
+Hive can use a GitHub App for API access, isolating agent rate limits from your personal token:
+
+```yaml
+# in hive-project.yaml
+github_app:
+  app_id: 12345
+  installation_id: 67890
+  private_key_file: /etc/hive/gh-app-key.pem
+```
+
+The token generator (`gh-app-token.sh`) creates 1-hour installation tokens, caches them in `/var/run/hive-metrics/gh-app-token.cache`, and auto-refreshes 5 minutes before expiry. All agent API calls and dashboard health checks use the app token.
+
+---
+
+## Auto-Deploy
+
+`hive-deploy.timer` runs every 60 seconds and keeps the live server in sync with the git repo:
+
+1. `git pull --rebase origin main`
+2. Syncs changed scripts from `bin/` to `/usr/local/bin/`
+3. Syncs `hive-project.yaml` to `/etc/hive/`
+4. Syncs systemd units and triggers `daemon-reload`
+5. Restarts dashboard and Discord bot if their files changed
+6. Drift-checks even if HEAD unchanged (catches manual edits)
+
+Merge a PR to `main` and the change is live within 60 seconds. No SSH needed.
+
+---
+
+## Discord Bot
+
+`discord/bot.js` bridges the dashboard to a Discord channel:
+
+- Agent transition announcements (working → idle, mode changes)
+- Pipeline result posts
+- Command routing (configurable prefix, default `!`)
+- 15-minute heartbeat status embeds
+- Rate-limited message queue (1.2s per message)
+
+Configure in `hive-project.yaml`:
+
+```yaml
+discord:
+  enabled: true
+  bot_token_env: DISCORD_BOT_TOKEN
+  channels:
+    primary: "channel-id"
+    alerts: "alerts-channel-id"
+```
+
+---
+
+## Notifications
+
+Hive sends alerts to any combination of ntfy, Slack, and Discord. Set whichever you use in `hive.conf` — all three fire simultaneously if configured.
+
+| Channel | Config key | How to get it |
+|---------|-----------|---------------|
+| ntfy (phone push) | `NTFY_TOPIC` | Free at [ntfy.sh](https://ntfy.sh) — pick any topic string |
+| Slack | `SLACK_WEBHOOK` | api.slack.com/apps → Incoming Webhooks |
+| Discord | `DISCORD_WEBHOOK` | Channel Settings → Integrations → Webhooks |
+
+---
+
 ## Adapting for Your Project
 
 Hive is designed to be forked and configured, not hardcoded. All project-specific values live in `hive-project.yaml`.
@@ -153,7 +314,7 @@ Hive is designed to be forked and configured, not hardcoded. All project-specifi
 
 1. **Copy the example config:**
    ```bash
-   sudo cp examples/kubestellar/hive-project.yaml /etc/hive/hive-project.yaml
+   sudo cp config/hive-project.yaml.example /etc/hive/hive-project.yaml
    ```
 
 2. **Edit the `project` section** — your org, repos, AI author account:
@@ -193,7 +354,7 @@ Hive is designed to be forked and configured, not hardcoded. All project-specifi
        default_model: "sonnet"
    ```
 
-5. **Copy and edit agent CLAUDE.md files** from `examples/kubestellar/agents/`. Template variables like `${PROJECT_ORG}`, `${PROJECT_PRIMARY_REPO}`, and `${PROJECT_AI_AUTHOR}` are substituted automatically at kick time — you don't need to hardcode your project values.
+5. **Copy and edit agent CLAUDE.md files** from `examples/kubestellar/agents/`. Template variables are substituted automatically at kick time — you don't need to hardcode your project values.
 
 6. **Set agent `.env` files** with your workdir and model preferences.
 
@@ -217,50 +378,23 @@ Agent policy files (CLAUDE.md) support these template variables, substituted by 
 | `${AGENTS_WORKDIR}` | `agents.workdir` | `/home/dev/my-project` |
 | `${BEADS_BASE}` | `agents.beads_base` | `/home/dev` |
 
----
+### What agents receive on each kick
 
-## Backends
+The kick script assembles context for each agent before dispatching:
 
-Set `HIVE_BACKENDS` in `hive.conf`. `HIVE_AUTO_INSTALL=true` installs missing backends on startup.
-
-| Backend | Type | Description |
-|---------|------|-------------|
-| `claude` | CLI | Anthropic's CLI — runs Claude models directly |
-| `gemini` | CLI | Google's CLI — runs Gemini models directly |
-| `copilot` | Aggregate | GitHub Copilot — routes to Claude, GPT, Gemini, and other vendor models |
-| `goose` | Aggregate | Block's Goose — routes to any model via config: qwen, deepseek, llama, and more (cloud or local) |
-
-**Native backends** (`claude`, `gemini`) are single-vendor tools that run their own models directly. **Aggregate backends** (`copilot`, `goose`) are multi-vendor routers — they can call models from different providers through a single interface.
-
-### Local models (optional)
-
-Set `HIVE_MODEL_SERVICES="ollama litellm"` to run models on-device with no API costs.
-
-```
-ollama        → runs local models (llama3, codestral, qwen2.5-coder, ...)
-    └── litellm proxy :4000  ← unified OpenAI-compatible endpoint
-            └── goose        ← points here when AGENT_BACKEND=goose
-```
-
-Ollama and litellm start as background services before any agent session launches.
-
----
-
-## Notifications
-
-hive sends alerts to any combination of ntfy, Slack, and Discord. Set whichever you use in `hive.conf` — all three fire simultaneously if configured.
-
-| Channel | Config key | How to get it |
-|---------|-----------|---------------|
-| ntfy (phone push) | `NTFY_TOPIC` | Free at [ntfy.sh](https://ntfy.sh) — pick any topic string |
-| Slack | `SLACK_WEBHOOK` | api.slack.com/apps → Incoming Webhooks |
-| Discord | `DISCORD_WEBHOOK` | Channel Settings → Integrations → Webhooks |
+- **Actionable issues** — filtered, classified, oldest-first
+- **Actionable PRs** — grouped by cluster (related file overlap)
+- **Merge-eligible PRs** — CI green, author validated, ready to merge
+- **Health indicators** — only RED thresholds (failures that need attention)
+- **GitHub rate limits** — remaining quota so agents can pace themselves
+- **Policy instructions** — CLAUDE.md (cached if unchanged since last kick)
+- **Current backend/model** — so agents know their own capabilities
 
 ---
 
 ## Config
 
-`/etc/hive/hive.conf` — the only file you need to edit:
+`/etc/hive/hive.conf` — the only file you need to edit for basic setup:
 
 ```bash
 # Repos to watch (space-separated)
@@ -281,6 +415,79 @@ NTFY_TOPIC=your-secret-topic     # free at ntfy.sh
 # DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
 ```
 
+For advanced configuration (pipeline stages, classification rules, health checks, outreach, Discord), use `hive-project.yaml`. See `config/hive-project.yaml.example` for the full schema and `examples/kubestellar/` for a production reference.
+
+---
+
+## Services
+
+Hive installs these systemd units:
+
+| Unit | Purpose |
+|------|---------|
+| `hive.service` | Main supervisor (legacy single-instance mode) |
+| `hive@.service` | Per-agent template (`hive@scanner`, `hive@reviewer`, etc.) |
+| `hive-deploy.service` / `.timer` | Auto-deploy from git every 60s |
+| `hive-dashboard.service` | Web dashboard backend |
+| `hive-discord.service` | Discord bot |
+| `hive-snapshot.service` / `.timer` | Snapshot publication |
+| `gh-zombie-reaper.service` / `.timer` | Cleans stale `gh` auth sessions |
+| `ttyd-hive.service` | Web terminal (ttyd) for remote access |
+
+macOS support uses launchd plists — see `launchd/` and `docs/macos.md`.
+
+---
+
+## Repository Layout
+
+```
+bin/                        # orchestration, pipeline, utilities
+  hive.sh                   # main CLI
+  supervisor.sh             # agent session manager with auto-restart
+  kick-governor.sh          # adaptive cadence governor
+  kick-agents.sh            # agent dispatcher with context assembly
+  run-pipeline.sh           # deterministic pipeline runner
+  enumerate-actionable.sh   # canonical work list enumerator
+  merge-gate.sh             # merge eligibility checker
+  issue-classifier.sh       # complexity/model assignment
+  gh-wrapper.sh             # enforcer — wraps gh CLI
+  gh-app-token.sh           # GitHub App token generator
+  hive-deploy.sh            # auto-deploy from git
+  notify.sh                 # ntfy/Slack/Discord notifications
+  hive-config.sh            # shared config loader
+  ...
+
+config/                     # configuration templates
+  hive-project.yaml.example # full schema with comments
+  agent.env.example         # per-agent env template
+  backends.conf             # backend definitions
+
+dashboard/                  # web UI
+  server.js                 # Node.js backend (40+ API endpoints, SSE)
+  index.html                # single-page frontend
+  health-check.sh           # config-driven health checks
+  api-collector.sh          # issue-to-merge time metrics
+  agent-metrics.sh          # per-agent busy time, restart counts
+  agent-summaries.sh        # action summary extraction
+
+discord/                    # Discord bot
+  bot.js                    # event bridge + command router
+
+examples/
+  kubestellar/              # production reference implementation
+    hive-project.yaml       # full config for 5 repos, 5 agents, GA4
+    agents/                 # CLAUDE.md policies + .env files per agent
+
+docs/
+  architecture.md           # system architecture deep dive
+  macos.md                  # macOS setup (launchd)
+  troubleshooting.md        # common issues and fixes
+  outreach-antispam.md      # anti-spam rules for outreach
+
+systemd/                    # Linux service/timer units
+launchd/                    # macOS LaunchAgent plists
+```
+
 ---
 
 ## Troubleshooting
@@ -290,22 +497,23 @@ hive status                  # check what's running
 hive logs governor           # why did it kick / not kick?
 hive logs scanner            # what is scanner doing?
 hive attach supervisor       # watch supervisor live
-journalctl -u claude-scanner # raw service log
+journalctl -u hive@scanner   # raw service log
 ```
 
 ### Common issues
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| All agents idle, no ntfy | Governor crashing (check `hive logs governor`) | See below |
-| Governor: `Permission denied` on `/var/run/kick-governor/` | Root-owned files from `sudo` operations | `sudo chown -R dev:dev /var/run/kick-governor/` |
-| Governor: `Slack: command not found` | Broken comments in `notify.sh` | Reinstall: `sudo cp bin/notify.sh /usr/local/bin/notify.sh` |
-| Governor: `$2: unbound variable` | `set -u` + missing arg defaults | Use `${N:-}` syntax in all function params |
+| All agents idle, no ntfy | Governor crashing | `hive logs governor` to diagnose |
+| Governor: `Permission denied` on `/var/run/kick-governor/` | Root-owned files | `sudo chown -R dev:dev /var/run/kick-governor/` |
 | Dashboard: agents show `stopped` / CLI `?` | Service running as root (can't see dev's tmux) | Add `User=dev` to `hive-dashboard.service` |
-| Dashboard: widget download 404 | Stale node process on port 3001 | `ss -tlnp \| grep 3001` → `kill <PID>` → restart service |
-| `bd dolt push` fails | Root-owned `.beads/` files | `sudo chown -R dev:dev ~/.beads/ /home/dev/scanner-beads/.beads/` |
-| Beads: `?` in status | `bd list` blocked by stale lock | `sudo killall -9 bd && rm -f /home/dev/scanner-beads/.beads/embeddeddolt/.lock` |
+| Dashboard: widget download 404 | Stale node process on port 3001 | `ss -tlnp \| grep 3001` → kill → restart service |
+| Mode change delayed by one cycle | Governor reading stale cache | Verify `actionable.json` exists in `/var/run/hive-metrics/` |
+| Agent ignores model switch | CLI is pinned | `hive unpin <agent>` to release to governor control |
+| Rate limited | Personal token exhausted | Configure GitHub App in `hive-project.yaml` for isolated rate limits |
+
+See `docs/troubleshooting.md` for more.
 
 ---
 
-Apache 2.0  ·  [Architecture](docs/architecture.md)  ·  [KubeStellar example](examples/kubestellar/)
+Apache 2.0  ·  [Architecture](docs/architecture.md)  ·  [macOS Setup](docs/macos.md)  ·  [KubeStellar Example](examples/kubestellar/)
