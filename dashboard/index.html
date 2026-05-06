@@ -288,7 +288,9 @@
     body.light-mode.oc-agent-focused .governor,
     body.light-mode.oc-agent-focused .token-usage,
     body.light-mode.oc-agent-focused .repos,
-    body.light-mode.oc-agent-focused #beads-section { display: none; }
+    body.light-mode.oc-agent-focused #beads-section,
+    body.light-mode.oc-agent-focused #nous-section { display: none; }
+    body.light-mode.oc-strategy-focused #nous-section { display: block; }
     body.light-mode.oc-agent-focused .agent-card.oc-hidden { display: none; }
 
     /* Light card overrides */
@@ -1386,9 +1388,11 @@
       if (children) children.classList.toggle('collapsed');
     }
 
+    const STRATEGY_AGENT_NAMES = ['strategist', 'analyst', 'guardian'];
     function ocUpdateFocusedState() {
       const isFocused = !!_ocSelectedAgent && getLayout() === 'light';
       document.body.classList.toggle('oc-agent-focused', isFocused);
+      document.body.classList.toggle('oc-strategy-focused', isFocused && STRATEGY_AGENT_NAMES.includes(_ocSelectedAgent));
       document.querySelectorAll('.agent-card').forEach(card => {
         card.classList.toggle('oc-hidden', isFocused && card.dataset.agent === _ocSelectedAgent);
       });
