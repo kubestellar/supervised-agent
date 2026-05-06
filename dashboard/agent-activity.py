@@ -2,8 +2,9 @@
 """Extract live activity summaries from Claude Code JSONL session files.
 
 Tails active session files efficiently using byte offset tracking.
-Produces human-readable 1-5 line summaries via template-based extraction.
+Produces human-readable summaries via template-based extraction.
 Called by server.js every 5s, outputs JSON to stdout.
+Set SUMMARY_MAX_LINES env var to control output length (default 20).
 """
 
 import json, os, sys, glob, re, time, subprocess
@@ -16,6 +17,7 @@ SUMMARY_CACHE_FILE = os.path.join(STATE_DIR, "activity-cache.json")
 
 BOOTSTRAP_BYTES = 8192
 STALE_SECONDS = 300
+SUMMARY_MAX_LINES = int(os.environ.get("SUMMARY_MAX_LINES", "20"))
 
 AGENT_TMUX_SESSION = {
     "supervisor": "supervisor",
@@ -263,7 +265,7 @@ def summarize_entries(entries):
         msg = entry.get("message", {})
         for content in msg.get("content", []):
             ct = content.get("type")
-            if ct == "tool_use" and len(tools) < 5:
+            if ct == "tool_use" and len(tools) < SUMMARY_MAX_LINES:
                 desc = describe_tool(content)
                 if desc and desc not in tools:
                     tools.append(desc)
@@ -276,19 +278,19 @@ def summarize_entries(entries):
     if last_text and last_text not in lines:
         lines.append(last_text)
     for t in tools[1:]:
-        if len(lines) >= 5:
+        if len(lines) >= SUMMARY_MAX_LINES:
             break
         if t not in lines:
             lines.append(t)
 
-    return "\n".join(lines[:5])
+    return "\n".join(lines[:SUMMARY_MAX_LINES])
 
 
 def scrape_tmux(session):
     """Extract meaningful output lines from a tmux pane."""
     try:
         raw = subprocess.check_output(
-            ["tmux", "capture-pane", "-t", session, "-p", "-S", "-50"],
+            ["tmux", "capture-pane", "-t", session, "-p", "-S", "-100"],
             timeout=5, text=True, stderr=subprocess.DEVNULL
         )
     except (subprocess.SubprocessError, OSError):
@@ -322,7 +324,7 @@ def scrape_tmux(session):
     for l in lines:
         if l not in unique:
             unique.append(l)
-    result = unique[-5:] if unique else []
+    result = unique[-SUMMARY_MAX_LINES:] if unique else []
     return ("\n".join(result), is_working) if result else None
 
 

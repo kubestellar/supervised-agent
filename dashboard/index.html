@@ -194,6 +194,7 @@
     .oc-agent-dot.running { background: #16a34a; }
     .oc-agent-dot.idle { background: #9ca3af; }
     .oc-agent-dot.paused { background: #dc2626; }
+    .oc-agent-dot.stopped { background: #dc2626; }
     .oc-agent-dot.off { background: #d1d5db; }
 
     /* Agent detail summary — monospace, respect newlines */
@@ -1152,7 +1153,7 @@
       }
     }
 
-    const OC_SUMMARY_MAX_LINES = 15;
+    const OC_SUMMARY_MAX_LINES = 20;
     function ocFormatSummary(raw) {
       const escaped = esc(raw);
       const lines = escaped.split(/\r?\n/);
@@ -1170,9 +1171,9 @@
 
       const isOff = a.offByCadence === true;
       const isPaused = a.paused === true && !isOff;
-      const isWorking = a.busy === 'working';
-      const dotCls = isWorking ? 'running' : isPaused ? 'paused' : isOff ? 'idle' : 'idle';
-      const stateLabel = isWorking ? 'working' : isPaused ? 'paused' : isOff ? 'off' : 'idle';
+      const isStopped = a.state === 'stopped';
+      const dotCls = isPaused ? 'paused' : isOff ? 'off' : isStopped ? 'stopped' : 'running';
+      const stateLabel = a.busy === 'working' ? 'working' : isPaused ? 'paused' : isOff ? 'off' : isStopped ? 'stopped' : 'idle';
 
       const kickId = `oc-kick-${a.name}`;
       const prevInput = document.getElementById(kickId);
@@ -1230,7 +1231,8 @@
       const html = agents.map(a => {
         const isOff = a.offByCadence === true;
         const isPaused = a.paused === true && !isOff;
-        const dotCls = a.busy === 'working' ? 'running' : isPaused ? 'paused' : isOff ? 'off' : 'idle';
+        const isStopped = a.state === 'stopped';
+        const dotCls = isPaused ? 'paused' : isOff ? 'off' : isStopped ? 'stopped' : 'running';
         const isActive = _ocSelectedAgent === a.name ? ' active' : '';
         return `<a class="oc-nav-item${isActive}" data-agent-nav="${a.name}" onclick="ocSelectAgent('${a.name}')"><span class="oc-agent-dot ${dotCls}"></span> ${a.name}</a>`;
       }).join('');
