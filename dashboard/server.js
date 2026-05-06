@@ -278,12 +278,18 @@ try {
 function persistSnapshot() {
   if (!statusCache) return;
   const am = agentMetrics || {};
+  const aItems = (actionableCache.issues || {}).items || [];
+  const pItems = (actionableCache.prs || {}).items || [];
+  const mItems = mergeEligibleCache.merge_eligible || [];
   const snap = {
     t: Date.now(),
     govIssues: statusCache.governor?.issues || 0,
     govPrs: statusCache.governor?.prs || 0,
     govTotal: (statusCache.governor?.issues || 0) + (statusCache.governor?.prs || 0),
     govMode: statusCache.governor?.mode || 'unknown',
+    actionableCount: aItems.length,
+    openPrCount: pItems.length,
+    mergeableCount: mItems.length,
     ga4Errors: am.outreach?.ga4Errors || 0,
     adopters: am.outreach?.adopters || 0,
     adopterPrs: am.outreach?.adopterPending || 0,
@@ -410,6 +416,9 @@ function fetchStatus() {
         }
         enrichReposWithActionable();
         // Record snapshot for sparklines
+        const actionableItems = (actionableCache.issues || {}).items || [];
+        const prItems = (actionableCache.prs || {}).items || [];
+        const mergeEligibleItems = mergeEligibleCache.merge_eligible || [];
         const snap = {
           t: lastFetch,
           govIssues: statusCache.governor?.issues || 0,
@@ -417,6 +426,9 @@ function fetchStatus() {
           govTotal: (statusCache.governor?.issues || 0) + (statusCache.governor?.prs || 0),
           govActive: statusCache.governor?.active ? 1 : 0,
           govMode: statusCache.governor?.mode || 'unknown',
+          actionableCount: actionableItems.length,
+          openPrCount: prItems.length,
+          mergeableCount: mergeEligibleItems.length,
           beadsWorkers: statusCache.beads?.workers || 0,
           beadsSupervisor: statusCache.beads?.supervisor || 0,
           repos: {},
