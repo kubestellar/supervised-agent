@@ -17,7 +17,7 @@ SUMMARY_CACHE_FILE = os.path.join(STATE_DIR, "activity-cache.json")
 
 BOOTSTRAP_BYTES = 8192
 STALE_SECONDS = 300
-SUMMARY_MAX_LINES = int(os.environ.get("SUMMARY_MAX_LINES", "40"))
+SUMMARY_MAX_LINES = int(os.environ.get("SUMMARY_MAX_LINES", "100"))
 
 AGENT_TMUX_SESSION = {
     "supervisor": "supervisor",

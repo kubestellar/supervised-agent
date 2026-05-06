@@ -209,7 +209,7 @@
       font-size: 0.82rem; color: #374151; line-height: 1.55;
       margin-bottom: 16px; padding: 14px; background: #f9fafb;
       border-radius: 8px; border: 1px solid #e5e7eb;
-      min-height: 60px; max-height: 320px; overflow-y: auto;
+      min-height: 60px; max-height: 600px; overflow-y: auto;
       white-space: pre-wrap; word-break: break-word;
       font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
       font-size: 0.78rem;
@@ -1179,12 +1179,8 @@
       }
     }
 
-    const OC_SUMMARY_MAX_LINES = 40;
     function ocFormatSummary(raw) {
-      const escaped = esc(raw);
-      const lines = escaped.split(/\r?\n/);
-      const trimmed = lines.length > OC_SUMMARY_MAX_LINES ? lines.slice(0, OC_SUMMARY_MAX_LINES).join('\n') + '\n…' : lines.join('\n');
-      return trimmed;
+      return esc(raw);
     }
 
     function ocRenderAgentDetail() {
