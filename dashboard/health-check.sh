@@ -43,7 +43,7 @@ ci=$(gh run list --repo "$REPO" --status completed --limit 10 --json conclusion 
 if [ -n "$BREW_TAP" ] && [ -n "$BREW_FORMULA" ]; then
   formula_ver=$(gh api "repos/${BREW_TAP}/contents/Formula/${BREW_FORMULA}" \
     --jq '.content' 2>/dev/null | base64 -d 2>/dev/null | grep 'version "' | sed 's/.*version "//;s/".*//' | sed 's/^v//' || echo "?")
-  today=$(date -u +%Y%m%d)
+  today=$(TZ=America/New_York date +%Y%m%d)
   if echo "$formula_ver" | grep -q "nightly\.${today}$"; then
     brew_ok=1
   else
