@@ -99,6 +99,14 @@ let summariesCache = {};
 let activityCache = {};
 let ghRateLimitsCache = { alerts: [] };
 
+const ACTIONABLE_FILE = path.join(METRICS_DIR, 'actionable.json');
+const ACTIONABLE_REFRESH_MS = 15000;
+let actionableCache = { issues: { items: [] } };
+try { actionableCache = JSON.parse(fs.readFileSync(ACTIONABLE_FILE, 'utf8')); } catch (_) {}
+setInterval(() => {
+  try { actionableCache = JSON.parse(fs.readFileSync(ACTIONABLE_FILE, 'utf8')); } catch (_) {}
+}, ACTIONABLE_REFRESH_MS);
+
 // GitHub API rate limit alerts — read from gh-rate-check.sh output every 30s
 const GH_RATE_LIMITS_FILE = '/var/run/hive-metrics/gh_rate_limits.json';
 const GH_RATE_REFRESH_MS = 30000; // 30 seconds
@@ -482,7 +490,15 @@ function fetchRepoStatus() {
   try {
     const raw = fs.readFileSync(GITHUB_CACHE_PATH, 'utf8');
     const data = JSON.parse(raw);
-    if (statusCache && data.repos) statusCache.repos = data.repos;
+    if (statusCache && data.repos) {
+      const items = (actionableCache.issues || {}).items || [];
+      for (const r of data.repos) {
+        r.actionableIssues = items
+          .filter(i => i.repo === r.full)
+          .map(i => ({ number: i.number, title: i.title, url: i.url, labels: i.labels || [] }));
+      }
+      statusCache.repos = data.repos;
+    }
   } catch (_) {}
 }
 setInterval(fetchRepoStatus, REPO_REFRESH_MS);
