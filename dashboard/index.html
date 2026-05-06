@@ -1101,11 +1101,17 @@
     }
     .hive-chat-panel {
       position: fixed; bottom: 80px; right: 24px; z-index: 9001;
-      width: 420px; max-height: 600px; border-radius: 12px;
+      width: 420px; height: 500px; min-height: 250px; max-height: 85vh;
+      border-radius: 12px;
       background: var(--bg); border: 1px solid var(--border);
       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
       display: none; flex-direction: column; overflow: hidden;
     }
+    .hive-chat-resize {
+      height: 6px; cursor: ns-resize; background: transparent;
+      position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+    }
+    .hive-chat-resize:hover { background: rgba(99,102,241,0.3); }
     .hive-chat-panel.open { display: flex; }
     .hive-chat-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -1118,7 +1124,7 @@
     .hive-chat-messages {
       flex: 1; overflow-y: auto; padding: 12px 14px;
       display: flex; flex-direction: column; gap: 10px;
-      min-height: 200px; max-height: 440px;
+      min-height: 100px;
     }
     .chat-msg {
       max-width: 88%; padding: 8px 12px; border-radius: 10px;
@@ -1162,6 +1168,7 @@
 <!-- Hive Chat FAB + Panel -->
 <button class="hive-chat-fab" id="hiveChatFab" title="Ask Hive">💬</button>
 <div class="hive-chat-panel" id="hiveChatPanel">
+  <div class="hive-chat-resize" id="hiveChatResize"></div>
   <div class="hive-chat-header">
     <span class="chat-title">🐝 Hive Chat</span>
     <button class="hive-chat-close" id="hiveChatClose">✕</button>
@@ -1513,7 +1520,7 @@
       detail.innerHTML = `
         <div class="oc-agent-detail-header">
           <span class="status-dot ${dotCls}"></span>
-          <span class="agent-name-big">${a.name}</span>
+          <span class="agent-name-big">${a.displayName || a.name}</span>
           <span style="font-size:0.78rem;color:#6b7280;margin-left:auto">${stateLabel}</span>
         </div>
         <div class="oc-detail-actions">
@@ -1615,7 +1622,8 @@
         const dotCls = isStopped ? 'stopped' : isPaused ? 'paused' : isOff ? 'off' : isRunning ? 'running' : 'idle';
         const isActive = _ocSelectedAgent === a.name ? ' active' : '';
         const agentDesc = AGENT_DESCRIPTIONS[a.name] || '';
-        return `<a class="oc-nav-item${isActive}" data-agent-nav="${a.name}" onclick="ocSelectAgent('${a.name}')" title="${agentDesc}"><span class="oc-agent-dot ${dotCls}"></span> ${a.name}</a>`;
+        const label = a.displayName || a.name;
+        return `<a class="oc-nav-item${isActive}" data-agent-nav="${a.name}" onclick="ocSelectAgent('${a.name}')" title="${agentDesc}"><span class="oc-agent-dot ${dotCls}"></span> ${label}</a>`;
       }).join('');
       if (nav.innerHTML !== html) nav.innerHTML = html;
     }
@@ -1969,7 +1977,7 @@
         const indEl = agentIndicators(a.name);
         return `<div class="agent-card ${cls}" data-agent="${a.name}">
           <span class="working-indicator"></span>
-          <div class="agent-name"><span class="dot ${dotCls}"></span>${a.name} ${toggleBtn} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a> <button class="restart-btn" onclick="restartAgent('${a.name}')" title="Kill tmux session — supervisor will respawn with fresh context">↻ restart</button> <button class="config-gear" onclick="openConfigDialog('agent','${a.name}')" title="Configure ${a.name}">⚙️</button></div>
+          <div class="agent-name"><span class="dot ${dotCls}"></span>${a.displayName || a.name} ${toggleBtn} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a> <button class="restart-btn" onclick="restartAgent('${a.name}')" title="Kill tmux session — supervisor will respawn with fresh context">↻ restart</button> <button class="config-gear" onclick="openConfigDialog('agent','${a.name}')" title="Configure ${a.name}">⚙️</button></div>
           <div class="agent-field"><span class="label">cli</span><span class="value">${cliChip(a.cli, a.pinnedBoth || a.pinnedCli, a.name)}${(a.pinnedBoth || a.pinnedCli) ? '' : ` <button class="pin-toggle" onclick="togglePin('${a.name}', 'cli', false)" title="Pin CLI — lock current backend">📌</button>`}</span></div>
           <div class="agent-field"><span class="label">model</span><span class="value">${modelChip(a.model, a.govReason, a.pinnedBoth || a.pinnedModel, a.name)}${(a.pinnedBoth || a.pinnedModel) ? '' : ` <button class="pin-toggle" onclick="togglePin('${a.name}', 'model', false)" title="Pin model — lock current model">📌</button>`}</span></div>
           <div class="agent-field"><span class="label">interval</span><span class="value">${isPaused ? 'paused' : isOff ? 'off' : a.cadence}</span></div>
@@ -3236,8 +3244,8 @@ function burnAreaChart() {
       const agentName = _configState.agent || '';
       return `
         <div class="config-field">
-          <label>Agent Name</label>
-          <input type="text" id="cfg-agent-name" value="${esc(agentName)}" placeholder="e.g. scanner, reviewer, outreach" onchange="updateConfigAgentName(this.value)">
+          <label>Display Name</label>
+          <input type="text" id="cfg-agent-name" value="${esc(g.displayName || agentName)}" placeholder="e.g. Scanner, Code Reviewer" onchange="updateConfigAgentName(this.value);markDirty('general','displayName',this.value)">
         </div>
         <div class="config-field">
           <label>Launch Command</label>
@@ -3780,11 +3788,41 @@ function burnAreaChart() {
     }
     restoreChatHistory();
 
+    const CHAT_HEIGHT_KEY = 'hive-chat-height';
+    const CHAT_MIN_HEIGHT = 250;
+    const savedChatH = localStorage.getItem(CHAT_HEIGHT_KEY);
+    if (savedChatH) chatPanel.style.height = savedChatH + 'px';
+
     chatFab.onclick = () => {
       const isOpen = chatPanel.classList.toggle('open');
-      if (isOpen) chatInput.focus();
+      if (isOpen) {
+        chatInput.focus();
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
     };
     chatClose.onclick = () => chatPanel.classList.remove('open');
+
+    // Resize handle — drag top edge to resize chat panel
+    (function initChatResize() {
+      const handle = document.getElementById('hiveChatResize');
+      let startY = 0, startH = 0;
+      handle.addEventListener('pointerdown', (e) => {
+        startY = e.clientY;
+        startH = chatPanel.offsetHeight;
+        handle.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      });
+      handle.addEventListener('pointermove', (e) => {
+        if (!startH) return;
+        const delta = startY - e.clientY;
+        const newH = Math.max(CHAT_MIN_HEIGHT, Math.min(window.innerHeight * 0.85, startH + delta));
+        chatPanel.style.height = newH + 'px';
+      });
+      handle.addEventListener('pointerup', () => {
+        if (startH) localStorage.setItem(CHAT_HEIGHT_KEY, chatPanel.offsetHeight);
+        startH = 0;
+      });
+    })();
 
     function chatAddMsg(text, cls) {
       const el = document.createElement('div');
