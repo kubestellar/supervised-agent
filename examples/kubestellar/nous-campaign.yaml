@@ -1,0 +1,95 @@
+# Nous Campaign Configuration — Agentic Strategy Evolution for Hive
+# This file controls the Nous experimentation framework.
+# Deployed to /etc/hive/nous-campaign.yaml on the hive server.
+
+campaign:
+  name: governor-strategy-v1
+  mode: observe  # observe | suggest | evolve
+
+  research_question: >
+    What cadence and model assignments minimize MTTR while keeping
+    weekly token burn under 150M?
+
+  # Metrics that Nous agents can read (all read-only from hive's perspective)
+  observables:
+    - name: queue_depth
+      source: /var/run/kick-governor/queue_depth
+    - name: mttr_avg
+      source: /var/run/hive-metrics/issue_to_merge.json
+      jq: ".avg_minutes"
+    - name: tokens_weekly
+      source: /var/run/hive-metrics/tokens.json
+      jq: ".weekly.billableTokens"
+    - name: kick_effectiveness
+      source: /var/run/hive-metrics/kick-outcomes.jsonl
+    - name: governor_mode
+      source: /var/run/kick-governor/mode
+
+  # Parameters that Nous can propose changes to (cadences, models, thresholds)
+  controllables:
+    - name: CADENCE_REVIEWER_QUIET_SEC
+      type: int
+      min: 900
+      max: 7200
+    - name: CADENCE_REVIEWER_BUSY_SEC
+      type: int
+      min: 900
+      max: 7200
+    - name: CADENCE_SCANNER_QUIET_SEC
+      type: int
+      min: 600
+      max: 3600
+    - name: MODEL_QUIET_SCANNER
+      type: enum
+      values:
+        - "claude:claude-haiku-4-5"
+        - "claude:claude-sonnet-4-6"
+        - "copilot:claude-sonnet-4-6"
+    - name: MODEL_QUIET_REVIEWER
+      type: enum
+      values:
+        - "claude:claude-sonnet-4-6"
+        - "copilot:claude-sonnet-4-6"
+        - "claude:claude-opus-4-6"
+    - name: BUSY_THRESHOLD_ISSUES
+      type: int
+      min: 5
+      max: 25
+    - name: SURGE_THRESHOLD_ISSUES
+      type: int
+      min: 15
+      max: 40
+    - name: TOKEN_BUDGET_SAFETY_PCT
+      type: int
+      min: 70
+      max: 95
+
+  # NEVER touched by experiments — hard constraints
+  invariants:
+    - agent_policies       # CLAUDE.md files, kick prompts, agent autonomy
+    - repo_permissions     # what agents can do on kubestellar/console + associated repos
+    - merge_rules          # auto-merge, yolo behavior, PR workflow
+    - budget_total         # only operator sets the ceiling
+    - agent_count          # Nous cannot add/remove/pause agents
+    - scanner_cadence      # scanner always runs every 15m (SLA requirement)
+
+  # Safety bounds — guardian aborts experiment on any violation
+  fast_fail:
+    queue_depth_max: 30
+    mttr_max_minutes: 180
+    budget_burn_rate_max_pct: 110
+
+  # Experiment timing
+  schedule:
+    experiment_duration_hours: 4
+    baseline_hours: 4
+    cooldown_hours: 2
+
+  # File paths for Nous internal state
+  paths:
+    ledger: /var/run/nous/ledger.jsonl
+    principles: /var/run/nous/principles.json
+    pending: /var/run/nous/pending-experiment.json
+    overlay: /etc/hive/governor-experiment.env
+    snapshots: /var/run/nous/snapshots
+    recommendations: /var/run/nous/recommendations.json

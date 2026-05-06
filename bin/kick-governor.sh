@@ -53,6 +53,13 @@ if [[ -f /etc/hive/governor.env ]]; then
   # shellcheck disable=SC1091
   . /etc/hive/governor.env
 fi
+
+# ── Nous experiment overlay (loosely coupled — file may not exist) ──────────
+if [[ -f /etc/hive/governor-experiment.env ]]; then
+  # shellcheck disable=SC1091
+  . /etc/hive/governor-experiment.env
+  log "NOUS: experiment overlay active (${NOUS_EXPERIMENT_ID:-unknown})"
+fi
 # Load from project config if available and HIVE_REPOS not already set
 if [[ -z "${HIVE_REPOS:-}" ]]; then
   if [[ -f /usr/local/bin/hive-config.sh ]]; then
@@ -104,6 +111,22 @@ CADENCE_OUTREACH_SURGE_SEC="${CADENCE_OUTREACH_SURGE_SEC:-0}"       # PAUSED
 CADENCE_OUTREACH_BUSY_SEC="${CADENCE_OUTREACH_BUSY_SEC:-0}"         # PAUSED
 CADENCE_OUTREACH_QUIET_SEC="${CADENCE_OUTREACH_QUIET_SEC:-0}"       # PAUSED
 CADENCE_OUTREACH_IDLE_SEC="${CADENCE_OUTREACH_IDLE_SEC:-7200}"      # 2 hours
+
+# Nous agents — strategy experimentation fleet (Phase 3)
+CADENCE_STRATEGIST_SURGE_SEC="${CADENCE_STRATEGIST_SURGE_SEC:-0}"      # PAUSED during surge
+CADENCE_STRATEGIST_BUSY_SEC="${CADENCE_STRATEGIST_BUSY_SEC:-28800}"    # 8h — less experimentation when busy
+CADENCE_STRATEGIST_QUIET_SEC="${CADENCE_STRATEGIST_QUIET_SEC:-14400}"  # 4h
+CADENCE_STRATEGIST_IDLE_SEC="${CADENCE_STRATEGIST_IDLE_SEC:-14400}"    # 4h
+
+CADENCE_ANALYST_SURGE_SEC="${CADENCE_ANALYST_SURGE_SEC:-14400}"        # 4h — still analyzes past experiments
+CADENCE_ANALYST_BUSY_SEC="${CADENCE_ANALYST_BUSY_SEC:-14400}"          # 4h
+CADENCE_ANALYST_QUIET_SEC="${CADENCE_ANALYST_QUIET_SEC:-14400}"        # 4h
+CADENCE_ANALYST_IDLE_SEC="${CADENCE_ANALYST_IDLE_SEC:-14400}"          # 4h
+
+CADENCE_GUARDIAN_SURGE_SEC="${CADENCE_GUARDIAN_SURGE_SEC:-900}"         # 15min — must monitor active experiments
+CADENCE_GUARDIAN_BUSY_SEC="${CADENCE_GUARDIAN_BUSY_SEC:-900}"           # 15min
+CADENCE_GUARDIAN_QUIET_SEC="${CADENCE_GUARDIAN_QUIET_SEC:-900}"         # 15min
+CADENCE_GUARDIAN_IDLE_SEC="${CADENCE_GUARDIAN_IDLE_SEC:-900}"           # 15min
 
 # ── Token budget ────────────────────────────────────────────────────────────
 TOKEN_BUDGET_WEEKLY="${TOKEN_BUDGET_WEEKLY:-200000000}"  # ~200M billable tokens ≈ 100% weekly limit
@@ -374,6 +397,27 @@ get_cadence() {
         busy)  echo "$CADENCE_SUPERVISOR_BUSY_SEC"  ;;
         quiet) echo "$CADENCE_SUPERVISOR_QUIET_SEC" ;;
         idle)  echo "$CADENCE_SUPERVISOR_IDLE_SEC"  ;;
+      esac ;;
+    strategist)
+      case "$mode" in
+        surge) echo "$CADENCE_STRATEGIST_SURGE_SEC" ;;
+        busy)  echo "$CADENCE_STRATEGIST_BUSY_SEC"  ;;
+        quiet) echo "$CADENCE_STRATEGIST_QUIET_SEC" ;;
+        idle)  echo "$CADENCE_STRATEGIST_IDLE_SEC"  ;;
+      esac ;;
+    analyst)
+      case "$mode" in
+        surge) echo "$CADENCE_ANALYST_SURGE_SEC" ;;
+        busy)  echo "$CADENCE_ANALYST_BUSY_SEC"  ;;
+        quiet) echo "$CADENCE_ANALYST_QUIET_SEC" ;;
+        idle)  echo "$CADENCE_ANALYST_IDLE_SEC"  ;;
+      esac ;;
+    guardian)
+      case "$mode" in
+        surge) echo "$CADENCE_GUARDIAN_SURGE_SEC" ;;
+        busy)  echo "$CADENCE_GUARDIAN_BUSY_SEC"  ;;
+        quiet) echo "$CADENCE_GUARDIAN_QUIET_SEC" ;;
+        idle)  echo "$CADENCE_GUARDIAN_IDLE_SEC"  ;;
       esac ;;
     *)
   esac
@@ -764,7 +808,7 @@ echo "$mode"      > "$STATE_DIR/mode"
 echo "$busy_pct"  > "$STATE_DIR/busyness_pct"
 
 # Write per-agent cadences for hive status to read
-for _agent in scanner reviewer architect outreach supervisor; do
+for _agent in scanner reviewer architect outreach supervisor strategist analyst guardian; do
   if _is_agent_paused "$_agent"; then
     echo "paused" > "$STATE_DIR/cadence_${_agent}"
     continue
@@ -797,16 +841,43 @@ log "MODE=${mode} queue=${queue_depth} scanner=$(secs_to_label "$(get_cadence sc
 
 # Log model assignments
 budget_pct=$(grep '^PROJECTED_PCT=' "$STATE_DIR/budget_state" 2>/dev/null | cut -d= -f2 || echo "?")
-log "BUDGET projected=${budget_pct}% models: $(for _a in scanner reviewer architect outreach supervisor; do
+log "BUDGET projected=${budget_pct}% models: $(for _a in scanner reviewer architect outreach supervisor strategist analyst guardian; do
   _b=$(grep '^BACKEND=' "$STATE_DIR/model_${_a}" 2>/dev/null | cut -d= -f2 || echo "?")
   _m=$(grep '^MODEL=' "$STATE_DIR/model_${_a}" 2>/dev/null | cut -d= -f2 || echo "?")
   printf '%s=%s:%s ' "$_a" "$_b" "$_m"
 done)"
 
+# ── Nous: state snapshot + outcome tracking (loosely coupled) ──────────────
+NOUS_SNAPSHOTS_DIR="${NOUS_SNAPSHOTS_DIR:-/var/run/nous/snapshots}"
+if mkdir -p "$NOUS_SNAPSHOTS_DIR" 2>/dev/null; then
+  _snap_ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+  _snap_epoch=$(date +%s)
+  _snap_tokens_hourly=0
+  [[ -f /var/run/hive-metrics/tokens.json ]] && \
+    _snap_tokens_hourly=$(jq -r '.hourly.billableTokens // 0' /var/run/hive-metrics/tokens.json 2>/dev/null || echo 0)
+  _snap_mttr=0
+  [[ -f /var/run/hive-metrics/issue_to_merge.json ]] && \
+    _snap_mttr=$(jq -r '.avg_minutes // 0' /var/run/hive-metrics/issue_to_merge.json 2>/dev/null || echo 0)
+
+  cat > "${NOUS_SNAPSHOTS_DIR}/${_snap_epoch}.json" <<SNAP_EOF
+{"ts":"${_snap_ts}","mode":"${mode}","queue_depth":${queue_depth},"budget_pct":"${budget_pct}","tokens_hourly":${_snap_tokens_hourly},"mttr_avg":${_snap_mttr}}
+SNAP_EOF
+
+  # Prune snapshots older than 7 days
+  find "$NOUS_SNAPSHOTS_DIR" -name '*.json' -mtime +7 -delete 2>/dev/null || true
+  log "NOUS: snapshot written (queue=${queue_depth} mode=${mode})"
+fi
+
+# Outcome tracker — correlate kicks with results
+OUTCOME_TRACKER="${OUTCOME_TRACKER:-$(dirname "$0")/kick-outcome-tracker.sh}"
+if [[ -x "$OUTCOME_TRACKER" ]]; then
+  "$OUTCOME_TRACKER" 2>&1 | while IFS= read -r _ot_line; do log "  $_ot_line"; done || true
+fi
+
 # Clear stuck input on every tick — C-c + C-u to discard, not Enter to execute.
 # If C-c + C-u fails (buffer completely stuck), flag agent for restart.
 BUFFER_STUCK_HEARTBEAT_THRESHOLD=1200  # 20 minutes — skip buffer-stuck flag if status file is fresher
-for _fa in scanner reviewer supervisor architect outreach; do
+for _fa in scanner reviewer supervisor architect outreach strategist analyst guardian; do
   _is_agent_paused "$_fa" && continue
   tmux has-session -t "$_fa" 2>/dev/null || continue
   _pane_text=$(tmux capture-pane -t "$_fa" -p 2>/dev/null || true)
@@ -849,7 +920,7 @@ DEFAULT_STALE_THRESHOLD_SEC=1200  # 20 minutes — overridden by per-agent AGENT
 STUCK_COUNT_FILE="$STATE_DIR/stuck_counts"
 touch "$STUCK_COUNT_FILE" 2>/dev/null || true
 
-for _sa in scanner reviewer architect outreach supervisor; do
+for _sa in scanner reviewer architect outreach supervisor strategist analyst guardian; do
   _is_agent_paused "$_sa" && continue
   _status_file="$HOME/.hive/${_sa}_status.txt"
   [[ ! -f "$_status_file" ]] && continue
@@ -898,5 +969,8 @@ maybe_kick reviewer   "$mode"
 maybe_kick architect  "$mode"
 maybe_kick outreach   "$mode"
 maybe_kick supervisor "$mode"
+maybe_kick strategist "$mode"
+maybe_kick analyst    "$mode"
+maybe_kick guardian   "$mode"
 
 log "GOVERNOR DONE"

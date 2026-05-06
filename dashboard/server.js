@@ -1809,6 +1809,201 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// ── Nous (Strategy Lab) API endpoints ──────────────────────────────────────
+const NOUS_CAMPAIGN_PATH = process.env.NOUS_CAMPAIGN_PATH || '/etc/hive/nous-campaign.yaml';
+const NOUS_OVERLAY_PATH = '/etc/hive/governor-experiment.env';
+const NOUS_STATE_DIR = '/var/run/nous';
+const NOUS_LEDGER_PATH = path.join(NOUS_STATE_DIR, 'ledger.jsonl');
+const NOUS_PRINCIPLES_PATH = path.join(NOUS_STATE_DIR, 'principles.json');
+const NOUS_PENDING_PATH = path.join(NOUS_STATE_DIR, 'pending-experiment.json');
+const NOUS_RECOMMENDATIONS_PATH = path.join(NOUS_STATE_DIR, 'recommendations.json');
+const NOUS_SNAPSHOTS_DIR = path.join(NOUS_STATE_DIR, 'snapshots');
+
+function readNousCampaign() {
+  try {
+    const raw = fs.readFileSync(NOUS_CAMPAIGN_PATH, 'utf8');
+    if (yaml) return yaml.load(raw) || {};
+    return {};
+  } catch (_) { return {}; }
+}
+
+function readJsonFile(p) {
+  try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (_) { return null; }
+}
+
+function readJsonlFile(p, limit) {
+  try {
+    const lines = fs.readFileSync(p, 'utf8').trim().split('\n').filter(Boolean);
+    const MAX_LEDGER_LINES = limit || 100;
+    const recent = lines.slice(-MAX_LEDGER_LINES);
+    return recent.map((l) => { try { return JSON.parse(l); } catch (_) { return null; } }).filter(Boolean);
+  } catch (_) { return []; }
+}
+
+// GET /api/nous/status — current mode, active experiment, pending proposal
+app.get('/api/nous/status', (_req, res) => {
+  const campaign = readNousCampaign();
+  const mode = (campaign.campaign && campaign.campaign.mode) || 'observe';
+
+  let activeExperiment = null;
+  if (fs.existsSync(NOUS_OVERLAY_PATH)) {
+    try {
+      const overlay = parseEnvFile(NOUS_OVERLAY_PATH);
+      const startEpoch = parseInt(overlay.NOUS_EXPERIMENT_START || '0', 10);
+      const ttlSec = parseInt(overlay.NOUS_EXPERIMENT_TTL_SEC || '14400', 10);
+      const nowEpoch = Math.floor(Date.now() / 1000);
+      const PERCENT_DIVISOR = 100;
+      activeExperiment = {
+        id: overlay.NOUS_EXPERIMENT_ID || 'unknown',
+        start: startEpoch,
+        ttlSec,
+        elapsed: nowEpoch - startEpoch,
+        progressPct: Math.min(Math.round(((nowEpoch - startEpoch) / ttlSec) * PERCENT_DIVISOR), PERCENT_DIVISOR),
+        fastFail: {
+          queueMax: parseInt(overlay.NOUS_FAST_FAIL_QUEUE_MAX || '30', 10),
+          mttrMax: parseInt(overlay.NOUS_FAST_FAIL_MTTR_MAX || '180', 10),
+        },
+      };
+    } catch (_) { /* overlay parse failed */ }
+  }
+
+  const pending = readJsonFile(NOUS_PENDING_PATH);
+  const principles = readJsonFile(NOUS_PRINCIPLES_PATH) || [];
+  const recommendations = readJsonFile(NOUS_RECOMMENDATIONS_PATH);
+
+  const SNAPSHOT_COUNT_TARGET = 672;
+  let snapshotCount = 0;
+  try {
+    if (fs.existsSync(NOUS_SNAPSHOTS_DIR)) {
+      snapshotCount = fs.readdirSync(NOUS_SNAPSHOTS_DIR).filter((f) => f.endsWith('.json')).length;
+    }
+  } catch (_) { /* ignore */ }
+
+  res.json({
+    mode,
+    campaign: campaign.campaign || {},
+    activeExperiment,
+    pending,
+    principleCount: Array.isArray(principles) ? principles.length : 0,
+    snapshotCount,
+    snapshotTarget: SNAPSHOT_COUNT_TARGET,
+    hasRecommendations: !!recommendations,
+    recommendations,
+  });
+});
+
+// GET /api/nous/ledger — experiment history
+app.get('/api/nous/ledger', (_req, res) => {
+  const LEDGER_LIMIT = 200;
+  res.json(readJsonlFile(NOUS_LEDGER_PATH, LEDGER_LIMIT));
+});
+
+// GET /api/nous/principles — accumulated knowledge
+app.get('/api/nous/principles', (_req, res) => {
+  res.json(readJsonFile(NOUS_PRINCIPLES_PATH) || []);
+});
+
+// POST /api/nous/approve — approve pending experiment (suggest mode only)
+app.post('/api/nous/approve', (_req, res) => {
+  const campaign = readNousCampaign();
+  const mode = (campaign.campaign && campaign.campaign.mode) || 'observe';
+  if (mode !== 'suggest') {
+    return res.status(400).json({ error: `Approve only available in suggest mode (current: ${mode})` });
+  }
+  const pending = readJsonFile(NOUS_PENDING_PATH);
+  if (!pending) {
+    return res.status(404).json({ error: 'No pending experiment to approve' });
+  }
+
+  try {
+    const overlayLines = [
+      '# Nous experiment overlay — approved from dashboard',
+      `NOUS_EXPERIMENT_ID=${pending.id || 'exp-approved'}`,
+      `NOUS_EXPERIMENT_START=${Math.floor(Date.now() / 1000)}`,
+      `NOUS_EXPERIMENT_TTL_SEC=${(pending.duration_hours || 4) * 3600}`,
+      `NOUS_FAST_FAIL_QUEUE_MAX=${(pending.fast_fail && pending.fast_fail.queue_max) || 30}`,
+      `NOUS_FAST_FAIL_MTTR_MAX=${(pending.fast_fail && pending.fast_fail.mttr_max) || 180}`,
+    ];
+    if (pending.params) {
+      for (const [k, v] of Object.entries(pending.params)) {
+        overlayLines.push(`${k}=${v}`);
+      }
+    }
+    fs.writeFileSync(NOUS_OVERLAY_PATH, overlayLines.join('\n') + '\n');
+
+    const ledgerEntry = JSON.stringify({
+      ...pending, type: 'active', approved_at: new Date().toISOString(),
+    });
+    fs.appendFileSync(NOUS_LEDGER_PATH, ledgerEntry + '\n');
+
+    fs.unlinkSync(NOUS_PENDING_PATH);
+    res.json({ ok: true, experimentId: pending.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/nous/abort — emergency stop
+app.post('/api/nous/abort', (_req, res) => {
+  try {
+    let experimentId = 'unknown';
+    if (fs.existsSync(NOUS_OVERLAY_PATH)) {
+      const overlay = parseEnvFile(NOUS_OVERLAY_PATH);
+      experimentId = overlay.NOUS_EXPERIMENT_ID || 'unknown';
+      fs.unlinkSync(NOUS_OVERLAY_PATH);
+    }
+
+    const abortEntry = JSON.stringify({
+      id: `abort-${Date.now()}`, ts: new Date().toISOString(),
+      type: 'aborted', experiment_id: experimentId,
+      reason: 'operator_abort',
+    });
+    try { fs.appendFileSync(NOUS_LEDGER_PATH, abortEntry + '\n'); } catch (_) { /* ignore */ }
+
+    res.json({ ok: true, aborted: experimentId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/nous/mode — change campaign mode
+app.put('/api/nous/mode', (req, res) => {
+  const { mode, force } = req.body;
+  const VALID_MODES = ['observe', 'suggest', 'evolve'];
+  if (!VALID_MODES.includes(mode)) {
+    return res.status(400).json({ error: `Invalid mode: ${mode}. Must be one of: ${VALID_MODES.join(', ')}` });
+  }
+
+  const campaign = readNousCampaign();
+  const currentMode = (campaign.campaign && campaign.campaign.mode) || 'observe';
+  const modeOrder = { observe: 0, suggest: 1, evolve: 2 };
+
+  if (!force && modeOrder[mode] < modeOrder[currentMode]) {
+    return res.status(400).json({
+      error: `Backward transition ${currentMode} → ${mode} requires force: true`,
+      currentMode,
+    });
+  }
+
+  try {
+    if (!campaign.campaign) campaign.campaign = {};
+    campaign.campaign.mode = mode;
+    if (yaml) {
+      fs.writeFileSync(NOUS_CAMPAIGN_PATH, yaml.dump(campaign, { lineWidth: 120 }));
+    } else {
+      return res.status(500).json({ error: 'js-yaml not available — cannot write campaign yaml' });
+    }
+
+    if (force && fs.existsSync(NOUS_OVERLAY_PATH)) {
+      fs.unlinkSync(NOUS_OVERLAY_PATH);
+    }
+
+    res.json({ ok: true, mode, previousMode: currentMode });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🐝 Hive Dashboard running at http://localhost:${PORT}`);
 });
