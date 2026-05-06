@@ -143,10 +143,11 @@
     .oc-agent-detail-header .status-dot {
       width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
     }
-    .oc-agent-detail-header .status-dot.running { background: #16a34a; }
+    .oc-agent-detail-header .status-dot.running { background: #16a34a; animation: oc-pulse 1.5s ease-in-out infinite; }
+    .oc-agent-detail-header .status-dot.idle { background: #16a34a; }
+    .oc-agent-detail-header .status-dot.paused { background: #ca8a04; }
     .oc-agent-detail-header .status-dot.stopped { background: #dc2626; }
-    .oc-agent-detail-header .status-dot.paused { background: #dc2626; }
-    .oc-agent-detail-header .status-dot.idle { background: #9ca3af; }
+    .oc-agent-detail-header .status-dot.off { background: #9ca3af; }
     .oc-detail-fields {
       display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; margin-bottom: 16px;
     }
@@ -191,11 +192,12 @@
     .oc-nav-item .oc-agent-dot {
       width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
     }
-    .oc-agent-dot.running { background: #16a34a; }
-    .oc-agent-dot.idle { background: #9ca3af; }
-    .oc-agent-dot.paused { background: #dc2626; }
+    .oc-agent-dot.running { background: #16a34a; animation: oc-pulse 1.5s ease-in-out infinite; }
+    .oc-agent-dot.idle { background: #16a34a; }
+    .oc-agent-dot.paused { background: #ca8a04; }
     .oc-agent-dot.stopped { background: #dc2626; }
-    .oc-agent-dot.off { background: #d1d5db; }
+    .oc-agent-dot.off { background: #9ca3af; }
+    @keyframes oc-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
     /* Agent detail summary — monospace, respect newlines */
     .oc-detail-summary {
@@ -224,7 +226,7 @@
     body.openclaw-mode .agent-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
     body.openclaw-mode .agent-card.working { border-color: #16a34a; }
     body.openclaw-mode .agent-card.stopped { border-color: #dc2626; }
-    body.openclaw-mode .agent-card.paused { border-color: #dc2626; opacity: 0.8; }
+    body.openclaw-mode .agent-card.paused { border-color: #ca8a04; opacity: 0.8; }
     body.openclaw-mode .agent-card.off { border-color: #d1d5db; opacity: 0.7; }
 
     /* OpenClaw agents grid */
@@ -1172,8 +1174,9 @@
       const isOff = a.offByCadence === true;
       const isPaused = a.paused === true && !isOff;
       const isStopped = a.state === 'stopped';
-      const dotCls = isPaused ? 'paused' : isOff ? 'off' : isStopped ? 'stopped' : 'running';
-      const stateLabel = a.busy === 'working' ? 'working' : isPaused ? 'paused' : isOff ? 'off' : isStopped ? 'stopped' : 'idle';
+      const isRunning = a.busy === 'working' && !isPaused && !isOff && !isStopped;
+      const dotCls = isStopped ? 'stopped' : isPaused ? 'paused' : isOff ? 'off' : isRunning ? 'running' : 'idle';
+      const stateLabel = isStopped ? 'stopped' : isPaused ? 'paused' : isOff ? 'off' : isRunning ? 'working' : 'idle';
 
       const kickId = `oc-kick-${a.name}`;
       const prevInput = document.getElementById(kickId);
@@ -1232,7 +1235,8 @@
         const isOff = a.offByCadence === true;
         const isPaused = a.paused === true && !isOff;
         const isStopped = a.state === 'stopped';
-        const dotCls = isPaused ? 'paused' : isOff ? 'off' : isStopped ? 'stopped' : 'running';
+        const isRunning = a.busy === 'working' && !isPaused && !isOff && !isStopped;
+        const dotCls = isStopped ? 'stopped' : isPaused ? 'paused' : isOff ? 'off' : isRunning ? 'running' : 'idle';
         const isActive = _ocSelectedAgent === a.name ? ' active' : '';
         return `<a class="oc-nav-item${isActive}" data-agent-nav="${a.name}" onclick="ocSelectAgent('${a.name}')"><span class="oc-agent-dot ${dotCls}"></span> ${a.name}</a>`;
       }).join('');
