@@ -152,11 +152,7 @@
     .oc-detail-field { font-size: 0.82rem; }
     .oc-detail-field .label { color: #6b7280; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.3px; }
     .oc-detail-field .value { font-weight: 600; color: #1a1a2e; margin-top: 2px; }
-    .oc-detail-summary {
-      font-size: 0.85rem; color: #374151; line-height: 1.6;
-      margin-bottom: 16px; padding: 12px; background: #f9fafb;
-      border-radius: 8px; border: 1px solid #e5e7eb; min-height: 60px;
-    }
+    /* (oc-detail-summary defined below with monospace) */
     .oc-detail-indicators { margin-bottom: 16px; }
     .oc-chat-prompt {
       display: flex; gap: 8px; align-items: flex-end;
@@ -180,7 +176,17 @@
       display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
     }
 
-    /* Sidebar agent items with status dots */
+    /* Sidebar agent tree */
+    .oc-tree-toggle {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 16px; font-size: 0.72rem; color: #6b7280;
+      cursor: pointer; user-select: none;
+    }
+    .oc-tree-toggle:hover { color: #374151; }
+    .oc-tree-arrow { font-size: 0.6rem; transition: transform 0.15s; }
+    .oc-tree-toggle.collapsed .oc-tree-arrow { transform: rotate(-90deg); }
+    .oc-tree-children { padding-left: 8px; }
+    .oc-tree-children.collapsed { display: none; }
     .oc-nav-item .oc-agent-dot {
       width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
     }
@@ -188,6 +194,24 @@
     .oc-agent-dot.idle { background: #9ca3af; }
     .oc-agent-dot.paused { background: #dc2626; }
     .oc-agent-dot.off { background: #d1d5db; }
+
+    /* Agent detail summary — monospace, respect newlines */
+    .oc-detail-summary {
+      font-size: 0.82rem; color: #374151; line-height: 1.55;
+      margin-bottom: 16px; padding: 14px; background: #f9fafb;
+      border-radius: 8px; border: 1px solid #e5e7eb;
+      min-height: 60px; max-height: 320px; overflow-y: auto;
+      white-space: pre-wrap; word-break: break-word;
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 0.78rem;
+    }
+
+    /* Hide non-agent sections when an agent is focused in OpenClaw */
+    body.openclaw-mode.oc-agent-focused .governor,
+    body.openclaw-mode.oc-agent-focused .token-usage,
+    body.openclaw-mode.oc-agent-focused .repos,
+    body.openclaw-mode.oc-agent-focused #beads-wrapper { display: none; }
+    body.openclaw-mode.oc-agent-focused .agent-card.oc-hidden { display: none; }
 
     /* OpenClaw card overrides */
     body.openclaw-mode .agent-card {
@@ -985,9 +1009,13 @@
       <a class="oc-nav-item" data-section="token-panel" onclick="ocNavigate('token-panel')">🪙 Tokens</a>
     </div>
     <div class="oc-nav-group">
-      <div class="oc-nav-label">Agents</div>
-      <a class="oc-nav-item" data-section="agents" onclick="ocNavigate('agents')">👁 Overview</a>
-      <div id="oc-agent-nav"></div>
+      <div class="oc-tree-toggle" onclick="ocToggleAgentTree(this)">
+        <span class="oc-tree-arrow">▼</span> <span style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Agents</span>
+      </div>
+      <div class="oc-tree-children" id="oc-agent-tree">
+        <a class="oc-nav-item" data-section="agents" onclick="ocNavigate('agents')">👁 Overview</a>
+        <div id="oc-agent-nav"></div>
+      </div>
     </div>
     <div class="oc-nav-group">
       <div class="oc-nav-label">Resources</div>
@@ -1035,7 +1063,7 @@
     <div class="repo-grid" id="repos"></div>
   </div>
 
-  <div style="margin-top: 16px; margin-bottom: 24px;">
+  <div id="beads-wrapper" style="margin-top: 16px; margin-bottom: 24px;">
     <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 8px;">Beads</h2>
     <div class="beads" id="beads"></div>
   </div>
@@ -1084,6 +1112,7 @@
       _ocSelectedAgent = null;
       const detail = document.getElementById('oc-agent-detail');
       if (detail) { detail.classList.remove('active'); detail.innerHTML = ''; }
+      ocUpdateFocusedState();
       const el = document.getElementById(section);
       if (el) {
         const y = el.getBoundingClientRect().top + window.scrollY - OC_TOPBAR_HEIGHT;
@@ -1094,17 +1123,40 @@
       if (active) active.classList.add('active');
     }
 
+    function ocToggleAgentTree(el) {
+      el.classList.toggle('collapsed');
+      const children = el.nextElementSibling;
+      if (children) children.classList.toggle('collapsed');
+    }
+
+    function ocUpdateFocusedState() {
+      const isFocused = !!_ocSelectedAgent && getLayout() === 'openclaw';
+      document.body.classList.toggle('oc-agent-focused', isFocused);
+      document.querySelectorAll('.agent-card').forEach(card => {
+        card.classList.toggle('oc-hidden', isFocused && card.dataset.agent === _ocSelectedAgent);
+      });
+    }
+
     function ocSelectAgent(name) {
       _ocSelectedAgent = name;
       document.querySelectorAll('.oc-nav-item').forEach(i => i.classList.remove('active'));
       const active = document.querySelector(`.oc-nav-item[data-agent-nav="${name}"]`);
       if (active) active.classList.add('active');
       ocRenderAgentDetail();
+      ocUpdateFocusedState();
       const detail = document.getElementById('oc-agent-detail');
       if (detail) {
         const y = detail.getBoundingClientRect().top + window.scrollY - OC_TOPBAR_HEIGHT;
         window.scrollTo({ top: y, behavior: 'smooth' });
       }
+    }
+
+    const OC_SUMMARY_MAX_LINES = 15;
+    function ocFormatSummary(raw) {
+      const escaped = esc(raw);
+      const lines = escaped.split(/\r?\n/);
+      const trimmed = lines.length > OC_SUMMARY_MAX_LINES ? lines.slice(0, OC_SUMMARY_MAX_LINES).join('\n') + '\n…' : lines.join('\n');
+      return trimmed;
     }
 
     function ocRenderAgentDetail() {
@@ -1147,7 +1199,7 @@
           <div class="oc-detail-field"><div class="label">Restarts</div><div class="value">${a.restarts ?? 0}</div></div>
           <div class="oc-detail-field"><div class="label">Avg/Pass</div><div class="value">${a.avgTokensPerPass || '—'}</div></div>
         </div>
-        <div class="oc-detail-summary">${a.liveSummary ? a.liveSummary : '<span style="color:#9ca3af">No activity summary</span>'}</div>
+        <div class="oc-detail-summary">${a.liveSummary ? ocFormatSummary(a.liveSummary) : '<span style="color:#9ca3af">No activity summary</span>'}</div>
         <div class="oc-chat-prompt">
           <input type="text" class="oc-chat-input" id="${kickId}" placeholder="Send a message to ${a.name}..." value="${prevVal.replace(/"/g, '&quot;')}" onkeydown="if(event.key==='Enter'){ocSendKick('${a.name}')}" />
           <button class="oc-chat-send" onclick="ocSendKick('${a.name}')">Send</button>
@@ -2393,7 +2445,7 @@ function burnAreaChart() {
       renderRepos(data.repos || []);
       renderBeads(data.beads || {});
       ocUpdateSidebarAgents();
-      if (_ocSelectedAgent) ocRenderAgentDetail();
+      if (_ocSelectedAgent) { ocRenderAgentDetail(); ocUpdateFocusedState(); }
       window.scrollTo(0, scrollY);
     }
 
