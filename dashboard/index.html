@@ -234,9 +234,12 @@
     body.openclaw-mode .agent-card.paused { border-color: #ca8a04; opacity: 0.8; }
     body.openclaw-mode .agent-card.off { border-color: #d1d5db; opacity: 0.7; }
 
-    /* OpenClaw agents grid — always single column (rows) */
+    /* OpenClaw agents grid — rows for Governor/Overview, columns when agent is focused */
     body.openclaw-mode .agents {
       grid-template-columns: 1fr; gap: 14px;
+    }
+    body.openclaw-mode.oc-agent-focused .agents {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     }
 
     /* OpenClaw surface panels */
