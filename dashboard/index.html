@@ -127,11 +127,16 @@
 
     /* OpenClaw agent detail panel (shown when agent selected in sidebar) */
     .oc-agent-detail {
-      display: none; background: #ffffff; border: 1px solid #e5e7eb;
+      display: none; background: #ffffff; border: 2px solid #e5e7eb;
       border-radius: 10px; padding: 20px; margin-bottom: 16px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
     .oc-agent-detail.active { display: block; }
+    .oc-agent-detail.state-running { border-color: #16a34a; }
+    .oc-agent-detail.state-idle { border-color: #16a34a; }
+    .oc-agent-detail.state-paused { border-color: #ca8a04; }
+    .oc-agent-detail.state-stopped { border-color: #dc2626; }
+    .oc-agent-detail.state-off { border-color: #d1d5db; }
     .oc-agent-detail-header {
       display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
       padding-bottom: 12px; border-bottom: 1px solid #e5e7eb;
@@ -229,9 +234,9 @@
     body.openclaw-mode .agent-card.paused { border-color: #ca8a04; opacity: 0.8; }
     body.openclaw-mode .agent-card.off { border-color: #d1d5db; opacity: 0.7; }
 
-    /* OpenClaw agents grid */
+    /* OpenClaw agents grid — always single column (rows) */
     body.openclaw-mode .agents {
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;
+      grid-template-columns: 1fr; gap: 14px;
     }
 
     /* OpenClaw surface panels */
@@ -1176,6 +1181,8 @@
       const isStopped = a.state === 'stopped';
       const isRunning = a.busy === 'working' && !isPaused && !isOff && !isStopped;
       const dotCls = isStopped ? 'stopped' : isPaused ? 'paused' : isOff ? 'off' : isRunning ? 'running' : 'idle';
+
+      detail.className = 'oc-agent-detail active state-' + dotCls;
       const stateLabel = isStopped ? 'stopped' : isPaused ? 'paused' : isOff ? 'off' : isRunning ? 'working' : 'idle';
 
       const kickId = `oc-kick-${a.name}`;
