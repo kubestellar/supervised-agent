@@ -330,20 +330,21 @@ def scrape_tmux(session):
     return ("\n".join(result), is_working) if result else None
 
 
-def merge_summaries(tmux_text, jsonl_text):
-    """Combine tmux and JSONL summaries, dedup, cap at SUMMARY_MAX_LINES."""
+def merge_summaries(tmux_text, jsonl_text, prev_text=""):
+    """Combine tmux, JSONL, and previously cached summaries. Dedup, cap lines.
+
+    New tmux lines go first (freshest visible state), then JSONL tool
+    descriptions, then previously cached lines that are still unique.
+    This accumulates context across polls since the tmux pane is small.
+    """
     lines = []
     seen = set()
-    for l in (tmux_text or "").split("\n"):
-        l = l.strip()
-        if l and l not in seen:
-            lines.append(l)
-            seen.add(l)
-    for l in (jsonl_text or "").split("\n"):
-        l = l.strip()
-        if l and l not in seen:
-            lines.append(l)
-            seen.add(l)
+    for source in (tmux_text, jsonl_text, prev_text):
+        for l in (source or "").split("\n"):
+            l = l.strip()
+            if l and l not in seen:
+                lines.append(l)
+                seen.add(l)
     return "\n".join(lines[:SUMMARY_MAX_LINES])
 
 
@@ -385,7 +386,8 @@ def main():
         tmux_result = scrape_tmux(session) if session else None
         tmux_summary = tmux_result[0] if tmux_result else ""
         tmux_working = tmux_result[1] if tmux_result else False
-        summary = merge_summaries(tmux_summary, jsonl_summary)
+        prev_summary = cached.get(agent, {}).get("summary", "")
+        summary = merge_summaries(tmux_summary, jsonl_summary, prev_summary)
         active = tmux_working or (now - mtime) < STALE_SECONDS
         if summary:
             cached[agent] = {
@@ -405,7 +407,9 @@ def main():
             continue
         result = scrape_tmux(session)
         if result:
-            summary, is_working = result
+            tmux_summary, is_working = result
+            prev_summary = cached.get(agent, {}).get("summary", "")
+            summary = merge_summaries(tmux_summary, "", prev_summary)
             cached[agent] = {
                 "summary": summary,
                 "ts": int(now * 1000),
