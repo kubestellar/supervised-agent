@@ -1002,6 +1002,10 @@ app.post('/api/reset-restarts/:agent', (req, res) => {
       const { execSync } = require('child_process');
       execSync(`sudo truncate -s 0 ${restartFile}`);
     }
+    if (statusCache && statusCache.agents) {
+      const entry = statusCache.agents.find(a => a.name === agent);
+      if (entry) entry.restarts = 0;
+    }
     res.json({ ok: true, output: `${agent} restart counter reset` });
   } catch (e) {
     res.status(500).json({ error: `failed to reset: ${e.message}` });
