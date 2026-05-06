@@ -1160,6 +1160,42 @@
     @media (max-width: 500px) {
       .hive-chat-panel { width: calc(100vw - 32px); right: 16px; bottom: 72px; }
     }
+
+    /* Strategy Lab (Nous) */
+    .nous-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+    .nous-card h3 { font-size: 0.85rem; margin: 0 0 8px 0; color: var(--fg); }
+    .nous-mode-toggle { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+    .nous-mode-btn { flex: 1; padding: 8px 12px; text-align: center; font-size: 0.78rem; cursor: pointer; border: none; background: var(--card); color: var(--muted); transition: all 0.2s; }
+    .nous-mode-btn:not(:last-child) { border-right: 1px solid var(--border); }
+    .nous-mode-btn.active-observe { background: #2563eb; color: white; }
+    .nous-mode-btn.active-suggest { background: #d97706; color: white; }
+    .nous-mode-btn.active-evolve { background: #16a34a; color: white; }
+    .nous-mode-btn:hover:not([class*="active-"]) { background: #f3f4f6; }
+    .nous-progress { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin: 8px 0; }
+    .nous-progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+    .nous-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .nous-stat { text-align: center; }
+    .nous-stat .val { font-size: 1.3rem; font-weight: 700; color: var(--fg); }
+    .nous-stat .lbl { font-size: 0.7rem; color: var(--muted); }
+    .nous-principle { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .nous-principle:last-child { border-bottom: none; }
+    .nous-confidence-bar { width: 60px; height: 6px; background: var(--border); border-radius: 3px; flex-shrink: 0; }
+    .nous-confidence-fill { height: 100%; border-radius: 3px; background: #16a34a; }
+    .nous-principle-text { font-size: 0.78rem; color: var(--fg); flex: 1; }
+    .nous-principle-score { font-size: 0.7rem; color: var(--muted); width: 35px; text-align: right; flex-shrink: 0; }
+    .nous-timeline { display: flex; gap: 3px; align-items: flex-end; height: 40px; margin-top: 8px; }
+    .nous-timeline-bar { flex: 1; min-width: 4px; border-radius: 2px 2px 0 0; cursor: default; }
+    .nous-pending-card { background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    .nous-pending-card h4 { margin: 0 0 6px 0; font-size: 0.82rem; color: #92400e; }
+    .nous-pending-params { font-size: 0.75rem; margin: 6px 0; }
+    .nous-pending-params td { padding: 2px 8px; }
+    .nous-btn { padding: 6px 14px; border: none; border-radius: 6px; font-size: 0.78rem; cursor: pointer; font-weight: 600; }
+    .nous-btn-approve { background: #16a34a; color: white; }
+    .nous-btn-reject { background: #dc2626; color: white; margin-left: 8px; }
+    .nous-btn-abort { background: #dc2626; color: white; }
+    .nous-btn:hover { opacity: 0.85; }
+    .nous-experiment-live { background: #f0fdf4; border: 1px solid #16a34a; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    .nous-experiment-live h4 { margin: 0 0 6px 0; font-size: 0.82rem; color: #166534; }
   </style>
 </head>
 <body>
@@ -1225,6 +1261,7 @@
       <div class="oc-nav-label">Resources</div>
       <a class="oc-nav-item" data-section="repos-section" onclick="ocNavigate('repos-section')">📦 Repos</a>
       <a class="oc-nav-item" data-section="beads-section" onclick="ocNavigate('beads-section')">🔮 Beads</a>
+      <a class="oc-nav-item" data-section="nous-section" onclick="ocNavigate('nous-section')">🧪 Strategy Lab</a>
     </div>
     <div class="oc-nav-group" style="margin-top:auto">
       <div class="oc-nav-label">Settings</div>
@@ -1270,6 +1307,11 @@
   <div id="beads-section" style="margin-top: 16px; margin-bottom: 24px;">
     <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 8px;">Beads</h2>
     <div class="beads" id="beads"></div>
+  </div>
+
+  <div id="nous-section" style="margin-top: 16px; margin-bottom: 24px;">
+    <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 8px;">🧪 Strategy Lab <span id="nous-mode-badge" style="font-size:0.75rem;padding:2px 8px;border-radius:9999px;margin-left:8px"></span></h2>
+    <div id="nous-panel"></div>
   </div>
 
   <div id="oc-gov-strip-outer" class="oc-gov-strip"></div>
@@ -2818,6 +2860,228 @@ function burnAreaChart() {
     function setIfChanged(el, html) {
       if (el.innerHTML !== html) el.innerHTML = html;
     }
+
+    // ── Strategy Lab (Nous) rendering ──────────────────────────────────────
+    let _nousCache = null;
+    const NOUS_POLL_MS = 30000;
+    const NOUS_CONFIDENCE_THRESHOLD = 0.8;
+    const NOUS_PRINCIPLE_HIGH_CONFIDENCE = 5;
+
+    async function fetchNousStatus() {
+      try {
+        const [statusRes, ledgerRes, principlesRes] = await Promise.all([
+          fetch('/api/nous/status'), fetch('/api/nous/ledger'), fetch('/api/nous/principles'),
+        ]);
+        _nousCache = {
+          status: await statusRes.json(),
+          ledger: await ledgerRes.json(),
+          principles: await principlesRes.json(),
+        };
+        renderNous();
+      } catch (_) { /* nous endpoints may not exist yet */ }
+    }
+
+    function renderNous() {
+      const panel = document.getElementById('nous-panel');
+      const badge = document.getElementById('nous-mode-badge');
+      if (!panel || !_nousCache) return;
+      const s = _nousCache.status || {};
+      const ledger = _nousCache.ledger || [];
+      const principles = _nousCache.principles || [];
+      const mode = s.mode || 'observe';
+
+      const modeColors = { observe: '#2563eb', suggest: '#d97706', evolve: '#16a34a' };
+      const modeLabels = { observe: 'Observing', suggest: 'Suggesting', evolve: 'Evolving' };
+      if (badge) {
+        badge.textContent = modeLabels[mode] || mode;
+        badge.style.background = modeColors[mode] || '#6b7280';
+        badge.style.color = 'white';
+      }
+
+      let html = '';
+
+      // Mode toggle
+      html += '<div class="nous-mode-toggle">';
+      for (const m of ['observe', 'suggest', 'evolve']) {
+        const active = m === mode ? ` active-${m}` : '';
+        const titles = {
+          observe: 'Data collection only — governor unchanged',
+          suggest: 'Experiments require your approval',
+          evolve: 'Fully autonomous experimentation',
+        };
+        html += `<button class="nous-mode-btn${active}" title="${titles[m]}" onclick="nousSetMode('${m}')">${m.charAt(0).toUpperCase() + m.slice(1)}</button>`;
+      }
+      html += '</div>';
+
+      // Stats row
+      const snapPct = s.snapshotTarget ? Math.min(Math.round((s.snapshotCount / s.snapshotTarget) * 100), 100) : 0;
+      html += '<div class="nous-stat-grid">';
+      html += `<div class="nous-stat"><div class="val">${s.snapshotCount || 0}</div><div class="lbl">Snapshots (${snapPct}% of baseline)</div></div>`;
+      html += `<div class="nous-stat"><div class="val">${s.principleCount || 0}</div><div class="lbl">Principles</div></div>`;
+      html += `<div class="nous-stat"><div class="val">${ledger.length}</div><div class="lbl">Experiments</div></div>`;
+      html += '</div>';
+
+      // Data collection progress (observe mode emphasis)
+      if (mode === 'observe') {
+        html += '<div class="nous-card" style="margin-top:12px">';
+        html += '<h3>Data Collection</h3>';
+        html += `<div class="nous-progress"><div class="nous-progress-fill" style="width:${snapPct}%;background:#2563eb"></div></div>`;
+        html += `<div style="font-size:0.72rem;color:var(--muted)">${s.snapshotCount || 0} / ${s.snapshotTarget || 672} snapshots — ${snapPct >= 75 ? 'Ready to upgrade to Suggest' : 'Collecting baseline data'}</div>`;
+
+        // Show dry_run proposals
+        const dryRuns = ledger.filter(e => e.type === 'dry_run').slice(-5);
+        if (dryRuns.length > 0) {
+          html += '<h3 style="margin-top:12px">Would Have Tested</h3>';
+          for (const dr of dryRuns) {
+            html += `<div style="font-size:0.75rem;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border)">`;
+            html += `<strong>${dr.id || '?'}</strong>: ${dr.hypothesis || 'no description'}`;
+            html += '</div>';
+          }
+        }
+        html += '</div>';
+      }
+
+      // Active experiment card
+      if (s.activeExperiment) {
+        const exp = s.activeExperiment;
+        html += '<div class="nous-experiment-live">';
+        html += `<h4>Active Experiment: ${exp.id}</h4>`;
+        html += `<div class="nous-progress"><div class="nous-progress-fill" style="width:${exp.progressPct}%;background:#16a34a"></div></div>`;
+        html += `<div style="font-size:0.72rem;color:var(--muted)">${exp.progressPct}% complete — ${Math.round((exp.ttlSec - exp.elapsed) / 60)}min remaining</div>`;
+        html += '<div style="display:flex;gap:16px;margin-top:8px;font-size:0.75rem">';
+        html += `<span>Queue limit: ${exp.fastFail.queueMax}</span>`;
+        html += `<span>MTTR limit: ${exp.fastFail.mttrMax}min</span>`;
+        html += '</div>';
+        html += `<button class="nous-btn nous-btn-abort" style="margin-top:10px" onclick="nousAbort()">Abort Experiment</button>`;
+        html += '</div>';
+      }
+
+      // Pending experiment (suggest mode)
+      if (s.pending && mode === 'suggest') {
+        const p = s.pending;
+        html += '<div class="nous-pending-card">';
+        html += `<h4>Pending Proposal: ${p.id || 'experiment'}</h4>`;
+        html += `<div style="font-size:0.78rem;margin-bottom:8px">${p.hypothesis || 'No hypothesis description'}</div>`;
+        if (p.params) {
+          html += '<table class="nous-pending-params"><tbody>';
+          for (const [k, v] of Object.entries(p.params)) {
+            html += `<tr><td style="color:var(--muted)">${k}</td><td><strong>${v}</strong></td></tr>`;
+          }
+          html += '</tbody></table>';
+        }
+        if (p.predicted) {
+          html += `<div style="font-size:0.72rem;color:#92400e">Predicted: ${JSON.stringify(p.predicted)}</div>`;
+        }
+        html += '<div style="margin-top:10px">';
+        html += '<button class="nous-btn nous-btn-approve" onclick="nousApprove()">Apply</button>';
+        html += '<button class="nous-btn nous-btn-reject" onclick="nousReject()">Reject</button>';
+        html += '</div></div>';
+      }
+
+      // Principles
+      if (principles.length > 0) {
+        html += '<div class="nous-card" style="margin-top:12px">';
+        html += '<h3>Principles</h3>';
+        const sorted = [...principles].sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+        for (const p of sorted) {
+          const conf = Math.round((p.confidence || 0) * 100);
+          const barColor = conf >= 80 ? '#16a34a' : conf >= 50 ? '#d97706' : '#dc2626';
+          html += '<div class="nous-principle">';
+          html += `<div class="nous-confidence-bar"><div class="nous-confidence-fill" style="width:${conf}%;background:${barColor}"></div></div>`;
+          html += `<div class="nous-principle-text">${p.text || p.id}</div>`;
+          html += `<div class="nous-principle-score">${conf}%</div>`;
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+
+      // Experiment timeline
+      if (ledger.length > 0) {
+        html += '<div class="nous-card" style="margin-top:12px">';
+        html += '<h3>Experiment History</h3>';
+        html += '<div class="nous-timeline">';
+        const TIMELINE_MAX_BARS = 30;
+        const recent = ledger.slice(-TIMELINE_MAX_BARS);
+        for (const entry of recent) {
+          const colors = { dry_run: '#94a3b8', active: '#2563eb', completed: '#16a34a', aborted: '#dc2626', analysis: '#7c3aed', shadow_analysis: '#a78bfa' };
+          const color = colors[entry.type] || '#94a3b8';
+          const outcome = entry.outcome || entry.type;
+          html += `<div class="nous-timeline-bar" style="height:${20 + Math.random() * 20}px;background:${color}" title="${entry.id || '?'}: ${outcome}"></div>`;
+        }
+        html += '</div>';
+        html += '<div style="font-size:0.65rem;color:var(--muted);margin-top:4px;display:flex;gap:12px">';
+        html += '<span><span style="color:#94a3b8">■</span> dry run</span>';
+        html += '<span><span style="color:#2563eb">■</span> active</span>';
+        html += '<span><span style="color:#16a34a">■</span> completed</span>';
+        html += '<span><span style="color:#dc2626">■</span> aborted</span>';
+        html += '<span><span style="color:#7c3aed">■</span> analysis</span>';
+        html += '</div></div>';
+      }
+
+      // Recommendations badge
+      if (s.hasRecommendations && s.recommendations) {
+        const recs = s.recommendations.recommendations || [];
+        html += '<div class="nous-card" style="margin-top:12px;border-color:#7c3aed">';
+        html += `<h3 style="color:#7c3aed">Pending Recommendations (${recs.length})</h3>`;
+        for (const r of recs) {
+          html += `<div style="font-size:0.78rem;padding:4px 0;border-bottom:1px solid var(--border)">`;
+          html += `<strong>${r.var}</strong>: ${r.current || '?'} → <strong>${r.proposed}</strong>`;
+          html += `<div style="font-size:0.7rem;color:var(--muted)">${r.rationale} (${Math.round((r.confidence || 0) * 100)}% confidence)</div>`;
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+
+      setIfChanged(panel, html);
+    }
+
+    async function nousSetMode(mode) {
+      const current = (_nousCache && _nousCache.status && _nousCache.status.mode) || 'observe';
+      const modeOrder = { observe: 0, suggest: 1, evolve: 2 };
+      let force = false;
+      if (modeOrder[mode] < modeOrder[current]) {
+        if (!confirm(`Switch from ${current} to ${mode}? This will stop any active experiment.`)) return;
+        force = true;
+      }
+      try {
+        await fetch('/api/nous/mode', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode, force }),
+        });
+        fetchNousStatus();
+      } catch (e) { showToast('Failed to change mode: ' + e.message, 'error'); }
+    }
+
+    async function nousApprove() {
+      try {
+        const r = await fetch('/api/nous/approve', { method: 'POST' });
+        const j = await r.json();
+        if (j.ok) { showToast('Experiment approved and started', 'success'); fetchNousStatus(); }
+        else showToast(j.error || 'Approve failed', 'error');
+      } catch (e) { showToast('Approve failed: ' + e.message, 'error'); }
+    }
+
+    async function nousReject() {
+      if (!confirm('Reject this experiment proposal?')) return;
+      try {
+        await fetch('/api/nous/abort', { method: 'POST' });
+        showToast('Proposal rejected', 'success');
+        fetchNousStatus();
+      } catch (e) { showToast('Reject failed: ' + e.message, 'error'); }
+    }
+
+    async function nousAbort() {
+      if (!confirm('Abort the active experiment? This will revert governor to default behavior.')) return;
+      try {
+        const r = await fetch('/api/nous/abort', { method: 'POST' });
+        const j = await r.json();
+        if (j.ok) { showToast('Experiment aborted: ' + j.aborted, 'success'); fetchNousStatus(); }
+        else showToast(j.error || 'Abort failed', 'error');
+      } catch (e) { showToast('Abort failed: ' + e.message, 'error'); }
+    }
+
+    fetchNousStatus();
+    setInterval(fetchNousStatus, NOUS_POLL_MS);
 
     function render(data) {
       if (!data || data.error) return;
