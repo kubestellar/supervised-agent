@@ -1250,18 +1250,26 @@
     </div>
     <div class="oc-nav-group">
       <div class="oc-tree-toggle" onclick="ocToggleAgentTree(this)">
-        <span class="oc-tree-arrow">▼</span> <span style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Agents</span>
+        <span class="oc-tree-arrow">▼</span> <span style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Operations</span>
       </div>
       <div class="oc-tree-children" id="oc-agent-tree">
-        <div id="oc-agent-nav"></div>
+        <div id="oc-agent-nav-ops"></div>
         <a class="oc-nav-item" style="color:#6b7280;font-style:italic" onclick="openConfigDialog('agent')">+ add agent</a>
+      </div>
+    </div>
+    <div class="oc-nav-group">
+      <div class="oc-tree-toggle" onclick="ocToggleAgentTree(this)">
+        <span class="oc-tree-arrow">▼</span> <span style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Strategy</span>
+      </div>
+      <div class="oc-tree-children">
+        <div id="oc-agent-nav-strategy"></div>
+        <a class="oc-nav-item" data-section="nous-section" onclick="ocNavigate('nous-section')">🧪 Strategy Lab</a>
       </div>
     </div>
     <div class="oc-nav-group">
       <div class="oc-nav-label">Resources</div>
       <a class="oc-nav-item" data-section="repos-section" onclick="ocNavigate('repos-section')">📦 Repos</a>
       <a class="oc-nav-item" data-section="beads-section" onclick="ocNavigate('beads-section')">🔮 Beads</a>
-      <a class="oc-nav-item" data-section="nous-section" onclick="ocNavigate('nous-section')">🧪 Strategy Lab</a>
     </div>
     <div class="oc-nav-group" style="margin-top:auto">
       <div class="oc-nav-label">Settings</div>
@@ -1650,13 +1658,18 @@
       reviewer: 'Post-merge quality gate — monitors CI health, code coverage, GA4 errors, and produces adoption digests',
       architect: 'Designs RFCs for cross-cutting changes — produces phase plans that scanner implements',
       outreach: 'Drives CNCF ecosystem engagement — ADOPTERS outreach, ACMM badges, community PRs',
+      strategist: 'Designs governor experiments — proposes cadence/model/threshold changes with falsifiable hypotheses',
+      analyst: 'Evaluates experiment outcomes — extracts principles, maintains confidence scores, proposes permanent changes',
+      guardian: 'Fast-fail monitor — checks experiment bounds every tick, auto-reverts overlay on any violation',
     };
 
     function ocUpdateSidebarAgents() {
-      const nav = document.getElementById('oc-agent-nav');
-      if (!nav) return;
+      const STRATEGY_AGENTS = ['strategist', 'analyst', 'guardian'];
+      const navOps = document.getElementById('oc-agent-nav-ops');
+      const navStrategy = document.getElementById('oc-agent-nav-strategy');
+      if (!navOps || !navStrategy) return;
       const agents = window._lastAgents || [];
-      const html = agents.map(a => {
+      const renderAgent = a => {
         const isOff = a.offByCadence === true;
         const isPaused = a.paused === true && !isOff;
         const isStopped = a.state === 'stopped';
@@ -1666,8 +1679,11 @@
         const agentDesc = AGENT_DESCRIPTIONS[a.name] || '';
         const label = a.displayName || a.name;
         return `<a class="oc-nav-item${isActive}" data-agent-nav="${a.name}" onclick="ocSelectAgent('${a.name}')" title="${agentDesc}"><span class="oc-agent-dot ${dotCls}"></span> ${label}</a>`;
-      }).join('');
-      if (nav.innerHTML !== html) nav.innerHTML = html;
+      };
+      const opsHtml = agents.filter(a => !STRATEGY_AGENTS.includes(a.name)).map(renderAgent).join('');
+      const stratHtml = agents.filter(a => STRATEGY_AGENTS.includes(a.name)).map(renderAgent).join('');
+      if (navOps.innerHTML !== opsHtml) navOps.innerHTML = opsHtml;
+      if (navStrategy.innerHTML !== stratHtml) navStrategy.innerHTML = stratHtml;
     }
 
     applyLayout(getLayout());
