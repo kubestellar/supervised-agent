@@ -406,6 +406,14 @@ function fetchStatus() {
               a.pinnedModel = /^AGENT_PIN_MODEL=true$/m.test(envContent);
             }
           } catch (_) {}
+          // Display name (vanity name for UI)
+          try {
+            const envFile = `${ENV_DIR}/${a.name}.env`;
+            if (fs.existsSync(envFile)) {
+              const dn = parseEnvFile(envFile).AGENT_DISPLAY_NAME;
+              if (dn) a.displayName = dn;
+            }
+          } catch (_) {}
         }
         // Issue-to-merge time metric
         statusCache.issueToMerge = issueToMergeCache;
@@ -1246,6 +1254,7 @@ app.get('/api/config/agent/:name', (req, res) => {
     const modelMatch = launchCmd.match(/--model\s+(\S+)/);
     const general = {
       launchCmd,
+      displayName: agentEnv.AGENT_DISPLAY_NAME || '',
       cliPinned: agentEnv.AGENT_CLI_PINNED === 'true' || agentEnv.AGENT_PIN_CLI === 'true',
       cliPinValue: agentEnv.AGENT_CLI_PIN_VALUE || agentEnv.AGENT_CLI || deriveCli(launchCmd),
       staleTimeout: parseInt(agentEnv.AGENT_STALE_TIMEOUT_SEC || agentEnv.AGENT_STALE_MAX_SEC || '1200', 10),
@@ -1298,7 +1307,8 @@ app.put('/api/config/agent/:name/general', (req, res) => {
   const { name } = req.params;
   const envFile = `${ENV_DIR}/${name}.env`;
   try {
-    const { launchCmd, cliPinned, cliPinValue, staleTimeout, restartStrategy, model } = req.body;
+    const { launchCmd, cliPinned, cliPinValue, staleTimeout, restartStrategy, model, displayName } = req.body;
+    if (displayName !== undefined) writeEnvVar(envFile, 'AGENT_DISPLAY_NAME', displayName);
     if (launchCmd !== undefined) writeEnvVar(envFile, 'AGENT_LAUNCH_CMD', launchCmd);
     if (cliPinned !== undefined) writeEnvVar(envFile, 'AGENT_CLI_PINNED', String(cliPinned));
     if (cliPinValue !== undefined) writeEnvVar(envFile, 'AGENT_CLI_PIN_VALUE', cliPinValue);
