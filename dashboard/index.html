@@ -161,6 +161,27 @@
     .oc-detail-field .value { font-weight: 600; color: #1a1a2e; margin-top: 2px; }
     /* (oc-detail-summary defined below with monospace) */
     .oc-detail-indicators { margin-bottom: 16px; }
+    .oc-gov-strip {
+      display: none; gap: 20px; align-items: center; padding: 8px 14px;
+      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+      margin-bottom: 12px; font-size: 0.72rem; flex-wrap: wrap;
+    }
+    body.openclaw-mode.oc-agent-focused .oc-gov-strip { display: flex; }
+    .oc-gov-strip .gov-metric { display: flex; flex-direction: column; gap: 1px; }
+    .oc-gov-strip .gov-metric .gm-label { font-size: 0.6rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px; }
+    .oc-gov-strip .gov-metric .gm-val { font-weight: 700; font-size: 0.8rem; }
+    .oc-gov-strip .gov-metric .gm-val.mode-idle { color: #16a34a; }
+    .oc-gov-strip .gov-metric .gm-val.mode-quiet { color: #2563eb; }
+    .oc-gov-strip .gov-metric .gm-val.mode-busy { color: #ca8a04; }
+    .oc-gov-strip .gov-metric .gm-val.mode-surge { color: #dc2626; }
+    .oc-detail-sparks {
+      display: flex; gap: 24px; margin-bottom: 16px; padding: 10px 14px;
+      background: #f0f4ff; border-radius: 8px; border: 1px solid #c7d2fe;
+    }
+    .oc-spark-stat { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .oc-spark-stat .spark-label { font-size: 0.65rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.3px; }
+    .oc-spark-stat .spark-row { display: flex; align-items: center; gap: 6px; }
+    .oc-spark-stat .spark-val { font-size: 1rem; font-weight: 700; }
     .oc-chat-prompt {
       display: flex; gap: 8px; align-items: flex-end;
       padding-top: 12px; border-top: 1px solid #e5e7eb;
@@ -210,7 +231,7 @@
       color: #374151; line-height: 1.5;
       padding: 14px; background: #f9fafb;
       border-radius: 8px; border: 1px solid #e5e7eb;
-      min-height: 60px; max-height: none; overflow-y: auto;
+      height: calc(1.5em * 40 + 28px); max-height: none; overflow-y: auto;
       resize: vertical;
       font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
       font-size: 0.78rem;
@@ -1283,10 +1304,11 @@
       applyLayout(next);
     }
     const OC_TOPBAR_HEIGHT = 64;
-    let _ocSelectedAgent = null;
+    let _ocSelectedAgent = localStorage.getItem('hive-oc-agent') || null;
 
     function ocNavigate(section) {
       _ocSelectedAgent = null;
+      localStorage.setItem('hive-oc-agent', '');
       const detail = document.getElementById('oc-agent-detail');
       if (detail) { detail.classList.remove('active'); detail.innerHTML = ''; }
       ocUpdateFocusedState();
@@ -1316,6 +1338,7 @@
 
     function ocSelectAgent(name) {
       _ocSelectedAgent = name;
+      localStorage.setItem('hive-oc-agent', name || '');
       document.querySelectorAll('.oc-nav-item').forEach(i => i.classList.remove('active'));
       const active = document.querySelector(`.oc-nav-item[data-agent-nav="${name}"]`);
       if (active) active.classList.add('active');
@@ -1326,6 +1349,20 @@
         const y = detail.getBoundingClientRect().top + window.scrollY - OC_TOPBAR_HEIGHT;
         window.scrollTo({ top: y, behavior: 'smooth' });
       }
+    }
+
+    function ocRenderDetailSparklines() {
+      const actionableItems = (window._lastStatus?.repos || []).reduce((n, r) => n + (r.actionableIssues || []).length, 0);
+      const openPrItems = (window._lastStatus?.repos || []).reduce((n, r) => n + (r.openPrs || []).length, 0);
+      const mergeableItems = (window._lastStatus?.repos || []).reduce((n, r) => n + (r.openPrs || []).filter(p => p.mergeable).length, 0);
+      const aSpark = sparkSvg(historyData.map(s => s.actionableCount ?? 0), '#f85149');
+      const pSpark = sparkSvg(historyData.map(s => s.openPrCount ?? 0), '#bc8cff');
+      const mSpark = sparkSvg(historyData.map(s => s.mergeableCount ?? 0), '#3fb950');
+      return `<div class="oc-detail-sparks">
+        <div class="oc-spark-stat"><span class="spark-label">Actionable Issues</span><div class="spark-row"><span class="spark-val" style="color:#f85149">${actionableItems}</span>${aSpark}</div></div>
+        <div class="oc-spark-stat"><span class="spark-label">Open PRs</span><div class="spark-row"><span class="spark-val" style="color:#bc8cff">${openPrItems}</span>${pSpark}</div></div>
+        <div class="oc-spark-stat"><span class="spark-label">Mergeable</span><div class="spark-row"><span class="spark-val" style="color:#3fb950">${mergeableItems}</span>${mSpark}</div></div>
+      </div>`;
     }
 
     function ocFormatSummary(raw) {
@@ -1438,7 +1475,20 @@
         _ocSummaryScrollTop = existingSummary.scrollTop;
       }
 
+      const gov = window._lastStatus?.governor || {};
+      const govMode = (gov.mode || 'unknown').toLowerCase();
+      const govModeClass = 'mode-' + (['idle','quiet','busy','surge'].includes(govMode) ? govMode : 'quiet');
+      const govActionable = (window._lastStatus?.repos || []).reduce((n, r) => n + (r.actionableIssues || []).length, 0);
+      const govPrs = (window._lastStatus?.repos || []).reduce((n, r) => n + (r.openPrs || []).length, 0);
+
       detail.innerHTML = `
+        <div class="oc-gov-strip">
+          <div class="gov-metric"><span class="gm-label">timer</span><span class="gm-val" style="color:#16a34a">${gov.active !== false ? '● active' : '○ off'}</span></div>
+          <div class="gov-metric"><span class="gm-label">mode</span><span class="gm-val ${govModeClass}">${gov.mode || '—'}</span></div>
+          <div class="gov-metric"><span class="gm-label">actionable</span><span class="gm-val">${govActionable}</span></div>
+          <div class="gov-metric"><span class="gm-label">PRs</span><span class="gm-val">${govPrs}</span></div>
+          <div class="gov-metric"><span class="gm-label">next run</span><span class="gm-val">${gov.nextRun || '—'}</span></div>
+        </div>
         <div class="oc-agent-detail-header">
           <span class="status-dot ${dotCls}"></span>
           <span class="agent-name-big">${a.name}</span>
@@ -1460,6 +1510,7 @@
           <div class="oc-detail-field"><div class="label">Restarts</div><div class="value">${a.restarts ?? 0}</div></div>
           <div class="oc-detail-field"><div class="label">Avg/Pass</div><div class="value">${a.avgTokensPerPass || '—'}</div></div>
         </div>
+        ${ocRenderDetailSparklines()}
         <div class="oc-detail-summary-wrap">
           <div class="oc-detail-summary" id="oc-summary-scroll">${a.liveSummary ? ocFormatSummary(a.liveSummary) : '<span style="color:#9ca3af">No activity summary</span>'}</div>
           <button class="oc-summary-follow-btn" id="oc-summary-follow" title="Follow new output" onclick="ocSummaryResumeTail()">⬇</button>
@@ -2726,6 +2777,7 @@ function burnAreaChart() {
       window._healthData = data.health || {};
       window._tokensByAgent = (data.tokens || {}).byAgent || {};
       window._lastAgents = data.agents || [];
+      window._lastStatus = data;
       window._lastBudget = data.budget || {};
       // Update OpenClaw health badge
       const ocHealth = document.getElementById('oc-health');
