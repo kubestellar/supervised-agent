@@ -1,5 +1,5 @@
 const express = require('express');
-const { execFile, execSync, spawn } = require('child_process');
+const { execFile, execFileSync, spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -16,8 +16,7 @@ try {
   if (yaml) {
     projectConfig = yaml.load(raw) || {};
   } else {
-    const { execSync } = require('child_process');
-    const json = execSync(`python3 -c "import yaml,json,sys; print(json.dumps(yaml.safe_load(sys.stdin)))" < "${CONFIG_PATH}"`, { encoding: 'utf8' });
+    const json = execFileSync('python3', ['-c', 'import yaml,json,sys; print(json.dumps(yaml.safe_load(sys.stdin)))'], { input: fs.readFileSync(CONFIG_PATH, 'utf8'), encoding: 'utf8' });
     projectConfig = JSON.parse(json);
   }
 } catch (_) { /* no config file — use defaults */ }
@@ -820,17 +819,17 @@ app.post('/api/pause/:agent', (req, res) => {
   const isWorking = agentStatus?.busy === 'working';
   if (isWorking) {
     try {
-      execSync(`tmux send-keys -t ${agent} Escape`, { timeout: 5000 });
+      execFileSync('tmux', ['send-keys', '-t', agent, 'Escape'], { timeout: 5000 });
     } catch (_) { /* session may not exist */ }
   }
   // Type placeholder text (no Enter) so operator sees status in the tmux pane.
   const PAUSE_TYPE_DELAY_MS = 500;
   setTimeout(() => {
     try {
-      execSync(`tmux send-keys -t ${agent} C-u`, { timeout: 5000 });
+      execFileSync('tmux', ['send-keys', '-t', agent, 'C-u'], { timeout: 5000 });
     } catch (_) { /* ignore */ }
     try {
-      execSync(`tmux send-keys -t ${agent} -l 'agent is paused'`, { timeout: 5000 });
+      execFileSync('tmux', ['send-keys', '-t', agent, '-l', 'agent is paused'], { timeout: 5000 });
     } catch (_) { /* ignore */ }
     res.json({ ok: true, output: `${agent} paused (interrupted: ${isWorking})` });
   }, PAUSE_TYPE_DELAY_MS);
@@ -865,7 +864,7 @@ app.post('/api/resume/:agent', (req, res) => {
   }
   // Clear "agent is paused" placeholder text, then kick.
   try {
-    execSync(`tmux send-keys -t ${agent} C-u`, { timeout: 5000 });
+    execFileSync('tmux', ['send-keys', '-t', agent, 'C-u'], { timeout: 5000 });
   } catch (_) { /* session may not exist */ }
   execFile('/usr/local/bin/kick-agents.sh', [agent], { timeout: 30000 }, (kickErr) => {
     if (kickErr) console.error(`resume kick error for ${agent}:`, kickErr.message);
@@ -883,23 +882,39 @@ app.post('/api/resume/:agent', (req, res) => {
 const PIN_ALLOWED = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
 const ENV_DIR = '/etc/hive';
 
+// VALID_AGENT_NAME guards against path traversal and injection via agent names.
+const VALID_AGENT_NAME = /^[a-z][a-z0-9-]{0,30}$/;
+// VALID_ENV_KEY guards against regex injection via env var names.
+const VALID_ENV_KEY = /^[A-Z][A-Z0-9_]{0,60}$/;
+
 function setEnvFlag(agent, flag, value) {
+  if (!VALID_AGENT_NAME.test(agent)) throw new Error(`invalid agent name: ${agent}`);
+  if (!VALID_ENV_KEY.test(flag)) throw new Error(`invalid env key: ${flag}`);
   const envFile = `${ENV_DIR}/${agent}.env`;
-  const { execSync } = require('child_process');
   const content = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf8') : '';
-  if (new RegExp(`^${flag}=`, 'm').test(content)) {
-    execSync(`sudo sed -i 's/^${flag}=.*/${flag}=${value}/' ${envFile}`);
+  const regex = new RegExp(`^${flag}=.*$`, 'm');
+  let updated;
+  if (regex.test(content)) {
+    updated = content.replace(regex, `${flag}=${value}`);
   } else {
-    execSync(`echo '${flag}=${value}' | sudo tee -a ${envFile} > /dev/null`);
+    updated = content.trimEnd() + `\n${flag}=${value}\n`;
   }
+  const tmpFile = `/tmp/.hive-env-${agent}-${Date.now()}`;
+  fs.writeFileSync(tmpFile, updated);
+  execFileSync('sudo', ['mv', tmpFile, envFile]);
 }
 
 function removeEnvFlag(agent, flag) {
+  if (!VALID_AGENT_NAME.test(agent)) throw new Error(`invalid agent name: ${agent}`);
+  if (!VALID_ENV_KEY.test(flag)) throw new Error(`invalid env key: ${flag}`);
   const envFile = `${ENV_DIR}/${agent}.env`;
-  const { execSync } = require('child_process');
-  if (fs.existsSync(envFile)) {
-    execSync(`sudo sed -i '/^${flag}=/d' ${envFile}`);
-  }
+  if (!fs.existsSync(envFile)) return;
+  const content = fs.readFileSync(envFile, 'utf8');
+  const regex = new RegExp(`^${flag}=.*\\n?`, 'gm');
+  const updated = content.replace(regex, '');
+  const tmpFile = `/tmp/.hive-env-${agent}-${Date.now()}`;
+  fs.writeFileSync(tmpFile, updated);
+  execFileSync('sudo', ['mv', tmpFile, envFile]);
 }
 
 app.post('/api/pin/:agent{/:dimension}', (req, res) => {
@@ -911,7 +926,7 @@ app.post('/api/pin/:agent{/:dimension}', (req, res) => {
     if (!dimension || dimension === 'both') {
       setEnvFlag(agent, 'AGENT_CLI_PINNED', 'true');
       const lockFile = path.join(GOVERNOR_STATE_DIR, `model_lock_${agent}`);
-      try { const { execSync: es } = require('child_process'); es(`sudo touch ${lockFile}`); } catch (_) {}
+      try { execFileSync('sudo', ['touch', lockFile]); } catch (_) {}
       // Snapshot current backend to state file
       const pinBothData = (statusCache.agents || []).find(a => a.name === agent);
       if (pinBothData && pinBothData.cli && pinBothData.cli !== '?') {
@@ -948,7 +963,7 @@ app.post('/api/unpin/:agent{/:dimension}', (req, res) => {
       removeEnvFlag(agent, 'AGENT_PIN_CLI');
       removeEnvFlag(agent, 'AGENT_PIN_MODEL');
       const lockFile = path.join(GOVERNOR_STATE_DIR, `model_lock_${agent}`);
-      try { const { execSync: es } = require('child_process'); es(`sudo rm -f ${lockFile}`); } catch (_) {}
+      try { execFileSync('sudo', ['rm', '-f', lockFile]); } catch (_) {}
       res.json({ ok: true, output: `${agent} unpinned (all)` });
     } else if (dimension === 'cli') {
       removeEnvFlag(agent, 'AGENT_PIN_CLI');
@@ -999,8 +1014,7 @@ app.post('/api/reset-restarts/:agent', (req, res) => {
   const restartFile = path.join(GOVERNOR_STATE_DIR, `restarts_${agent}`);
   try {
     if (fs.existsSync(restartFile)) {
-      const { execSync } = require('child_process');
-      execSync(`sudo truncate -s 0 ${restartFile}`);
+      execFileSync('sudo', ['truncate', '-s', '0', restartFile]);
     }
     if (statusCache && statusCache.agents) {
       const entry = statusCache.agents.find(a => a.name === agent);
@@ -1130,6 +1144,7 @@ function parseEnvFile(filePath) {
 }
 
 function writeEnvVar(filePath, key, value) {
+  if (!VALID_ENV_KEY.test(key)) throw new Error(`invalid env key: ${key}`);
   const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
   const regex = new RegExp(`^${key}=.*$`, 'm');
   let updated;
@@ -1138,12 +1153,20 @@ function writeEnvVar(filePath, key, value) {
   } else {
     updated = content.trimEnd() + `\n${key}=${value}\n`;
   }
-  execSync(`echo '${updated.replace(/'/g, "'\\''")}' | sudo tee ${filePath} > /dev/null`);
+  const tmpFile = `/tmp/.hive-envvar-${Date.now()}`;
+  fs.writeFileSync(tmpFile, updated);
+  execFileSync('sudo', ['mv', tmpFile, filePath]);
 }
 
 function removeEnvVar(filePath, key) {
+  if (!VALID_ENV_KEY.test(key)) throw new Error(`invalid env key: ${key}`);
   if (!fs.existsSync(filePath)) return;
-  execSync(`sudo sed -i '/^${key}=/d' ${filePath}`);
+  const content = fs.readFileSync(filePath, 'utf8');
+  const regex = new RegExp(`^${key}=.*\\n?`, 'gm');
+  const updated = content.replace(regex, '');
+  const tmpFile = `/tmp/.hive-envvar-${Date.now()}`;
+  fs.writeFileSync(tmpFile, updated);
+  execFileSync('sudo', ['mv', tmpFile, filePath]);
 }
 
 function deriveCli(launchCmd) {
@@ -1451,7 +1474,10 @@ app.post('/api/config/governor/agents', (req, res) => {
   try {
     const envFile = `${ENV_DIR}/${name}.env`;
     if (!fs.existsSync(envFile)) {
-      execSync(`echo '# ${name} agent config\nAGENT_LAUNCH_CMD=agent-launch.sh\nAGENT_CLI_PINNED=false' | sudo tee ${envFile} > /dev/null`);
+      const defaultContent = `# ${name} agent config\nAGENT_LAUNCH_CMD=agent-launch.sh\nAGENT_CLI_PINNED=false\n`;
+      const tmpFile = `/tmp/.hive-newagent-${Date.now()}`;
+      fs.writeFileSync(tmpFile, defaultContent);
+      execFileSync('sudo', ['mv', tmpFile, envFile]);
     }
     res.json({ ok: true });
   } catch (err) {
@@ -1464,7 +1490,7 @@ app.delete('/api/config/governor/agents/:name', (req, res) => {
   try {
     const envFile = `${ENV_DIR}/${name}.env`;
     if (fs.existsSync(envFile)) {
-      execSync(`sudo rm ${envFile}`);
+      execFileSync('sudo', ['rm', envFile]);
     }
     res.json({ ok: true });
   } catch (err) {
@@ -1478,7 +1504,9 @@ app.put('/api/config/governor/repos', (req, res) => {
     if (!projectConfig.project) projectConfig.project = {};
     projectConfig.project.repos = list;
     const dumpYaml = yaml ? yaml.dump(projectConfig) : JSON.stringify(projectConfig, null, 2);
-    execSync(`echo ${JSON.stringify(dumpYaml)} | sudo tee ${CONFIG_PATH} > /dev/null`);
+    const tmpFile = `/tmp/.hive-config-${Date.now()}`;
+    fs.writeFileSync(tmpFile, dumpYaml);
+    execFileSync('sudo', ['mv', tmpFile, CONFIG_PATH]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
