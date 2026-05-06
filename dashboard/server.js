@@ -969,21 +969,12 @@ const ENV_DIR = '/etc/hive';
 
 function setEnvFlag(agent, flag, value) {
   const envFile = `${ENV_DIR}/${agent}.env`;
-  const { execSync } = require('child_process');
-  const content = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf8') : '';
-  if (new RegExp(`^${flag}=`, 'm').test(content)) {
-    execSync(`sudo sed -i 's/^${flag}=.*/${flag}=${value}/' ${envFile}`);
-  } else {
-    execSync(`echo '${flag}=${value}' | sudo tee -a ${envFile} > /dev/null`);
-  }
+  writeEnvVar(envFile, flag, value);
 }
 
 function removeEnvFlag(agent, flag) {
   const envFile = `${ENV_DIR}/${agent}.env`;
-  const { execSync } = require('child_process');
-  if (fs.existsSync(envFile)) {
-    execSync(`sudo sed -i '/^${flag}=/d' ${envFile}`);
-  }
+  removeEnvVar(envFile, flag);
 }
 
 app.post('/api/pin/:agent{/:dimension}', (req, res) => {
@@ -1202,6 +1193,22 @@ app.get('/api/summaries', (req, res) => {
 // ── Configuration Dialog API ──────────────���──────────────────────────────────
 const GOVERNOR_ENV_PATH = '/etc/hive/governor.env';
 
+// Security: validate agent names and env keys to prevent injection
+const VALID_AGENT_NAME = /^[a-z][a-z0-9_-]{0,30}$/;
+const VALID_ENV_KEY = /^[A-Z_][A-Z0-9_]{0,60}$/;
+
+function validateAgentName(name, res) {
+  if (!VALID_AGENT_NAME.test(name) || !ENABLED_AGENTS.includes(name)) {
+    res.status(400).json({ error: 'invalid or unknown agent: ' + name });
+    return false;
+  }
+  return true;
+}
+
+function shellQuote(s) {
+  return "'" + s.replace(/'/g, "'\\''" ) + "'";
+}
+
 function parseEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return {};
   const content = fs.readFileSync(filePath, 'utf8');
@@ -1214,20 +1221,30 @@ function parseEnvFile(filePath) {
 }
 
 function writeEnvVar(filePath, key, value) {
+  if (!VALID_ENV_KEY.test(key)) throw new Error(`invalid env key: ${key}`);
   const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
-  const regex = new RegExp(`^${key}=.*$`, 'm');
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`^${escapedKey}=.*$`, 'm');
   let updated;
   if (regex.test(content)) {
     updated = content.replace(regex, `${key}=${value}`);
   } else {
     updated = content.trimEnd() + `\n${key}=${value}\n`;
   }
-  execSync(`echo '${updated.replace(/'/g, "'\\''")}' | sudo tee ${filePath} > /dev/null`);
+  const tmp = `/tmp/hive-env-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(tmp, updated, { mode: 0o644 });
+  execSync(`sudo mv ${shellQuote(tmp)} ${shellQuote(filePath)}`);
 }
 
 function removeEnvVar(filePath, key) {
+  if (!VALID_ENV_KEY.test(key)) throw new Error(`invalid env key: ${key}`);
   if (!fs.existsSync(filePath)) return;
-  execSync(`sudo sed -i '/^${key}=/d' ${filePath}`);
+  const content = fs.readFileSync(filePath, 'utf8');
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const updated = content.replace(new RegExp(`^${escapedKey}=.*\n?`, 'gm'), '');
+  const tmp = `/tmp/hive-env-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(tmp, updated, { mode: 0o644 });
+  execSync(`sudo mv ${shellQuote(tmp)} ${shellQuote(filePath)}`);
 }
 
 function deriveCli(launchCmd) {
@@ -1305,6 +1322,7 @@ app.get('/api/config/agent/:name', (req, res) => {
 
 app.put('/api/config/agent/:name/general', (req, res) => {
   const { name } = req.params;
+  if (!validateAgentName(name, res)) return;
   const envFile = `${ENV_DIR}/${name}.env`;
   try {
     const { launchCmd, cliPinned, cliPinValue, staleTimeout, restartStrategy, model, displayName } = req.body;
@@ -1329,6 +1347,7 @@ app.put('/api/config/agent/:name/general', (req, res) => {
 
 app.put('/api/config/agent/:name/cadences', (req, res) => {
   const { name } = req.params;
+  if (!validateAgentName(name, res)) return;
   const upper = name.toUpperCase();
   try {
     const { surge, busy, quiet, idle } = req.body;
@@ -1344,6 +1363,7 @@ app.put('/api/config/agent/:name/cadences', (req, res) => {
 
 app.put('/api/config/agent/:name/models', (req, res) => {
   const { name } = req.params;
+  if (!validateAgentName(name, res)) return;
   const upper = name.toUpperCase();
   try {
     const { surge, busy, quiet, idle } = req.body;
@@ -1359,6 +1379,7 @@ app.put('/api/config/agent/:name/models', (req, res) => {
 
 app.put('/api/config/agent/:name/pipeline', (req, res) => {
   const { name } = req.params;
+  if (!validateAgentName(name, res)) return;
   const envFile = `${ENV_DIR}/${name}.env`;
   try {
     for (const [stage, enabled] of Object.entries(req.body)) {
@@ -1377,6 +1398,7 @@ app.put('/api/config/agent/:name/pipeline', (req, res) => {
 
 app.put('/api/config/agent/:name/hooks', (req, res) => {
   const { name } = req.params;
+  if (!validateAgentName(name, res)) return;
   const envFile = `${ENV_DIR}/${name}.env`;
   try {
     const { preKick, postIdle } = req.body;
@@ -1390,6 +1412,7 @@ app.put('/api/config/agent/:name/hooks', (req, res) => {
 
 app.put('/api/config/agent/:name/restrictions', (req, res) => {
   const { name } = req.params;
+  if (!validateAgentName(name, res)) return;
   const envFile = `${ENV_DIR}/${name}.env`;
   try {
     const list = req.body.list || [];
@@ -1402,6 +1425,7 @@ app.put('/api/config/agent/:name/restrictions', (req, res) => {
 
 app.get('/api/config/agent/:name/prompt', (req, res) => {
   const { name } = req.params;
+  if (!validateAgentName(name, res)) return;
   try {
     const kickScript = fs.readFileSync(path.join(HIVE_REPO_DIR, 'bin', 'kick-agents.sh'), 'utf8');
     const upper = name.toUpperCase();
@@ -1550,7 +1574,10 @@ app.post('/api/config/governor/agents', (req, res) => {
   try {
     const envFile = `${ENV_DIR}/${name}.env`;
     if (!fs.existsSync(envFile)) {
-      execSync(`echo '# ${name} agent config\nAGENT_LAUNCH_CMD=agent-launch.sh\nAGENT_CLI_PINNED=false' | sudo tee ${envFile} > /dev/null`);
+      const initContent = `# ${name} agent config\nAGENT_LAUNCH_CMD=agent-launch.sh\nAGENT_CLI_PINNED=false\n`;
+      const tmp = `/tmp/hive-env-${process.pid}-${Date.now()}`;
+      fs.writeFileSync(tmp, initContent, { mode: 0o644 });
+      execSync(`sudo mv ${shellQuote(tmp)} ${shellQuote(envFile)}`);
     }
     res.json({ ok: true });
   } catch (err) {
@@ -1560,10 +1587,13 @@ app.post('/api/config/governor/agents', (req, res) => {
 
 app.delete('/api/config/governor/agents/:name', (req, res) => {
   const { name } = req.params;
+  if (!VALID_AGENT_NAME.test(name)) {
+    return res.status(400).json({ error: 'invalid agent name' });
+  }
   try {
     const envFile = `${ENV_DIR}/${name}.env`;
     if (fs.existsSync(envFile)) {
-      execSync(`sudo rm ${envFile}`);
+      execSync(`sudo rm ${shellQuote(envFile)}`);
     }
     res.json({ ok: true });
   } catch (err) {
