@@ -36,8 +36,8 @@
     .layout-toggle:hover { border-color: var(--text); color: var(--text); }
     .layout-toggle.active { border-color: var(--cyan); color: var(--cyan); }
 
-    /* ── OpenClaw mode ── */
-    body.openclaw-mode {
+    /* ── Light mode ── */
+    body.light-mode {
       --bg: #f8f9fa; --surface: #ffffff; --border: #e5e7eb;
       --text: #1a1a2e; --muted: #6b7280; --green: #16a34a;
       --yellow: #ca8a04; --red: #dc2626; --blue: #2563eb;
@@ -47,10 +47,10 @@
       background: var(--bg); color: var(--text);
       padding: 0; margin: 0;
     }
-    body.openclaw-mode .connection { display: none; }
-    body.openclaw-mode .gh-rate-alert { border-radius: 8px; }
+    body.light-mode .connection { display: none; }
+    body.light-mode .gh-rate-alert { border-radius: 8px; }
 
-    /* OpenClaw sidebar */
+    /* Light sidebar */
     .oc-sidebar {
       position: fixed; top: 0; left: 0; bottom: 0; width: 200px;
       background: #ffffff; border-right: 1px solid #e5e7eb;
@@ -93,7 +93,7 @@
     }
     .oc-sidebar-footer .layout-toggle:hover { background: #f3f4f6; color: #111827; }
 
-    /* OpenClaw top bar */
+    /* Light top bar */
     .oc-topbar {
       position: fixed; top: 0; left: 200px; right: 0; height: 48px;
       background: #ffffff; border-bottom: 1px solid #e5e7eb;
@@ -115,23 +115,23 @@
     }
     .oc-topbar .widget-dl:hover { background: #dc2626; color: #fff; }
 
-    /* OpenClaw main content area */
-    body.openclaw-mode {
+    /* Light main content area */
+    body.light-mode {
       padding: 64px 20px 24px 220px; margin: 0;
       max-width: 100vw; overflow-x: hidden; box-sizing: border-box;
     }
-    body.openclaw-mode > .gh-rate-alert { margin-left: 0; }
-    body.openclaw-mode .repo-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-    body.openclaw-mode .beads { flex-wrap: wrap; }
-    body.openclaw-mode .agents { grid-template-columns: 1fr; }
+    body.light-mode > .gh-rate-alert { margin-left: 0; }
+    body.light-mode .repo-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    body.light-mode .beads { flex-wrap: wrap; }
+    body.light-mode .agents { grid-template-columns: 1fr; }
 
-    /* OpenClaw agent detail panel (shown when agent selected in sidebar) */
+    /* Light agent detail panel (shown when agent selected in sidebar) */
     .oc-agent-detail {
       display: none; background: #ffffff; border: 2px solid #e5e7eb;
       border-radius: 10px; padding: 20px; margin-bottom: 16px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
-    body.openclaw-mode .oc-agent-detail.active { display: block; }
+    body.light-mode .oc-agent-detail.active { display: block; }
     .oc-agent-detail.state-running { border-color: #16a34a; }
     .oc-agent-detail.state-idle { border-color: #16a34a; }
     .oc-agent-detail.state-paused { border-color: #ca8a04; }
@@ -166,7 +166,7 @@
       background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
       margin-bottom: 12px; font-size: 0.72rem; flex-wrap: wrap;
     }
-    body.openclaw-mode.oc-agent-focused #oc-gov-strip-outer { display: flex; }
+    body.light-mode.oc-agent-focused #oc-gov-strip-outer { display: flex; }
     .oc-gov-strip .gov-metric { display: flex; flex-direction: column; gap: 1px; }
     .oc-gov-strip .gov-metric .gm-label { font-size: 0.6rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px; }
     .oc-gov-strip .gov-metric .gm-val { font-weight: 700; font-size: 0.8rem; }
@@ -284,114 +284,114 @@
     .oc-summary-follow-btn:hover { background: rgba(0,0,0,0.8); }
     .oc-summary-follow-btn.visible { display: flex; }
 
-    /* Hide non-agent sections when an agent is focused in OpenClaw */
-    body.openclaw-mode.oc-agent-focused .governor,
-    body.openclaw-mode.oc-agent-focused .token-usage,
-    body.openclaw-mode.oc-agent-focused .repos,
-    body.openclaw-mode.oc-agent-focused #beads-section { display: none; }
-    body.openclaw-mode.oc-agent-focused .agent-card.oc-hidden { display: none; }
+    /* Hide non-agent sections when an agent is focused in Light */
+    body.light-mode.oc-agent-focused .governor,
+    body.light-mode.oc-agent-focused .token-usage,
+    body.light-mode.oc-agent-focused .repos,
+    body.light-mode.oc-agent-focused #beads-section { display: none; }
+    body.light-mode.oc-agent-focused .agent-card.oc-hidden { display: none; }
 
-    /* OpenClaw card overrides */
-    body.openclaw-mode .agent-card {
+    /* Light card overrides */
+    body.light-mode .agent-card {
       background: #ffffff; border: 1px solid #e5e7eb;
       border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
       transition: box-shadow 0.2s;
     }
-    body.openclaw-mode .agent-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-    body.openclaw-mode .agent-card.working { border-color: #16a34a; }
-    body.openclaw-mode .agent-card.stopped { border-color: #dc2626; }
-    body.openclaw-mode .agent-card.paused { border-color: #ca8a04; opacity: 0.8; }
-    body.openclaw-mode .agent-card.off { border-color: #d1d5db; opacity: 0.7; }
+    body.light-mode .agent-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    body.light-mode .agent-card.working { border-color: #16a34a; }
+    body.light-mode .agent-card.stopped { border-color: #dc2626; }
+    body.light-mode .agent-card.paused { border-color: #ca8a04; opacity: 0.8; }
+    body.light-mode .agent-card.off { border-color: #d1d5db; opacity: 0.7; }
 
-    /* OpenClaw agents grid — rows for Governor/Overview, columns when agent is focused */
-    body.openclaw-mode .agents {
+    /* Light agents grid — rows for Governor/Overview, columns when agent is focused */
+    body.light-mode .agents {
       grid-template-columns: 1fr; gap: 14px;
     }
-    body.openclaw-mode.oc-agent-focused .agents {
+    body.light-mode.oc-agent-focused .agents {
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     }
 
-    /* OpenClaw surface panels */
-    body.openclaw-mode .governor,
-    body.openclaw-mode .token-panel {
+    /* Light surface panels */
+    body.light-mode .governor,
+    body.light-mode .token-panel {
       background: #ffffff; border: 1px solid #e5e7eb;
       border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
-    body.openclaw-mode .repo-card {
+    body.light-mode .repo-card {
       background: #ffffff; border: 1px solid #e5e7eb;
       border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
     }
 
-    /* OpenClaw typography */
-    body.openclaw-mode h1, body.openclaw-mode h2,
-    body.openclaw-mode .gov-title, body.openclaw-mode .token-title,
-    body.openclaw-mode .agent-name { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-    body.openclaw-mode .doing { font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; }
+    /* Light typography */
+    body.light-mode h1, body.light-mode h2,
+    body.light-mode .gov-title, body.light-mode .token-title,
+    body.light-mode .agent-name { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body.light-mode .doing { font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; }
 
-    /* OpenClaw button overrides */
-    body.openclaw-mode .btn { background: #f9fafb; border-color: #e5e7eb; color: #374151; }
-    body.openclaw-mode .btn:hover { background: #f3f4f6; border-color: #d1d5db; }
-    body.openclaw-mode .terminal-link { border-color: #dc2626; color: #dc2626; }
-    body.openclaw-mode .terminal-link:hover { background: #dc2626; color: #fff; }
-    body.openclaw-mode .restart-btn { border-color: #ca8a04; color: #ca8a04; }
-    body.openclaw-mode .restart-btn:hover { background: #ca8a04; color: #fff; }
-    body.openclaw-mode .btn-toggle.running { background: #f0fdf4; border-color: #16a34a; color: #16a34a; }
-    body.openclaw-mode .btn-toggle.paused { background: #fef2f2; border-color: #dc2626; color: #dc2626; }
+    /* Light button overrides */
+    body.light-mode .btn { background: #f9fafb; border-color: #e5e7eb; color: #374151; }
+    body.light-mode .btn:hover { background: #f3f4f6; border-color: #d1d5db; }
+    body.light-mode .terminal-link { border-color: #dc2626; color: #dc2626; }
+    body.light-mode .terminal-link:hover { background: #dc2626; color: #fff; }
+    body.light-mode .restart-btn { border-color: #ca8a04; color: #ca8a04; }
+    body.light-mode .restart-btn:hover { background: #ca8a04; color: #fff; }
+    body.light-mode .btn-toggle.running { background: #f0fdf4; border-color: #16a34a; color: #16a34a; }
+    body.light-mode .btn-toggle.paused { background: #fef2f2; border-color: #dc2626; color: #dc2626; }
 
-    /* OpenClaw status badges */
-    body.openclaw-mode .status-badge.blocked { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
-    body.openclaw-mode .status-badge.done { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
-    body.openclaw-mode .pause-badge { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+    /* Light status badges */
+    body.light-mode .status-badge.blocked { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+    body.light-mode .status-badge.done { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+    body.light-mode .pause-badge { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
 
-    /* OpenClaw governor gauge */
-    body.openclaw-mode .temp-gauge-track { border: 1px solid #e5e7eb; }
-    body.openclaw-mode .temp-gauge-needle { background: #1a1a2e; box-shadow: 0 0 6px rgba(26,26,46,0.4); }
+    /* Light governor gauge */
+    body.light-mode .temp-gauge-track { border: 1px solid #e5e7eb; }
+    body.light-mode .temp-gauge-needle { background: #1a1a2e; box-shadow: 0 0 6px rgba(26,26,46,0.4); }
 
-    /* OpenClaw config modal */
-    body.openclaw-mode .config-overlay { background: rgba(0,0,0,0.3); }
-    body.openclaw-mode .config-modal {
+    /* Light config modal */
+    body.light-mode .config-overlay { background: rgba(0,0,0,0.3); }
+    body.light-mode .config-modal {
       background: #ffffff; border: 1px solid #e5e7eb;
       box-shadow: 0 20px 60px rgba(0,0,0,0.15);
     }
-    body.openclaw-mode .config-header { border-color: #e5e7eb; }
-    body.openclaw-mode .config-tabs { border-color: #e5e7eb; }
-    body.openclaw-mode .config-tab { color: #6b7280; }
-    body.openclaw-mode .config-tab.active { color: #dc2626; border-bottom-color: #dc2626; }
-    body.openclaw-mode .config-body { scrollbar-color: #d1d5db transparent; }
-    body.openclaw-mode .config-field input,
-    body.openclaw-mode .config-field select {
+    body.light-mode .config-header { border-color: #e5e7eb; }
+    body.light-mode .config-tabs { border-color: #e5e7eb; }
+    body.light-mode .config-tab { color: #6b7280; }
+    body.light-mode .config-tab.active { color: #dc2626; border-bottom-color: #dc2626; }
+    body.light-mode .config-body { scrollbar-color: #d1d5db transparent; }
+    body.light-mode .config-field input,
+    body.light-mode .config-field select {
       background: #f9fafb; border-color: #e5e7eb; color: #1a1a2e;
     }
-    body.openclaw-mode .config-field input:focus,
-    body.openclaw-mode .config-field select:focus { border-color: #dc2626; }
-    body.openclaw-mode .config-footer { border-color: #e5e7eb; }
-    body.openclaw-mode .config-footer .config-save { background: #2563eb; }
-    body.openclaw-mode .config-footer .config-cancel { color: #6b7280; border-color: #e5e7eb; }
+    body.light-mode .config-field input:focus,
+    body.light-mode .config-field select:focus { border-color: #dc2626; }
+    body.light-mode .config-footer { border-color: #e5e7eb; }
+    body.light-mode .config-footer .config-save { background: #2563eb; }
+    body.light-mode .config-footer .config-cancel { color: #6b7280; border-color: #e5e7eb; }
 
-    /* OpenClaw toast overrides */
-    body.openclaw-mode .toast.success { background: #16a34a; border-color: #15803d; }
-    body.openclaw-mode .toast.error { background: #dc2626; border-color: #b91c1c; }
-    body.openclaw-mode .toast.info { background: #2563eb; border-color: #1d4ed8; }
+    /* Light toast overrides */
+    body.light-mode .toast.success { background: #16a34a; border-color: #15803d; }
+    body.light-mode .toast.error { background: #dc2626; border-color: #b91c1c; }
+    body.light-mode .toast.info { background: #2563eb; border-color: #1d4ed8; }
 
-    /* OpenClaw model chips */
-    body.openclaw-mode .model-chip.free { background: #f0fdf4; color: #16a34a; }
-    body.openclaw-mode .model-chip.paid { background: #fefce8; color: #ca8a04; }
-    body.openclaw-mode .model-chip.opus { background: #fef2f2; color: #dc2626; }
-    body.openclaw-mode .model-chip.sonnet { background: #fefce8; color: #ca8a04; }
-    body.openclaw-mode .model-chip.haiku { background: #eff6ff; color: #2563eb; }
+    /* Light model chips */
+    body.light-mode .model-chip.free { background: #f0fdf4; color: #16a34a; }
+    body.light-mode .model-chip.paid { background: #fefce8; color: #ca8a04; }
+    body.light-mode .model-chip.opus { background: #fef2f2; color: #dc2626; }
+    body.light-mode .model-chip.sonnet { background: #fefce8; color: #ca8a04; }
+    body.light-mode .model-chip.haiku { background: #eff6ff; color: #2563eb; }
 
-    /* OpenClaw kick prompt */
-    body.openclaw-mode .kick-prompt {
+    /* Light kick prompt */
+    body.light-mode .kick-prompt {
       background: #f9fafb; border-color: #e5e7eb; color: #1a1a2e;
     }
-    body.openclaw-mode .kick-prompt:focus { border-color: #dc2626; }
-    body.openclaw-mode .kick-prompt::placeholder { color: #9ca3af; }
+    body.light-mode .kick-prompt:focus { border-color: #dc2626; }
+    body.light-mode .kick-prompt::placeholder { color: #9ca3af; }
 
-    /* OpenClaw responsive */
+    /* Light responsive */
     @media (max-width: 768px) {
       .oc-sidebar { display: none !important; }
       .oc-topbar { left: 0; }
-      body.openclaw-mode { padding-left: 16px; }
+      body.light-mode { padding-left: 16px; }
     }
 
     /* Agent cards */
@@ -1234,7 +1234,7 @@
 <div class="gh-auth-alert" id="gh-auth-alert">GitHub CLI authentication failed (401). Agents cannot use <code>gh</code> commands. Run <code>gh auth login</code> on the dev server to fix.</div>
   <div class="gh-rate-alert" id="gh-rate-alert"></div>
 
-  <!-- OpenClaw sidebar (hidden by default) -->
+  <!-- Light sidebar (hidden by default) -->
   <nav id="oc-sidebar" class="oc-sidebar" style="display:none">
     <div class="oc-sidebar-logo">
       <span class="oc-logo-icon">🐝</span>
@@ -1276,11 +1276,11 @@
       <a class="oc-nav-item" onclick="openConfigDialog('governor')">⚙️ Config</a>
     </div>
     <div class="oc-sidebar-footer">
-      <button class="layout-toggle" onclick="toggleLayout()" title="Switch layout">☰ Classic</button>
+      <button class="layout-toggle" onclick="toggleLayout()" title="Switch layout">☰ Classic View</button>
     </div>
   </nav>
 
-  <!-- OpenClaw top bar (hidden by default) -->
+  <!-- Light top bar (hidden by default) -->
   <header id="oc-topbar" class="oc-topbar" style="display:none">
     <div class="oc-topbar-left">
       <span id="oc-project-name"></span>
@@ -1327,31 +1327,32 @@
   <div class="agents" id="agents"></div>
 
   <script>
-    // ── Layout mode (Classic / OpenClaw) ──
+    // ── Layout mode (Classic / Light) ──
     const LAYOUT_KEY = 'hive-layout-mode';
-    const LAYOUT_MODES = ['classic', 'openclaw'];
-    const LAYOUT_LABELS = { classic: '☰ Classic', openclaw: '🦞 OpenClaw' };
+    const LAYOUT_MODES = ['classic', 'light'];
+    const LAYOUT_LABELS = { classic: '☰ Light View', light: '☰ Classic View' };
     function getLayout() {
-      const stored = localStorage.getItem(LAYOUT_KEY) || 'classic';
+      let stored = localStorage.getItem(LAYOUT_KEY) || 'classic';
+      if (stored === 'openclaw') { stored = 'light'; setLayout(stored); }
       return LAYOUT_MODES.includes(stored) ? stored : 'classic';
     }
     function setLayout(mode) { localStorage.setItem(LAYOUT_KEY, mode); }
     function applyLayout(mode) {
-      document.body.classList.toggle('openclaw-mode', mode === 'openclaw');
+      document.body.classList.toggle('light-mode', mode === 'light');
       const btn = document.getElementById('layout-toggle');
       if (btn) {
         btn.textContent = LAYOUT_LABELS[mode] || LAYOUT_LABELS.classic;
         btn.classList.toggle('active', mode !== 'classic');
       }
-      // Show/hide OpenClaw sidebar
+      // Show/hide Light sidebar
       const sidebar = document.getElementById('oc-sidebar');
-      if (sidebar) sidebar.style.display = mode === 'openclaw' ? 'flex' : 'none';
+      if (sidebar) sidebar.style.display = mode === 'light' ? 'flex' : 'none';
       // Show/hide classic header
       const h1 = document.querySelector('body > h1');
-      if (h1) h1.style.display = mode === 'openclaw' ? 'none' : 'flex';
-      // Show/hide OpenClaw top bar
+      if (h1) h1.style.display = mode === 'light' ? 'none' : 'flex';
+      // Show/hide Light top bar
       const topbar = document.getElementById('oc-topbar');
-      if (topbar) topbar.style.display = mode === 'openclaw' ? 'flex' : 'none';
+      if (topbar) topbar.style.display = mode === 'light' ? 'flex' : 'none';
     }
     function toggleLayout() {
       const current = getLayout();
@@ -1386,7 +1387,7 @@
     }
 
     function ocUpdateFocusedState() {
-      const isFocused = !!_ocSelectedAgent && getLayout() === 'openclaw';
+      const isFocused = !!_ocSelectedAgent && getLayout() === 'light';
       document.body.classList.toggle('oc-agent-focused', isFocused);
       document.querySelectorAll('.agent-card').forEach(card => {
         card.classList.toggle('oc-hidden', isFocused && card.dataset.agent === _ocSelectedAgent);
@@ -3114,7 +3115,7 @@ function burnAreaChart() {
       window._lastAgents = data.agents || [];
       window._lastStatus = data;
       window._lastBudget = data.budget || {};
-      // Update OpenClaw health badge with hover detail
+      // Update Light health badge with hover detail
       const ocHealth = document.getElementById('oc-health');
       if (ocHealth) {
         const h = data.health || {};
