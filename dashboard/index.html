@@ -36,21 +36,6 @@
     .layout-toggle:hover { border-color: var(--text); color: var(--text); }
     .layout-toggle.active { border-color: var(--cyan); color: var(--cyan); }
 
-    /* Deck mode */
-    body.deck-mode .agents { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: start; gap: 8px; }
-    body.deck-mode .agent-card { border-top: 3px solid transparent; padding: 10px; }
-    body.deck-mode .agent-card[data-agent="scanner"]    { border-top-color: #58a6ff; }
-    body.deck-mode .agent-card[data-agent="reviewer"]   { border-top-color: #3fb950; }
-    body.deck-mode .agent-card[data-agent="architect"]  { border-top-color: #bc8cff; }
-    body.deck-mode .agent-card[data-agent="outreach"]   { border-top-color: #39d2c0; }
-    body.deck-mode .agent-card[data-agent="supervisor"] { border-top-color: #d29922; }
-    body.deck-mode .agent-name { font-size: 0.9rem; }
-    body.deck-mode .doing { min-height: 4em; font-size: 0.7rem; }
-    body.deck-mode .agent-actions { flex-direction: column; }
-    body.deck-mode .agent-field { font-size: 0.72rem; }
-    @media (max-width: 800px) { body.deck-mode .agents { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 600px) { body.deck-mode .agents { grid-template-columns: 1fr; } }
-
     /* ── OpenClaw mode ── */
     body.openclaw-mode {
       --bg: #f8f9fa; --surface: #ffffff; --border: #e5e7eb;
@@ -996,14 +981,16 @@
   <div class="agents" id="agents"></div>
 
   <script>
-    // ── Layout mode (Classic / Deck / OpenClaw) ──
+    // ── Layout mode (Classic / OpenClaw) ──
     const LAYOUT_KEY = 'hive-layout-mode';
-    const LAYOUT_MODES = ['classic', 'deck', 'openclaw'];
-    const LAYOUT_LABELS = { classic: '☰ Classic', deck: '▥ Deck', openclaw: '🦞 OpenClaw' };
-    function getLayout() { return localStorage.getItem(LAYOUT_KEY) || 'classic'; }
+    const LAYOUT_MODES = ['classic', 'openclaw'];
+    const LAYOUT_LABELS = { classic: '☰ Classic', openclaw: '🦞 OpenClaw' };
+    function getLayout() {
+      const stored = localStorage.getItem(LAYOUT_KEY) || 'classic';
+      return LAYOUT_MODES.includes(stored) ? stored : 'classic';
+    }
     function setLayout(mode) { localStorage.setItem(LAYOUT_KEY, mode); }
     function applyLayout(mode) {
-      document.body.classList.toggle('deck-mode', mode === 'deck');
       document.body.classList.toggle('openclaw-mode', mode === 'openclaw');
       const btn = document.getElementById('layout-toggle');
       if (btn) {
