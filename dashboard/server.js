@@ -404,6 +404,7 @@ function fetchStatus() {
           a.structuredStatus = sm.status || '';
           a.statusEvidence = sm.evidence || '';
         }
+        enrichReposWithActionable();
         // Record snapshot for sparklines
         const snap = {
           t: lastFetch,
@@ -486,18 +487,22 @@ fetchStatus();
 // Repo data — read from centralized api-collector cache (no additional GH API calls)
 const REPO_REFRESH_MS = 60000;
 const GITHUB_CACHE_PATH = path.join(process.env.HIVE_METRICS_DIR || '/var/run/hive-metrics', 'github-cache.json');
+function enrichReposWithActionable() {
+  if (!statusCache || !statusCache.repos) return;
+  const items = (actionableCache.issues || {}).items || [];
+  for (const r of statusCache.repos) {
+    r.actionableIssues = items
+      .filter(i => i.repo === r.full)
+      .map(i => ({ number: i.number, title: i.title, url: i.url, labels: i.labels || [] }));
+  }
+}
 function fetchRepoStatus() {
   try {
     const raw = fs.readFileSync(GITHUB_CACHE_PATH, 'utf8');
     const data = JSON.parse(raw);
     if (statusCache && data.repos) {
-      const items = (actionableCache.issues || {}).items || [];
-      for (const r of data.repos) {
-        r.actionableIssues = items
-          .filter(i => i.repo === r.full)
-          .map(i => ({ number: i.number, title: i.title, url: i.url, labels: i.labels || [] }));
-      }
       statusCache.repos = data.repos;
+      enrichReposWithActionable();
     }
   } catch (_) {}
 }
