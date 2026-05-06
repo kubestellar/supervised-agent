@@ -618,6 +618,10 @@
 
     /* Agent indicators */
     .agent-indicators { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 0.75rem; }
+    details.agent-indicators > summary { list-style: none; }
+    details.agent-indicators > summary::-webkit-details-marker { display: none; }
+    details.agent-indicators > summary::before { content: '▶'; display: inline-block; margin-right: 4px; font-size: 0.55rem; transition: transform 0.15s; vertical-align: middle; }
+    details.agent-indicators[open] > summary::before { transform: rotate(90deg); }
     .ind-label { color: var(--muted); font-size: 0.65rem; }
     .ind-empty { color: var(--muted); font-style: italic; font-size: 0.7rem; }
     .ind-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
@@ -1390,7 +1394,10 @@
         let html = '';
         if (inProgress.length > 0) html += `<div class="agent-indicators"><span class="ind-label">Working on (${inProgress.length}):</span>${inProgress.map(renderWip).join('')}</div>`;
         if (openPairs.length > 0) html += `<div class="agent-indicators"><span class="ind-label">PR open (${openPairs.length}):</span>${openPairs.map(renderPair).join('')}</div>`;
-        if (allMergedCount > 0) html += `<div class="agent-indicators"><span class="ind-label">Merged today (${allMergedCount}):</span>${mergedPairs.map(renderPair).join('')}${standaloneMerged.map(renderStandalonePr).join('')}</div>`;
+        if (allMergedCount > 0) {
+          const mergedOpen = localStorage.getItem('hive-merged-expanded') !== 'false';
+          html += `<details class="agent-indicators merged-collapse" ${mergedOpen ? 'open' : ''} ontoggle="localStorage.setItem('hive-merged-expanded', this.open)"><summary class="ind-label" style="cursor:pointer;user-select:none">Merged today (${allMergedCount})</summary>${mergedPairs.map(renderPair).join('')}${standaloneMerged.map(renderStandalonePr).join('')}</details>`;
+        }
         if (!html) html = '<div class="agent-indicators"><span class="ind-empty">no active fixes</span></div>';
         return html;
       }
