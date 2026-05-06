@@ -33,7 +33,7 @@ PANE_NOISE = re.compile(
     r"Auto-update failed|ctrl\+q enqueue|\? help$|"
     r"~/kubestellar-console|~/hive|Read shell output|"
     r"Waiting up to \d+ seconds|"
-    r"^[│└├┌┐┘┤┬┴┼╭╮╰╯]\s|^\s*[│└├]\s|"
+    r"^[│└├┌┐┘┤┬┴┼╭╮╰╯─━═]+\s*$|"
     r"^\$ |^#\s|Scanner\s*─|Reviewer\s*─|Architect\s*─|"
     r"Outreach\s*─|Supervisor\s*─|"
     r"ctrl\+o to expand|^\d+ lines?\.\.\.|"
@@ -259,7 +259,7 @@ def first_sentence(text):
 
 def summarize_entries(entries):
     tools = []
-    last_text = None
+    texts = []
 
     for entry in reversed(entries):
         msg = entry.get("message", {})
@@ -269,20 +269,22 @@ def summarize_entries(entries):
                 desc = describe_tool(content)
                 if desc and desc not in tools:
                     tools.append(desc)
-            elif ct == "text" and last_text is None:
-                last_text = first_sentence(content.get("text", ""))
+            elif ct == "text" and len(texts) < SUMMARY_MAX_LINES:
+                raw = content.get("text", "").strip()
+                if raw:
+                    for line in raw.split("\n"):
+                        line = line.strip()
+                        if line and len(line) > 5 and line not in texts:
+                            texts.append(line)
+                            if len(texts) >= SUMMARY_MAX_LINES:
+                                break
 
     lines = []
-    if tools:
-        lines.append(tools[0])
-    if last_text and last_text not in lines:
-        lines.append(last_text)
-    for t in tools[1:]:
-        if len(lines) >= SUMMARY_MAX_LINES:
-            break
-        if t not in lines:
-            lines.append(t)
-
+    seen = set()
+    for l in texts + tools:
+        if l not in seen:
+            lines.append(l)
+            seen.add(l)
     return "\n".join(lines[:SUMMARY_MAX_LINES])
 
 
@@ -290,7 +292,7 @@ def scrape_tmux(session):
     """Extract meaningful output lines from a tmux pane."""
     try:
         raw = subprocess.check_output(
-            ["tmux", "capture-pane", "-t", session, "-p", "-S", "-100"],
+            ["tmux", "capture-pane", "-t", session, "-p", "-S", "-500"],
             timeout=5, text=True, stderr=subprocess.DEVNULL
         )
     except (subprocess.SubprocessError, OSError):
@@ -328,6 +330,23 @@ def scrape_tmux(session):
     return ("\n".join(result), is_working) if result else None
 
 
+def merge_summaries(tmux_text, jsonl_text):
+    """Combine tmux and JSONL summaries, dedup, cap at SUMMARY_MAX_LINES."""
+    lines = []
+    seen = set()
+    for l in (tmux_text or "").split("\n"):
+        l = l.strip()
+        if l and l not in seen:
+            lines.append(l)
+            seen.add(l)
+    for l in (jsonl_text or "").split("\n"):
+        l = l.strip()
+        if l and l not in seen:
+            lines.append(l)
+            seen.add(l)
+    return "\n".join(lines[:SUMMARY_MAX_LINES])
+
+
 def main():
     os.makedirs(STATE_DIR, exist_ok=True)
     offsets = load_json_file(OFFSETS_FILE)
@@ -361,8 +380,13 @@ def main():
 
     for agent, (fpath, mtime) in best_per_agent.items():
         entries, offsets = read_tail(fpath, offsets)
-        summary = summarize_entries(entries)
-        active = (now - mtime) < STALE_SECONDS
+        jsonl_summary = summarize_entries(entries)
+        session = AGENT_TMUX_SESSION.get(agent)
+        tmux_result = scrape_tmux(session) if session else None
+        tmux_summary = tmux_result[0] if tmux_result else ""
+        tmux_working = tmux_result[1] if tmux_result else False
+        summary = merge_summaries(tmux_summary, jsonl_summary)
+        active = tmux_working or (now - mtime) < STALE_SECONDS
         if summary:
             cached[agent] = {
                 "summary": summary,
@@ -377,7 +401,7 @@ def main():
             cached[agent]["active"] = False
 
     for agent, session in AGENT_TMUX_SESSION.items():
-        if agent in best_per_agent and cached.get(agent, {}).get("active"):
+        if agent in best_per_agent:
             continue
         result = scrape_tmux(session)
         if result:
