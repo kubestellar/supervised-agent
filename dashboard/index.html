@@ -365,7 +365,7 @@
     body.openclaw-mode .config-field input:focus,
     body.openclaw-mode .config-field select:focus { border-color: #dc2626; }
     body.openclaw-mode .config-footer { border-color: #e5e7eb; }
-    body.openclaw-mode .config-footer .config-save { background: #dc2626; }
+    body.openclaw-mode .config-footer .config-save { background: #2563eb; }
     body.openclaw-mode .config-footer .config-cancel { color: #6b7280; border-color: #e5e7eb; }
 
     /* OpenClaw toast overrides */
@@ -3674,6 +3674,7 @@ function burnAreaChart() {
       if (success) {
         showToast('Configuration saved', 'success');
         _configState.dirty = {};
+        closeConfigDialog();
       }
     }
 
