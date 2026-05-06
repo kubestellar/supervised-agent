@@ -254,23 +254,57 @@ count_actionable() {
 }
 
 measure_queue() {
-  local total=0 total_i=0 total_p=0
+  local total_i=0 total_p=0 total=0
   local breakdown=""
-  for repo in "${REPOS[@]}"; do
-    local counts i p
-    counts=$(count_actionable "$repo")
-    i="${counts%% *}"
-    p="${counts##* }"
-    total_i=$(( total_i + i ))
-    total_p=$(( total_p + p ))
-    total=$(( total_i + total_p ))
-    breakdown="${breakdown} ${repo##*/}=${i}i/${p}p"
-  done
+  local actionable_file="/var/run/hive-metrics/actionable.json"
+
+  # Read directly from actionable.json (canonical source) instead of stale per-repo caches.
+  # This ensures mode changes immediately when the issue queue drains, not one cycle later.
+  if [ -f "$actionable_file" ]; then
+    local counts
+    counts=$(python3 -c "
+import json
+with open('$actionable_file') as f:
+    d = json.load(f)
+issues = d.get('issues', {}).get('items', [])
+prs = d.get('prs', {}).get('items', [])
+# Per-repo breakdown
+repos = {}
+for i in issues:
+    r = i.get('repo', '').split('/')[-1] or 'unknown'
+    repos.setdefault(r, [0, 0])
+    repos[r][0] += 1
+for p in prs:
+    r = p.get('repo', '').split('/')[-1] or 'unknown'
+    repos.setdefault(r, [0, 0])
+    repos[r][1] += 1
+parts = ' '.join(f'{r}={c[0]}i/{c[1]}p' for r, c in sorted(repos.items()))
+print(f'{len(issues)} {len(prs)} {parts}')
+" 2>/dev/null)
+    if [ -n "$counts" ]; then
+      total_i=$(echo "$counts" | awk '{print $1}')
+      total_p=$(echo "$counts" | awk '{print $2}')
+      total=$(( total_i + total_p ))
+      breakdown=$(echo "$counts" | cut -d' ' -f3-)
+    fi
+  else
+    # Fallback to per-repo cache files if actionable.json doesn't exist
+    for repo in "${REPOS[@]}"; do
+      local counts i p
+      counts=$(count_actionable "$repo")
+      i="${counts%% *}"
+      p="${counts##* }"
+      total_i=$(( total_i + i ))
+      total_p=$(( total_p + p ))
+      total=$(( total_i + total_p ))
+      breakdown="${breakdown} ${repo##*/}=${i}i/${p}p"
+    done
+  fi
+
   echo "$total"        > "$STATE_DIR/queue_depth"
   echo "$total_i"      > "$STATE_DIR/queue_issues"
   echo "$total_p"      > "$STATE_DIR/queue_prs"
   log "QUEUE total=${total} (${total_i}i/${total_p}p) |${breakdown# }"
-  # Return issue count only — PRs don't drive mode thresholds (CI+merge is cheap)
   echo "$total_i"
 }
 
