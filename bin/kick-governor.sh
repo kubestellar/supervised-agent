@@ -845,7 +845,7 @@ done
 # ── Stale-status escalation ─────────────────────────────────────────────────
 # Check each agent's status file. If UPDATED is >20 min stale and STATUS is
 # not DONE/DONE_WITH_CONCERNS, flag as stuck.
-STALE_THRESHOLD_SEC=1200  # 20 minutes
+DEFAULT_STALE_THRESHOLD_SEC=1200  # 20 minutes — overridden by per-agent AGENT_STALE_TIMEOUT_SEC
 STUCK_COUNT_FILE="$STATE_DIR/stuck_counts"
 touch "$STUCK_COUNT_FILE" 2>/dev/null || true
 
@@ -859,6 +859,13 @@ for _sa in scanner reviewer architect outreach supervisor; do
 
   [[ -z "$_sa_updated" ]] && continue
   [[ "$_sa_status" == "DONE" || "$_sa_status" == "DONE_WITH_CONCERNS" ]] && continue
+
+  # Per-agent stale timeout from env file, falling back to default
+  _sa_upper=$(echo "$_sa" | tr '[:lower:]' '[:upper:]')
+  _sa_env="/etc/hive/${_sa}.env"
+  _sa_stale_sec=$(grep "^AGENT_STALE_TIMEOUT_SEC=" "$_sa_env" 2>/dev/null | cut -d= -f2 || true)
+  [[ -z "$_sa_stale_sec" ]] && _sa_stale_sec=$(grep "^AGENT_STALE_MAX_SEC=" "$_sa_env" 2>/dev/null | cut -d= -f2 || true)
+  STALE_THRESHOLD_SEC="${_sa_stale_sec:-$DEFAULT_STALE_THRESHOLD_SEC}"
 
   _sa_epoch=$(date -d "$_sa_updated" +%s 2>/dev/null || echo 0)
   _now_epoch=$(date +%s)
