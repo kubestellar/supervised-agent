@@ -1243,13 +1243,12 @@
           const val = row[m] || '?';
           const isActive = m === currentMode;
           const isOff = val === 'off';
-          const isPaused = val === 'paused';
-          const showPaused = isPaused || (agentPaused && isActive);
-          const showOff = isOff || (agentOff && isActive && !showPaused);
+          const showOff = isOff;
+          const showPaused = !isOff && (val === 'paused' || agentPaused);
           const colCls = isActive ? `col-active mode-${m}` : '';
-          const stateCls = showPaused ? ' paused' : showOff ? ' off' : '';
-          const dot = (isActive && isWorking && !agentPaused && !agentOff) ? '<span class="active-dot"></span>' : '';
-          const badge = showPaused ? '<span class="pause-badge">paused</span>' : showOff ? '<span class="off-badge">off</span>' : val;
+          const stateCls = showOff ? ' off' : showPaused ? ' paused' : '';
+          const dot = (isActive && isWorking && !agentPaused && !showOff) ? '<span class="active-dot"></span>' : '';
+          const badge = showOff ? '<span class="off-badge">off</span>' : showPaused ? '<span class="pause-badge">paused</span>' : val;
           return `<td class="${colCls}${stateCls}">${dot}${badge}</td>`;
         }).join('');
         const nameDot = isWorking ? '<span class="agent-dot"></span>' : '';
