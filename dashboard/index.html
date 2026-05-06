@@ -3335,7 +3335,8 @@ function burnAreaChart() {
     const THRESH_COLORS = { idle: '#238636', quiet: '#58a6ff', busy: '#d29922', surge: '#f85149' };
 
     function renderGovThresholds(t) {
-      const q = t.quiet || 2, b = t.busy || 10, s = t.surge || 20;
+      const merged = Object.assign({}, t, _configState.dirty.thresholds || {});
+      const q = merged.quiet || 2, b = merged.busy || 10, s = merged.surge || 20;
       const qPct = (q / THRESH_BAR_MAX) * 100;
       const bPct = (b / THRESH_BAR_MAX) * 100;
       const sPct = (s / THRESH_BAR_MAX) * 100;
@@ -3367,16 +3368,21 @@ function burnAreaChart() {
           </div>
         </div>
         <div class="config-field-row" style="margin-top:24px">
-          <div class="config-field"><label>Quiet</label><input type="number" min="1" id="thresh-in-quiet" value="${q}" onchange="setThreshFromInput('quiet',this.value)"></div>
-          <div class="config-field"><label>Busy</label><input type="number" min="1" id="thresh-in-busy" value="${b}" onchange="setThreshFromInput('busy',this.value)"></div>
-          <div class="config-field"><label>Surge</label><input type="number" min="1" id="thresh-in-surge" value="${s}" onchange="setThreshFromInput('surge',this.value)"></div>
+          <div class="config-field"><label>Quiet</label><input type="number" min="1" max="${THRESH_BAR_MAX}" id="thresh-in-quiet" value="${q}" oninput="setThreshFromInput('quiet',this.value)"></div>
+          <div class="config-field"><label>Busy</label><input type="number" min="1" max="${THRESH_BAR_MAX}" id="thresh-in-busy" value="${b}" oninput="setThreshFromInput('busy',this.value)"></div>
+          <div class="config-field"><label>Surge</label><input type="number" min="1" max="${THRESH_BAR_MAX}" id="thresh-in-surge" value="${s}" oninput="setThreshFromInput('surge',this.value)"></div>
         </div>`;
     }
 
     function setThreshFromInput(key, val) {
       const v = Math.max(1, Math.min(THRESH_BAR_MAX, parseInt(val) || 1));
       markDirty('thresholds', key, v);
-      renderConfigTab('Thresholds');
+      const handle = document.getElementById('thresh-' + key);
+      const lbl = document.getElementById('thresh-lbl-' + key);
+      const pct = (v / THRESH_BAR_MAX) * 100;
+      if (handle) { handle.style.left = pct + '%'; handle.dataset.val = v; }
+      if (lbl) { lbl.textContent = v; lbl.style.left = pct + '%'; }
+      updateThreshBarGradient();
     }
 
     (function initThreshDrag() {
