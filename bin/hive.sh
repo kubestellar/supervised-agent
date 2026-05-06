@@ -495,7 +495,9 @@ kick_agents() {
   # Copilot shows "claude-opus-4.6" in bottom-right; Claude Code shows "Opus 4.6".
   local expected_model="4.6"
 
-  for session in scanner reviewer architect outreach; do
+  local _kick_agents="${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}"
+  for session in $_kick_agents; do
+    [[ "$session" == "supervisor" ]] && continue
     if ! tmux has-session -t "$session" 2>/dev/null; then
       warn "$session session not ready yet — governor will kick on next cycle"
       continue
@@ -592,10 +594,9 @@ _label_to_secs() {
 cmd_status() {
   echo -e "\n${BLD}🐝 hive status — $(TZ="${HIVE_TZ:-UTC}" date '+%-I:%M %p %Z')${RST}\n"
 
-  # Sessions
-  local SESSIONS=(supervisor scanner reviewer architect outreach)
-  local LABELS=("supervisor" "scanner" "reviewer" "architect" "outreach")
-  local ENV_FILES=("supervisor" "scanner" "reviewer" "architect" "outreach")
+  # Sessions — read from project config (AGENTS_ENABLED from hive-config.sh)
+  local _ae="${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}"
+  local SESSIONS=($_ae) LABELS=($_ae) ENV_FILES=($_ae)
   local GOV_STATE="/var/run/kick-governor"
   printf "  %-12s  %-8s  %-8s  %-8s  %-8s  %s\n" "AGENT" "STATE" "CLI" "CADENCE" "KICK" "BUSY"
   printf "  %-12s  %-8s  %-8s  %-8s  %-8s  %s\n" "-----" "-----" "---" "-------" "----" "----"
@@ -752,9 +753,8 @@ cmd_status() {
 # ── status JSON ──────────────────────────────────────────────────────────────
 
 cmd_status_json() {
-  local SESSIONS=(supervisor scanner reviewer architect outreach)
-  local LABELS=("supervisor" "scanner" "reviewer" "architect" "outreach")
-  local ENV_FILES=("supervisor" "scanner" "reviewer" "architect" "outreach")
+  local _ae="${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}"
+  local SESSIONS=($_ae) LABELS=($_ae) ENV_FILES=($_ae)
   local GOV_STATE="/var/run/kick-governor"
   local STATUS_CACHE="/var/run/kick-governor/repo_cache"
   mkdir -p "$STATUS_CACHE" 2>/dev/null || true
