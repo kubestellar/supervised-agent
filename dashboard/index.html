@@ -207,14 +207,54 @@
     /* Agent detail summary — monospace, respect newlines */
     .oc-detail-summary-wrap { position: relative; margin-bottom: 16px; }
     .oc-detail-summary {
-      color: #374151; line-height: 1.55;
+      color: #374151; line-height: 1.5;
       padding: 14px; background: #f9fafb;
       border-radius: 8px; border: 1px solid #e5e7eb;
       min-height: 60px; max-height: 600px; overflow-y: auto;
-      white-space: pre-wrap; word-break: break-word;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 0.82rem;
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 0.78rem;
     }
+    .sum-tool {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 10px; margin: 6px 0 2px; border-radius: 6px;
+      background: #eef2ff; border-left: 3px solid #6366f1;
+      font-weight: 600; font-size: 0.78rem; color: #4338ca;
+    }
+    .sum-tool .sum-tool-type {
+      font-size: 0.6rem; text-transform: uppercase; font-weight: 700;
+      background: #6366f1; color: #fff; padding: 1px 5px; border-radius: 3px;
+    }
+    .sum-cmd {
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 0.72rem; color: #475569; padding: 4px 10px 4px 14px;
+      border-left: 2px solid #cbd5e1; margin: 0; line-height: 1.4;
+      word-break: break-all;
+    }
+    .sum-tree {
+      font-size: 0.7rem; color: #9ca3af; padding: 1px 10px 1px 20px;
+      font-style: italic;
+    }
+    .sum-text {
+      padding: 3px 0; font-size: 0.82rem; color: #374151; line-height: 1.5;
+    }
+    .sum-table-wrap {
+      overflow-x: auto; margin: 4px 0;
+      border: 1px solid #e2e8f0; border-radius: 6px;
+      background: #f8fafc;
+    }
+    .sum-table {
+      width: 100%; border-collapse: collapse; font-size: 0.72rem;
+    }
+    .sum-table th {
+      text-align: left; padding: 5px 10px; background: #eef2ff;
+      border-bottom: 2px solid #c7d2fe; font-weight: 700; color: #4338ca;
+      font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .sum-table td {
+      padding: 5px 10px; border-bottom: 1px solid #e2e8f0; color: #475569;
+    }
+    .sum-table tr:last-child td { border-bottom: none; }
+    .sum-table tr:hover td { background: #eef2ff; }
     .oc-summary-follow-btn {
       position: absolute; bottom: 10px; right: 10px;
       width: 28px; height: 28px; border-radius: 50%;
@@ -1288,7 +1328,84 @@
     }
 
     function ocFormatSummary(raw) {
-      return esc(raw);
+      const lines = (raw || '').split('\n');
+      const out = [];
+      let tableRows = [];
+      let tableCols = [];
+      let cmdBlock = [];
+
+      function flushTable() {
+        if (!tableRows.length) return;
+        let html = '<div class="sum-table-wrap"><table class="sum-table">';
+        if (tableCols.length) html += '<thead><tr>' + tableCols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr></thead>';
+        html += '<tbody>' + tableRows.map(r => '<tr>' + r.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+        out.push(html);
+        tableRows = [];
+        tableCols = [];
+      }
+
+      function flushCmd() {
+        if (!cmdBlock.length) return;
+        out.push('<div class="sum-cmd">' + cmdBlock.map(l => esc(l)).join('\n') + '</div>');
+        cmdBlock = [];
+      }
+
+      const TOOL_RE = /^(.+?)\s*\((shell|Read|Edit|Write|Bash|WebSearch|WebFetch|Agent|NotebookEdit)\)\s*$/;
+      const TABLE_ROW_RE = /^\|\s*(.+?)\s*\|$/;
+      const TABLE_SEP_RE = /^[\|+][\-─━=+\|]+[\|+]$/;
+      const PIPE_LINE_RE = /^[│|]\s*(.*)$/;
+      const TREE_LINE_RE = /^[└├╰╭─\s]*[└├╰]\s*(.*)$/;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        if (!trimmed) { flushCmd(); flushTable(); continue; }
+
+        const toolMatch = trimmed.match(TOOL_RE);
+        if (toolMatch) {
+          flushCmd();
+          flushTable();
+          out.push('<div class="sum-tool"><span class="sum-tool-type">' + esc(toolMatch[2]) + '</span>' + esc(toolMatch[1]) + '</div>');
+          continue;
+        }
+
+        if (TABLE_SEP_RE.test(trimmed.replace(/\s/g, ''))) {
+          continue;
+        }
+
+        const tableMatch = trimmed.match(TABLE_ROW_RE);
+        if (tableMatch) {
+          flushCmd();
+          const cells = tableMatch[1].split('|').map(c => c.trim());
+          if (!tableCols.length && !tableRows.length) {
+            tableCols = cells;
+          } else {
+            tableRows.push(cells);
+          }
+          continue;
+        }
+
+        if (tableRows.length || tableCols.length) flushTable();
+
+        const pipeMatch = trimmed.match(PIPE_LINE_RE);
+        if (pipeMatch) {
+          cmdBlock.push(pipeMatch[1] || '');
+          continue;
+        }
+
+        const treeMatch = trimmed.match(TREE_LINE_RE);
+        if (treeMatch) {
+          flushCmd();
+          out.push('<div class="sum-tree">↳ ' + esc(treeMatch[1]) + '</div>');
+          continue;
+        }
+
+        flushCmd();
+        out.push('<div class="sum-text">' + esc(trimmed) + '</div>');
+      }
+      flushCmd();
+      flushTable();
+      return out.join('');
     }
 
     let _ocSummaryTailing = true;
