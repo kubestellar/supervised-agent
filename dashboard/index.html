@@ -2291,8 +2291,8 @@ function burnAreaChart() {
         </div>
         <div class="config-field-row">
           <div class="config-field">
-            <label>Stale Timeout (sec) <span class="config-info">i<span class="config-tooltip">How long (in seconds) an agent can be idle before the governor considers it stale and triggers a restart. Default is 1200s (20 minutes).</span></span></label>
-            <input type="number" id="cfg-stale-timeout" value="${g.staleTimeout || 1200}" onchange="markDirty('general','staleTimeout',this.value)">
+            <label>Stale Timeout <span class="config-info">i<span class="config-tooltip">How long an agent can be idle before the governor considers it stale and triggers a restart. Use m (minutes) or h (hours), e.g. 20m, 2.5h. Default is 20m.</span></span></label>
+            <input type="text" id="cfg-stale-timeout" value="${cadenceToHuman(g.staleTimeout || 1200)}" onchange="markDirty('general','staleTimeout',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))">
           </div>
           <div class="config-field">
             <label>Restart Strategy <span class="config-info">i<span class="config-tooltip">immediate: restart right away when stale or crashed. backoff: wait progressively longer between restart attempts (useful for rate-limited agents). none: do not auto-restart — operator must manually intervene.</span></span></label>
@@ -2334,10 +2334,10 @@ function burnAreaChart() {
       return `
         <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Time between kicks per governor mode. Use <b>m</b> (minutes) or <b>h</b> (hours), e.g. <code>30m</code>, <code>2h</code>. Set to <code>0</code> to turn the agent off in that mode.</p>
         <div class="config-field-row4">
-          <div class="config-field"><label>Surge</label><input type="text" value="${cadenceToHuman(c.surge)}" onchange="markDirty('cadences','surge',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
-          <div class="config-field"><label>Busy</label><input type="text" value="${cadenceToHuman(c.busy)}" onchange="markDirty('cadences','busy',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
-          <div class="config-field"><label>Quiet</label><input type="text" value="${cadenceToHuman(c.quiet)}" onchange="markDirty('cadences','quiet',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
           <div class="config-field"><label>Idle</label><input type="text" value="${cadenceToHuman(c.idle)}" onchange="markDirty('cadences','idle',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
+          <div class="config-field"><label>Quiet</label><input type="text" value="${cadenceToHuman(c.quiet)}" onchange="markDirty('cadences','quiet',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
+          <div class="config-field"><label>Busy</label><input type="text" value="${cadenceToHuman(c.busy)}" onchange="markDirty('cadences','busy',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
+          <div class="config-field"><label>Surge</label><input type="text" value="${cadenceToHuman(c.surge)}" onchange="markDirty('cadences','surge',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
         </div>`;
     }
 
