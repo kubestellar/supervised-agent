@@ -3643,6 +3643,59 @@ function burnAreaChart() {
       }
     }
 
+    // --- Chat rich formatting ---
+    function formatChatHtml(raw) {
+      const lines = (raw || '').split('\n');
+      const out = [];
+      const TOOL_RE = /^[✕×X✗]\s+(.+?)\s*\((shell|Read|Edit|Write|Bash|WebSearch|WebFetch|Agent)\)\s*$/;
+      const URL_RE = /(https?:\/\/[^\s<>"')\]]+)/g;
+      const BOLD_RE = /\*\*(.+?)\*\*/g;
+      const CODE_RE = /`([^`]+)`/g;
+      const BULLET_RE = /^[-•–]\s+(.*)$/;
+      const PIPE_LINE_RE = /^[│|]\s+(.*)$/;
+      const TREE_LINE_RE = /^[└├╰╭─\s]*[└├╰]\s*(.*)$/;
+
+      function inlineFmt(text) {
+        let s = esc(text);
+        s = s.replace(BOLD_RE, '<strong>$1</strong>');
+        s = s.replace(CODE_RE, '<code style="background:rgba(99,102,241,0.1);padding:1px 4px;border-radius:3px;font-size:0.85em">$1</code>');
+        s = s.replace(URL_RE, '<a href="$1" target="_blank" style="color:var(--cyan)">$1</a>');
+        return s;
+      }
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) { out.push('<div style="height:6px"></div>'); continue; }
+
+        const toolMatch = trimmed.match(TOOL_RE);
+        if (toolMatch) {
+          out.push('<div class="sum-tool"><span class="sum-tool-type">' + esc(toolMatch[2]) + '</span>' + esc(toolMatch[1]) + '</div>');
+          continue;
+        }
+
+        const pipeMatch = trimmed.match(PIPE_LINE_RE);
+        if (pipeMatch) {
+          out.push('<div class="sum-cmd">' + inlineFmt(pipeMatch[1]) + '</div>');
+          continue;
+        }
+
+        const treeMatch = trimmed.match(TREE_LINE_RE);
+        if (treeMatch) {
+          out.push('<div class="sum-tree">↳ ' + inlineFmt(treeMatch[1]) + '</div>');
+          continue;
+        }
+
+        const bulletMatch = trimmed.match(BULLET_RE);
+        if (bulletMatch) {
+          out.push('<div style="padding-left:12px;text-indent:-10px">• ' + inlineFmt(bulletMatch[1]) + '</div>');
+          continue;
+        }
+
+        out.push('<div>' + inlineFmt(trimmed) + '</div>');
+      }
+      return out.join('');
+    }
+
     // --- Hive Chat ---
     const CHAT_MAX_HISTORY = 50;
     const chatFab = document.getElementById('hiveChatFab');
@@ -3653,7 +3706,32 @@ function burnAreaChart() {
     const chatSend = document.getElementById('hiveChatSend');
     let chatBusy = false;
     const CHAT_CONTEXT_LIMIT = 6;
+    const CHAT_STORAGE_KEY = 'hive-chat-history';
     let chatContext = [];
+
+    function saveChatHistory() {
+      const msgs = [];
+      chatMessages.querySelectorAll('.chat-msg').forEach(el => {
+        if (el.classList.contains('thinking')) return;
+        msgs.push({ cls: el.classList.contains('user') ? 'user' : 'system', html: el.innerHTML });
+      });
+      const MAX_PERSIST = 30;
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(msgs.slice(-MAX_PERSIST)));
+    }
+
+    function restoreChatHistory() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) || '[]');
+        saved.forEach(m => {
+          const el = document.createElement('div');
+          el.className = 'chat-msg ' + m.cls;
+          el.innerHTML = m.html;
+          chatMessages.appendChild(el);
+        });
+        if (saved.length) chatMessages.scrollTop = chatMessages.scrollHeight;
+      } catch (_) {}
+    }
+    restoreChatHistory();
 
     chatFab.onclick = () => {
       const isOpen = chatPanel.classList.toggle('open');
@@ -3668,6 +3746,7 @@ function burnAreaChart() {
       chatMessages.appendChild(el);
       if (chatMessages.children.length > CHAT_MAX_HISTORY) chatMessages.removeChild(chatMessages.firstChild);
       chatMessages.scrollTop = chatMessages.scrollHeight;
+      if (cls !== 'thinking') saveChatHistory();
       return el;
     }
 
@@ -3695,7 +3774,7 @@ function burnAreaChart() {
           const answer = data.answer || 'No results found.';
           chatContext.push({ role: 'assistant', text: answer });
           if (chatContext.length > CHAT_CONTEXT_LIMIT) chatContext = chatContext.slice(-CHAT_CONTEXT_LIMIT);
-          let html = esc(answer).replace(/\n/g, '<br>');
+          let html = formatChatHtml(answer);
           if (data.raw) {
             const rawId = 'chat-raw-' + Date.now();
             html += `<details class="chat-raw-details"><summary>Search data</summary><pre id="${rawId}">${esc(data.raw)}</pre></details>`;
