@@ -3153,7 +3153,7 @@ function burnAreaChart() {
       _configModalOpen = true;
       _configState = { type, agent: agentName || null, tab: null, data: {}, dirty: {} };
       document.getElementById('config-overlay').classList.remove('hidden');
-      const title = type === 'governor' ? 'Governor Configuration' : `${agentName} Configuration`;
+      const title = type === 'governor' ? 'Governor Configuration' : `${agentName || 'New Agent'} Configuration`;
       document.querySelector('.config-title').textContent = title;
       const tabs = type === 'governor' ? GOVERNOR_CONFIG_TABS : AGENT_CONFIG_TABS;
       const tabsEl = document.getElementById('config-tabs');
@@ -3233,7 +3233,12 @@ function burnAreaChart() {
 
     // ── Agent Tab Renderers ──
     function renderAgentGeneral(g) {
+      const agentName = _configState.agent || '';
       return `
+        <div class="config-field">
+          <label>Agent Name</label>
+          <input type="text" id="cfg-agent-name" value="${esc(agentName)}" placeholder="e.g. scanner, reviewer, outreach" onchange="updateConfigAgentName(this.value)">
+        </div>
         <div class="config-field">
           <label>Launch Command</label>
           <input type="text" id="cfg-launch-cmd" value="${esc(g.launchCmd || '')}" onchange="markDirty('general','launchCmd',this.value)">
@@ -3267,6 +3272,13 @@ function burnAreaChart() {
             ${KNOWN_MODELS.map(m => `<option value="${m.value}" ${_modelsEqual(g.model, m.value) ? 'selected' : ''}>${m.label}</option>`).join('')}
           </select>
         </div>`;
+    }
+
+    function updateConfigAgentName(name) {
+      _configState.agent = name;
+      const titleEl = document.querySelector('.config-title');
+      if (titleEl) titleEl.textContent = `${name || 'New Agent'} Configuration`;
+      markDirty('general', 'name', name);
     }
 
     const SECONDS_PER_MIN = 60;
