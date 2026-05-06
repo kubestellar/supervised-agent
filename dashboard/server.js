@@ -1550,17 +1550,32 @@ const BEADS_AGENTS = ['supervisor', 'scanner', 'reviewer', 'architect', 'outreac
 const BEADS_BASE = '/home/dev';
 const HIVE_STATUS_DIR = process.env.HOME ? path.join(process.env.HOME, '.hive') : '/home/dev/.hive';
 const CHAT_MAX_RESULTS = 20;
+const STOP_WORDS = new Set(['tell', 'me', 'more', 'about', 'what', 'is', 'the', 'a', 'an', 'of', 'in', 'on', 'for', 'to', 'and', 'or', 'how', 'why', 'when', 'show', 'find', 'get', 'give', 'can', 'you', 'do', 'does', 'did', 'has', 'have', 'with', 'from', 'are', 'was', 'were', 'been', 'any', 'all', 'this', 'that', 'its', 'it']);
 
-function searchBeads(query) {
+function parseQuery(raw) {
+  const q = raw.toLowerCase().trim();
+  const numbers = [...q.matchAll(/#?(\d{3,})/g)].map(m => m[1]);
+  const agentNames = BEADS_AGENTS.filter(a => q.includes(a));
+  const tokens = q.split(/\s+/).filter(t => t.length > 1 && !STOP_WORDS.has(t.replace(/[^a-z0-9]/g, '')));
+  return { raw: q, numbers, agentNames, tokens };
+}
+
+function textMatchesTokens(text, parsed) {
+  const lower = text.toLowerCase();
+  for (const num of parsed.numbers) { if (lower.includes(num) || lower.includes('#' + num)) return true; }
+  for (const t of parsed.tokens) { if (lower.includes(t)) return true; }
+  return false;
+}
+
+function searchBeads(parsed) {
   const results = [];
-  const q = query.toLowerCase();
   for (const agent of BEADS_AGENTS) {
     try {
       const out = execSync(`cd ${BEADS_BASE}/${agent}-beads && bd list --json 2>/dev/null`, { encoding: 'utf8', timeout: 5000 });
       const beads = JSON.parse(out);
       for (const b of beads) {
-        const text = `${b.title || ''} ${b.notes || ''}`.toLowerCase();
-        if (text.includes(q) || (b.id && b.id.includes(q))) {
+        const text = `${b.title || ''} ${b.notes || ''} ${b.id || ''}`;
+        if (textMatchesTokens(text, parsed)) {
           results.push({ agent, bead: b });
         }
       }
@@ -1569,47 +1584,59 @@ function searchBeads(query) {
   return results.slice(0, CHAT_MAX_RESULTS);
 }
 
-function searchStatus(query) {
+function searchStatus(parsed) {
   const results = [];
-  const q = query.toLowerCase();
   for (const agent of BEADS_AGENTS) {
     try {
       const txt = fs.readFileSync(path.join(HIVE_STATUS_DIR, `${agent}_status.txt`), 'utf8');
-      if (txt.toLowerCase().includes(q)) results.push({ agent, content: txt.trim() });
+      if (textMatchesTokens(txt, parsed) || parsed.agentNames.includes(agent)) {
+        results.push({ agent, content: txt.trim() });
+      }
     } catch (_) {}
   }
   return results;
 }
 
-function searchDashboardState(query) {
-  const q = query.toLowerCase();
+function searchDashboardState(parsed) {
   const results = [];
   if (statusCache && statusCache.agents) {
     for (const a of statusCache.agents) {
-      const text = `${a.name || ''} ${a.doing || ''} ${a.liveSummary || ''} ${a.state || ''}`.toLowerCase();
-      if (text.includes(q)) {
+      const text = `${a.name || ''} ${a.doing || ''} ${a.liveSummary || ''} ${a.state || ''}`;
+      if (textMatchesTokens(text, parsed) || parsed.agentNames.includes(a.name)) {
         results.push({ type: 'agent', name: a.name, state: a.state, doing: (a.doing || '').slice(0, 200), liveSummary: (a.liveSummary || '').slice(0, 300) });
       }
     }
   }
   if (statusCache && statusCache.repos) {
     for (const r of statusCache.repos) {
-      const text = `${r.name || ''} ${r.full || ''}`.toLowerCase();
-      if (text.includes(q)) {
+      const repoText = `${r.name || ''} ${r.full || ''}`;
+      const issueText = (r.actionableIssues || []).map(i => `#${i.number} ${i.title}`).join(' ');
+      const prText = (r.openPrs || []).map(p => `#${p.number} ${p.title}`).join(' ');
+      if (textMatchesTokens(`${repoText} ${issueText} ${prText}`, parsed)) {
         results.push({ type: 'repo', name: r.full || r.name, issues: r.issues, prs: r.prs, actionableIssues: r.actionableIssues, openPrs: r.openPrs });
       }
+    }
+  }
+  // Search actionable issues/PRs directly for number matches
+  if (parsed.numbers.length) {
+    const issues = (actionableCache.issues || {}).items || [];
+    const prs = (actionableCache.prs || {}).items || [];
+    for (const num of parsed.numbers) {
+      const issue = issues.find(i => String(i.number) === num);
+      if (issue) results.push({ type: 'issue', number: issue.number, title: issue.title, url: issue.url, repo: issue.repo, labels: issue.labels || [] });
+      const pr = prs.find(p => String(p.number) === num);
+      if (pr) results.push({ type: 'pr', number: pr.number, title: pr.title, url: pr.url, repo: pr.repo, author: pr.author || '', labels: pr.labels || [] });
     }
   }
   return results;
 }
 
-function formatChatResponse(query, beadResults, statusResults, dashResults) {
+function formatChatResponse(query, parsed, beadResults, statusResults, dashResults) {
   const sections = [];
   const sources = [];
-  const q = query.toLowerCase();
 
   // Special queries
-  if (q.match(/^(status|what.?s happening|overview|summary)$/i)) {
+  if (parsed.raw.match(/^(status|what.?s happening|overview|summary)$/)) {
     if (statusCache && statusCache.agents) {
       const lines = statusCache.agents.map(a => `${a.name}: ${a.state || 'unknown'}${a.doing ? ' — ' + a.doing.slice(0, 80) : ''}`);
       sections.push('Agent Status:\n' + lines.join('\n'));
@@ -1622,24 +1649,38 @@ function formatChatResponse(query, beadResults, statusResults, dashResults) {
     return { answer: sections.join('\n\n') || 'No status data available.', sources };
   }
 
-  if (dashResults.length) {
-    const agentHits = dashResults.filter(d => d.type === 'agent');
-    const repoHits = dashResults.filter(d => d.type === 'repo');
-    if (agentHits.length) {
-      sections.push('Agents:\n' + agentHits.map(a =>
-        `${a.name}: ${a.state}${a.doing ? '\n  Doing: ' + a.doing : ''}${a.liveSummary ? '\n  Summary: ' + a.liveSummary.slice(0, 200) : ''}`
-      ).join('\n'));
-      sources.push('dashboard');
-    }
-    if (repoHits.length) {
-      sections.push('Repos:\n' + repoHits.map(r => {
-        let line = `${r.name}: ${r.issues || 0} issues, ${r.prs || 0} PRs`;
-        if (r.actionableIssues && r.actionableIssues.length) line += '\n  Actionable: ' + r.actionableIssues.map(i => `#${i.number} ${i.title}`).join(', ');
-        if (r.openPrs && r.openPrs.length) line += '\n  Open PRs: ' + r.openPrs.map(p => `#${p.number} ${p.title}${p.mergeable ? ' ✓' : ''}`).join(', ');
-        return line;
-      }).join('\n'));
-      sources.push('repos');
-    }
+  // Direct issue/PR hits first
+  const issueHits = dashResults.filter(d => d.type === 'issue');
+  const prHits = dashResults.filter(d => d.type === 'pr');
+  if (issueHits.length) {
+    sections.push('Issues:\n' + issueHits.map(i =>
+      `#${i.number} — ${i.title}\n  Repo: ${i.repo}\n  Labels: ${(i.labels || []).join(', ') || 'none'}\n  ${i.url}`
+    ).join('\n\n'));
+    sources.push('issues');
+  }
+  if (prHits.length) {
+    sections.push('Pull Requests:\n' + prHits.map(p =>
+      `#${p.number} — ${p.title}\n  Repo: ${p.repo}${p.author ? '\n  Author: ' + p.author : ''}\n  Labels: ${(p.labels || []).join(', ') || 'none'}\n  ${p.url}`
+    ).join('\n\n'));
+    sources.push('prs');
+  }
+
+  const agentHits = dashResults.filter(d => d.type === 'agent');
+  const repoHits = dashResults.filter(d => d.type === 'repo');
+  if (agentHits.length) {
+    sections.push('Agents:\n' + agentHits.map(a =>
+      `${a.name}: ${a.state}${a.doing ? '\n  Doing: ' + a.doing : ''}${a.liveSummary ? '\n  Summary: ' + a.liveSummary.slice(0, 200) : ''}`
+    ).join('\n'));
+    sources.push('dashboard');
+  }
+  if (repoHits.length) {
+    sections.push('Repos:\n' + repoHits.map(r => {
+      let line = `${r.name}: ${r.issues || 0} issues, ${r.prs || 0} PRs`;
+      if (r.actionableIssues && r.actionableIssues.length) line += '\n  Actionable: ' + r.actionableIssues.map(i => `#${i.number} ${i.title}`).join(', ');
+      if (r.openPrs && r.openPrs.length) line += '\n  Open PRs: ' + r.openPrs.map(p => `#${p.number} ${p.title}${p.mergeable ? ' ✓' : ''}`).join(', ');
+      return line;
+    }).join('\n'));
+    sources.push('repos');
   }
 
   if (beadResults.length) {
@@ -1665,10 +1706,11 @@ app.post('/api/chat', (req, res) => {
   if (query.length > MAX_QUERY_LEN) return res.json({ error: 'Query too long' });
 
   try {
-    const beadResults = searchBeads(query);
-    const statusResults = searchStatus(query);
-    const dashResults = searchDashboardState(query);
-    const response = formatChatResponse(query, beadResults, statusResults, dashResults);
+    const parsed = parseQuery(query);
+    const beadResults = searchBeads(parsed);
+    const statusResults = searchStatus(parsed);
+    const dashResults = searchDashboardState(parsed);
+    const response = formatChatResponse(query, parsed, beadResults, statusResults, dashResults);
     res.json(response);
   } catch (err) {
     res.status(500).json({ error: err.message });
