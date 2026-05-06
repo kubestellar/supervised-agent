@@ -116,17 +116,75 @@
     .oc-topbar .widget-dl:hover { background: #dc2626; color: #fff; }
 
     /* OpenClaw main content area */
-    body.openclaw-mode > .governor,
-    body.openclaw-mode > .token-usage,
-    body.openclaw-mode > .repos,
-    body.openclaw-mode > div:has(> .beads),
-    body.openclaw-mode > .agents,
-    body.openclaw-mode > .gh-rate-alert {
-      margin-left: 200px; padding-top: 0;
-    }
     body.openclaw-mode {
-      padding-left: 216px; padding-top: 64px; padding-right: 16px; padding-bottom: 24px;
+      padding: 64px 20px 24px 220px; margin: 0;
     }
+    body.openclaw-mode > .gh-rate-alert { margin-left: 0; }
+
+    /* OpenClaw agent detail panel (shown when agent selected in sidebar) */
+    .oc-agent-detail {
+      display: none; background: #ffffff; border: 1px solid #e5e7eb;
+      border-radius: 10px; padding: 20px; margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .oc-agent-detail.active { display: block; }
+    .oc-agent-detail-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+      padding-bottom: 12px; border-bottom: 1px solid #e5e7eb;
+    }
+    .oc-agent-detail-header .agent-name-big {
+      font-size: 1.2rem; font-weight: 700; color: #1a1a2e;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .oc-agent-detail-header .status-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .oc-agent-detail-header .status-dot.running { background: #16a34a; }
+    .oc-agent-detail-header .status-dot.stopped { background: #dc2626; }
+    .oc-agent-detail-header .status-dot.paused { background: #dc2626; }
+    .oc-agent-detail-header .status-dot.idle { background: #9ca3af; }
+    .oc-detail-fields {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; margin-bottom: 16px;
+    }
+    .oc-detail-field { font-size: 0.82rem; }
+    .oc-detail-field .label { color: #6b7280; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.3px; }
+    .oc-detail-field .value { font-weight: 600; color: #1a1a2e; margin-top: 2px; }
+    .oc-detail-summary {
+      font-size: 0.85rem; color: #374151; line-height: 1.6;
+      margin-bottom: 16px; padding: 12px; background: #f9fafb;
+      border-radius: 8px; border: 1px solid #e5e7eb; min-height: 60px;
+    }
+    .oc-detail-indicators { margin-bottom: 16px; }
+    .oc-chat-prompt {
+      display: flex; gap: 8px; align-items: flex-end;
+      padding-top: 12px; border-top: 1px solid #e5e7eb;
+    }
+    .oc-chat-input {
+      flex: 1; padding: 10px 14px; border: 1px solid #e5e7eb;
+      border-radius: 8px; font-size: 0.85rem; color: #1a1a2e;
+      background: #ffffff; font-family: inherit; resize: none;
+      min-height: 40px; outline: none;
+    }
+    .oc-chat-input:focus { border-color: #dc2626; box-shadow: 0 0 0 2px rgba(220,38,38,0.1); }
+    .oc-chat-input::placeholder { color: #9ca3af; }
+    .oc-chat-send {
+      padding: 10px 18px; background: #dc2626; color: #fff; border: none;
+      border-radius: 8px; font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; white-space: nowrap; font-family: inherit;
+    }
+    .oc-chat-send:hover { background: #b91c1c; }
+    .oc-detail-actions {
+      display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+
+    /* Sidebar agent items with status dots */
+    .oc-nav-item .oc-agent-dot {
+      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+    }
+    .oc-agent-dot.running { background: #16a34a; }
+    .oc-agent-dot.idle { background: #9ca3af; }
+    .oc-agent-dot.paused { background: #dc2626; }
+    .oc-agent-dot.off { background: #d1d5db; }
 
     /* OpenClaw card overrides */
     body.openclaw-mode .agent-card {
@@ -926,6 +984,7 @@
     <div class="oc-nav-group">
       <div class="oc-nav-label">Agents</div>
       <a class="oc-nav-item" data-section="agents" onclick="ocNavigate('agents')">👁 Overview</a>
+      <div id="oc-agent-nav"></div>
     </div>
     <div class="oc-nav-group">
       <div class="oc-nav-label">Resources</div>
@@ -978,6 +1037,7 @@
     <div class="beads" id="beads"></div>
   </div>
 
+  <div id="oc-agent-detail" class="oc-agent-detail"></div>
   <div class="agents" id="agents"></div>
 
   <script>
@@ -1014,14 +1074,111 @@
       setLayout(next);
       applyLayout(next);
     }
+    const OC_TOPBAR_HEIGHT = 64;
+    let _ocSelectedAgent = null;
+
     function ocNavigate(section) {
+      _ocSelectedAgent = null;
+      const detail = document.getElementById('oc-agent-detail');
+      if (detail) { detail.classList.remove('active'); detail.innerHTML = ''; }
       const el = document.getElementById(section);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      // Update active sidebar item
+      if (el) {
+        const y = el.getBoundingClientRect().top + window.scrollY - OC_TOPBAR_HEIGHT;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      }
       document.querySelectorAll('.oc-nav-item').forEach(i => i.classList.remove('active'));
       const active = document.querySelector(`.oc-nav-item[data-section="${section}"]`);
       if (active) active.classList.add('active');
     }
+
+    function ocSelectAgent(name) {
+      _ocSelectedAgent = name;
+      document.querySelectorAll('.oc-nav-item').forEach(i => i.classList.remove('active'));
+      const active = document.querySelector(`.oc-nav-item[data-agent-nav="${name}"]`);
+      if (active) active.classList.add('active');
+      ocRenderAgentDetail();
+      const detail = document.getElementById('oc-agent-detail');
+      if (detail) {
+        const y = detail.getBoundingClientRect().top + window.scrollY - OC_TOPBAR_HEIGHT;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      }
+    }
+
+    function ocRenderAgentDetail() {
+      const detail = document.getElementById('oc-agent-detail');
+      if (!detail || !_ocSelectedAgent) return;
+      const agents = window._lastAgents || [];
+      const a = agents.find(ag => ag.name === _ocSelectedAgent);
+      if (!a) { detail.classList.remove('active'); return; }
+      detail.classList.add('active');
+
+      const isWorking = a.state === 'working';
+      const isPaused = a.paused;
+      const isOff = a.off;
+      const dotCls = isWorking ? 'running' : isPaused ? 'paused' : isOff ? 'idle' : 'idle';
+      const stateLabel = isWorking ? 'working' : isPaused ? 'paused' : isOff ? 'off' : 'idle';
+
+      const kickId = `oc-kick-${a.name}`;
+      const prevInput = document.getElementById(kickId);
+      const prevVal = prevInput ? prevInput.value : '';
+
+      detail.innerHTML = `
+        <div class="oc-agent-detail-header">
+          <span class="status-dot ${dotCls}"></span>
+          <span class="agent-name-big">${a.name}</span>
+          <span style="font-size:0.78rem;color:#6b7280;margin-left:auto">${stateLabel}</span>
+        </div>
+        <div class="oc-detail-actions">
+          <button class="btn-toggle ${isPaused ? 'paused' : isOff ? 'off' : 'running'}" onclick="toggleAgent('${a.name}', ${isPaused})">${isPaused ? '▶ resume' : isOff ? '▶ start' : '⏸ pause'}</button>
+          <a href="/api/terminal/${a.name}" target="_blank" class="terminal-link">▶ terminal</a>
+          <button class="restart-btn" onclick="restartAgent('${a.name}')">↻ restart</button>
+          <button class="config-gear" onclick="openConfigDialog('agent','${a.name}')" style="font-size:1rem;opacity:0.7">⚙️</button>
+        </div>
+        <div class="oc-detail-fields">
+          <div class="oc-detail-field"><div class="label">CLI</div><div class="value">${a.cli || '—'}</div></div>
+          <div class="oc-detail-field"><div class="label">Model</div><div class="value">${a.model || '—'}</div></div>
+          <div class="oc-detail-field"><div class="label">Interval</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : (a.cadence || '—')}</div></div>
+          <div class="oc-detail-field"><div class="label">Last Run</div><div class="value">${a.lastKick || '—'}</div></div>
+          <div class="oc-detail-field"><div class="label">Next Run</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : (a.nextKick || '—')}</div></div>
+          <div class="oc-detail-field"><div class="label">Tokens (24h)</div><div class="value">${a.tokens24h || '—'}</div></div>
+          <div class="oc-detail-field"><div class="label">Restarts</div><div class="value">${a.restarts ?? 0}</div></div>
+          <div class="oc-detail-field"><div class="label">Avg/Pass</div><div class="value">${a.avgTokensPerPass || '—'}</div></div>
+        </div>
+        <div class="oc-detail-summary">${a.liveSummary ? a.liveSummary : '<span style="color:#9ca3af">No activity summary</span>'}</div>
+        <div class="oc-chat-prompt">
+          <input type="text" class="oc-chat-input" id="${kickId}" placeholder="Send a message to ${a.name}..." value="${prevVal.replace(/"/g, '&quot;')}" onkeydown="if(event.key==='Enter'){ocSendKick('${a.name}')}" />
+          <button class="oc-chat-send" onclick="ocSendKick('${a.name}')">Send</button>
+        </div>
+      `;
+    }
+
+    async function ocSendKick(name) {
+      const input = document.getElementById('oc-kick-' + name);
+      if (!input) return;
+      const prompt = input.value.trim();
+      const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+      if (prompt) opts.body = JSON.stringify({ prompt });
+      try {
+        const res = await fetch('/api/kick/' + name, opts);
+        const data = await res.json();
+        if (!data.ok) { showToast('Kick failed: ' + (data.error || 'unknown'), 'error'); return; }
+        showToast(prompt ? 'Sent to ' + name : 'Kicked ' + name, 'success');
+        input.value = '';
+      } catch (e) { showToast('Kick failed: ' + e.message, 'error'); }
+    }
+
+    function ocUpdateSidebarAgents() {
+      const nav = document.getElementById('oc-agent-nav');
+      if (!nav) return;
+      const agents = window._lastAgents || [];
+      const html = agents.map(a => {
+        const dotCls = a.state === 'working' ? 'running' : a.paused ? 'paused' : a.off ? 'off' : 'idle';
+        const isActive = _ocSelectedAgent === a.name ? ' active' : '';
+        return `<a class="oc-nav-item${isActive}" data-agent-nav="${a.name}" onclick="ocSelectAgent('${a.name}')"><span class="oc-agent-dot ${dotCls}"></span> ${a.name}</a>`;
+      }).join('');
+      if (nav.innerHTML !== html) nav.innerHTML = html;
+    }
+
     applyLayout(getLayout());
 
     // ── Sparkline helper ──
@@ -2232,6 +2389,8 @@ function burnAreaChart() {
       renderTokens(data.tokens || {});
       renderRepos(data.repos || []);
       renderBeads(data.beads || {});
+      ocUpdateSidebarAgents();
+      if (_ocSelectedAgent) ocRenderAgentDetail();
       window.scrollTo(0, scrollY);
     }
 
