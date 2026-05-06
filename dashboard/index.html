@@ -326,7 +326,7 @@
     body.openclaw-mode h1, body.openclaw-mode h2,
     body.openclaw-mode .gov-title, body.openclaw-mode .token-title,
     body.openclaw-mode .agent-name { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-    body.openclaw-mode .doing { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body.openclaw-mode .doing { font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; }
 
     /* OpenClaw button overrides */
     body.openclaw-mode .btn { background: #f9fafb; border-color: #e5e7eb; color: #374151; }
@@ -1480,7 +1480,6 @@
           <div class="gov-metric"><span class="gm-label">actionable</span><span class="gm-val">${govActionable}</span></div>
           <div class="gov-metric"><span class="gm-label">PRs</span><span class="gm-val">${govPrs}</span></div>
           <div class="gov-metric"><span class="gm-label">MTTR</span><span class="gm-val" style="color:${MTTR_COLOR}">${formatFixTime(itmMedian)}</span></div>
-          <div class="gov-metric"><span class="gm-label">next run</span><span class="gm-val">${gov.nextRun || '—'}</span></div>
           <div class="oc-gov-gauge">
             <div class="temp-gauge-track">
               <div class="temp-gauge-glow" style="width:100%"></div>
@@ -1502,6 +1501,10 @@
         mergeable: (window._lastStatus?.repos || []).reduce((n, r) => n + (r.openPrs || []).filter(p => p.mergeable).length, 0),
       };
 
+      const _tok = (window._tokensByAgent || {})[a.name] || {};
+      const _tokTotal = (_tok.input || 0) + (_tok.output || 0) + (_tok.cacheRead || 0);
+      const _tokAvg = _tok.avgPerSession || (_tok.sessions > 0 ? Math.floor(_tokTotal / _tok.sessions) : 0);
+
       detail.innerHTML = `
         <div class="oc-agent-detail-header">
           <span class="status-dot ${dotCls}"></span>
@@ -1520,13 +1523,13 @@
           <div class="oc-detail-field"><div class="label">Interval</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : (a.cadence || '—')}</div></div>
           <div class="oc-detail-field"><div class="label">Last Run</div><div class="value">${a.lastKick || '—'}</div></div>
           <div class="oc-detail-field"><div class="label">Next Run</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : (a.nextKick || '—')}</div></div>
-          <div class="oc-detail-field"><div class="label">Tokens (24h)</div><div class="value">${a.tokens24h || '—'}</div></div>
+          <div class="oc-detail-field"><div class="label">Tokens (24h)</div><div class="value">${_tokTotal > 0 ? fmtTokens(_tokTotal) : (_tok.sessions > 0 ? _tok.sessions + ' sess' : '—')}</div></div>
           <div class="oc-detail-field"><div class="label">Actionable</div><div class="value"><div class="spark-row"><span style="color:#f85149">${_ocSparkCounts.actionable}</span>${sparkSvg(historyData.map(s => s.actionableCount ?? 0), '#f85149')}</div></div></div>
           <div class="oc-detail-field"><div class="label">Restarts</div><div class="value">${a.restarts ?? 0}</div></div>
-          <div class="oc-detail-field"><div class="label">Avg/Pass</div><div class="value">${a.avgTokensPerPass || '—'}</div></div>
+          <div class="oc-detail-field"><div class="label">Avg/Pass</div><div class="value">${_tokAvg > 0 ? fmtTokens(_tokAvg) : '—'}</div></div>
           <div class="oc-detail-field"><div class="label">Open PRs</div><div class="value"><div class="spark-row"><span style="color:#bc8cff">${_ocSparkCounts.openPrs}</span>${sparkSvg(historyData.map(s => s.openPrCount ?? 0), '#bc8cff')}</div></div></div>
-          <div class="oc-detail-field"><div class="label">Sessions</div><div class="value">${a.sessions ?? '—'}</div></div>
-          <div class="oc-detail-field"><div class="label">Messages</div><div class="value">${a.messages ?? '—'}</div></div>
+          <div class="oc-detail-field"><div class="label">Sessions</div><div class="value">${_tok.sessions ?? '—'}</div></div>
+          <div class="oc-detail-field"><div class="label">Messages</div><div class="value">${_tok.messages ?? '—'}</div></div>
           <div class="oc-detail-field"><div class="label">Mergeable</div><div class="value"><div class="spark-row"><span style="color:#3fb950">${_ocSparkCounts.mergeable}</span>${sparkSvg(historyData.map(s => s.mergeableCount ?? 0), '#3fb950')}</div></div></div>
         </div>
         <div class="oc-detail-summary-wrap">
@@ -1542,6 +1545,12 @@
       const summaryEl = document.getElementById('oc-summary-scroll');
       const followBtn = document.getElementById('oc-summary-follow');
       if (summaryEl) {
+        const savedHeight = localStorage.getItem('hive-oc-summary-height');
+        if (savedHeight) summaryEl.style.height = savedHeight;
+        const resizeObs = new ResizeObserver(() => {
+          localStorage.setItem('hive-oc-summary-height', summaryEl.style.height || summaryEl.offsetHeight + 'px');
+        });
+        resizeObs.observe(summaryEl);
         if (_ocSummaryTailing) {
           summaryEl.scrollTop = summaryEl.scrollHeight;
         } else if (_ocSummaryScrollTop !== null) {
