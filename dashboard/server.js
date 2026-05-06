@@ -964,7 +964,7 @@ app.post('/api/resume/:agent', (req, res) => {
 // POST /api/unpin/:agent         — unpin all
 // POST /api/unpin/:agent/cli     — unpin backend only
 // POST /api/unpin/:agent/model   — unpin model only
-const PIN_ALLOWED = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+const PIN_ALLOWED = [...ENABLED_AGENTS];
 const ENV_DIR = '/etc/hive';
 
 function setEnvFlag(agent, flag, value) {
