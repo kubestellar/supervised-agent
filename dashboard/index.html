@@ -1472,8 +1472,12 @@
         const itm = window._lastStatus?.issueToMerge || {};
         const itmMedian = itm.median_minutes || 0;
         const MTTR_COLOR = '#d2a8ff';
-        const GOV_GAUGE_MAX = 30;
-        const gaugePct = Math.min(govActionable / GOV_GAUGE_MAX * 100, 100);
+        const govThresh = gov.thresholds || {};
+        const OC_THRESH_QUIET = govThresh.quiet || 2;
+        const OC_THRESH_BUSY = govThresh.busy || 10;
+        const OC_THRESH_SURGE = govThresh.surge || 20;
+        const OC_GAUGE_MAX = Math.max(OC_THRESH_SURGE + 10, govActionable + 5);
+        const gaugePct = Math.min(govActionable / OC_GAUGE_MAX * 100, 100);
         govOuter.innerHTML = `
           <div class="gov-metric"><span class="gm-label">timer</span><span class="gm-val" style="color:#16a34a">${gov.active !== false ? '● active' : '○ off'}</span></div>
           <div class="gov-metric"><span class="gm-label">mode</span><span class="gm-val ${govModeClass}">${gov.mode || '—'}</span></div>
@@ -1481,15 +1485,16 @@
           <div class="gov-metric"><span class="gm-label">PRs</span><span class="gm-val">${govPrs}</span></div>
           <div class="gov-metric"><span class="gm-label">MTTR</span><span class="gm-val" style="color:${MTTR_COLOR}">${formatFixTime(itmMedian)}</span></div>
           <div class="oc-gov-gauge">
-            <div class="temp-gauge-track">
+            <div class="temp-gauge-track" style="background:linear-gradient(to right, #238636 0%, #238636 ${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%, #1f6feb ${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%, #1f6feb ${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%, #d29922 ${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%, #d29922 ${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%, #f85149 ${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%, #f85149 100%)">
               <div class="temp-gauge-glow" style="width:100%"></div>
+              <div class="temp-gauge-ticks"><span>0</span><span>${OC_THRESH_QUIET}</span><span>${OC_THRESH_BUSY}</span><span>${OC_THRESH_SURGE}</span><span>${OC_GAUGE_MAX}</span></div>
               <div class="temp-gauge-needle" style="left:${gaugePct}%" data-val="${govActionable}"></div>
             </div>
             <div class="temp-gauge-labels">
-              <span class="tl-idle lbl-idle">idle</span>
-              <span class="tl-quiet lbl-quiet">quiet</span>
-              <span class="tl-busy lbl-busy">busy</span>
-              <span class="tl-surge lbl-surge">surge</span>
+              <span class="tl-idle" style="position:absolute;left:${OC_THRESH_QUIET / OC_GAUGE_MAX * 50}%;transform:translateX(-50%)">idle</span>
+              <span class="tl-quiet" style="position:absolute;left:${(OC_THRESH_QUIET + OC_THRESH_BUSY) / 2 / OC_GAUGE_MAX * 100}%;transform:translateX(-50%)">quiet</span>
+              <span class="tl-busy" style="position:absolute;left:${(OC_THRESH_BUSY + OC_THRESH_SURGE) / 2 / OC_GAUGE_MAX * 100}%;transform:translateX(-50%)">busy</span>
+              <span class="tl-surge" style="position:absolute;left:${(OC_THRESH_SURGE + OC_GAUGE_MAX) / 2 / OC_GAUGE_MAX * 100}%;transform:translateX(-50%)">surge</span>
             </div>
           </div>
         `;
@@ -2050,8 +2055,12 @@
       const currentMode = gov.mode || 'idle';
       const modes = ['idle', 'quiet', 'busy', 'surge'];
 
-      // Gauge bar — thresholds driven by issue count only (PRs don't affect mode)
-      const maxQ = 30;
+      // Gauge bar — thresholds from governor.env (dynamic via status API)
+      const _gt = gov.thresholds || {};
+      const CLASSIC_THRESH_QUIET = _gt.quiet || 2;
+      const CLASSIC_THRESH_BUSY = _gt.busy || 10;
+      const CLASSIC_THRESH_SURGE = _gt.surge || 20;
+      const maxQ = Math.max(CLASSIC_THRESH_SURGE + 10, issueCount + 5);
       const pct = Math.min(issueCount / maxQ * 100, 100);
       const modeColors = { idle: '#238636', quiet: '#58a6ff', busy: '#d29922', surge: '#f85149' };
       const modeColor = modeColors[gov.mode] || '#8b949e';
@@ -2084,16 +2093,16 @@
         </div>
         <div class="temp-gauge">
           <div class="temp-gauge-label"><span>Issues: ${issueCount}</span><span>max ${maxQ}</span></div>
-          <div class="temp-gauge-track">
+          <div class="temp-gauge-track" style="background:linear-gradient(to right, #238636 0%, #238636 ${CLASSIC_THRESH_QUIET/maxQ*100}%, #1f6feb ${CLASSIC_THRESH_QUIET/maxQ*100}%, #1f6feb ${CLASSIC_THRESH_BUSY/maxQ*100}%, #d29922 ${CLASSIC_THRESH_BUSY/maxQ*100}%, #d29922 ${CLASSIC_THRESH_SURGE/maxQ*100}%, #f85149 ${CLASSIC_THRESH_SURGE/maxQ*100}%, #f85149 100%)">
             <div class="temp-gauge-glow" style="width:100%"></div>
-            <div class="temp-gauge-ticks"><span>0</span><span>2</span><span>10</span><span>20</span><span>${maxQ}</span></div>
+            <div class="temp-gauge-ticks"><span>0</span><span>${CLASSIC_THRESH_QUIET}</span><span>${CLASSIC_THRESH_BUSY}</span><span>${CLASSIC_THRESH_SURGE}</span><span>${maxQ}</span></div>
             <div class="temp-gauge-needle" style="left:${pct}%" data-val="${issueCount}"></div>
           </div>
           <div class="temp-gauge-labels">
-            <span class="tl-idle lbl-idle">idle</span>
-            <span class="tl-quiet lbl-quiet">quiet</span>
-            <span class="tl-busy lbl-busy">busy</span>
-            <span class="tl-surge lbl-surge">surge</span>
+            <span class="tl-idle" style="position:absolute;left:${CLASSIC_THRESH_QUIET / maxQ * 50}%;transform:translateX(-50%)">idle</span>
+            <span class="tl-quiet" style="position:absolute;left:${(CLASSIC_THRESH_QUIET + CLASSIC_THRESH_BUSY) / 2 / maxQ * 100}%;transform:translateX(-50%)">quiet</span>
+            <span class="tl-busy" style="position:absolute;left:${(CLASSIC_THRESH_BUSY + CLASSIC_THRESH_SURGE) / 2 / maxQ * 100}%;transform:translateX(-50%)">busy</span>
+            <span class="tl-surge" style="position:absolute;left:${(CLASSIC_THRESH_SURGE + maxQ) / 2 / maxQ * 100}%;transform:translateX(-50%)">surge</span>
           </div>
         </div>
         <div class="gov-timeline">
@@ -2817,14 +2826,39 @@ function burnAreaChart() {
       window._lastAgents = data.agents || [];
       window._lastStatus = data;
       window._lastBudget = data.budget || {};
-      // Update OpenClaw health badge
+      // Update OpenClaw health badge with hover detail
       const ocHealth = document.getElementById('oc-health');
       if (ocHealth) {
         const h = data.health || {};
-        const ciOk = !h.ci || h.ci >= 70;
-        const anyFail = Object.values(h).some(v => v === false);
-        if (anyFail || (h.ci && h.ci < 70)) {
-          ocHealth.textContent = '● Issues';
+        const CI_PASS_THRESHOLD = 70;
+        const HEALTH_LABELS = {
+          ci: 'CI Pass Rate', brew: 'Homebrew', helm: 'Helm', nightly: 'Nightly',
+          nightlyCompliance: 'Nightly Compliance', nightlyDashboard: 'Nightly Dashboard',
+          nightlyGhaw: 'Nightly GHAW', nightlyPlaywright: 'Nightly Playwright',
+          nightlyRel: 'Nightly Release', weekly: 'Weekly', weeklyRel: 'Weekly Release',
+          hourly: 'Hourly', deploy_vllm_d: 'Deploy vLLM-d', deploy_pok_prod: 'Deploy POK Prod'
+        };
+        const failing = [];
+        const passing = [];
+        for (const [k, v] of Object.entries(h)) {
+          const label = HEALTH_LABELS[k] || k;
+          if (k === 'ci') {
+            if (v < CI_PASS_THRESHOLD) failing.push(`${label}: ${v}% (threshold: ${CI_PASS_THRESHOLD}%)`);
+            else passing.push(`${label}: ${v}%`);
+          } else if (v === false || v === 0) {
+            failing.push(`${label}: failing`);
+          } else if (v === -1) {
+            passing.push(`${label}: skipped`);
+          } else {
+            passing.push(`${label}: passing`);
+          }
+        }
+        const hoverLines = [];
+        if (failing.length) hoverLines.push('FAILING:\n' + failing.map(f => '  ✗ ' + f).join('\n'));
+        if (passing.length) hoverLines.push('PASSING:\n' + passing.map(p => '  ✓ ' + p).join('\n'));
+        ocHealth.title = hoverLines.join('\n\n') || 'No health data';
+        if (failing.length > 0) {
+          ocHealth.textContent = `● ${failing.length} Issue${failing.length > 1 ? 's' : ''}`;
           ocHealth.style.color = '#dc2626';
           ocHealth.style.background = '#fef2f2';
           ocHealth.style.borderColor = '#fecaca';

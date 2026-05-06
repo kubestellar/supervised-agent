@@ -343,6 +343,20 @@ function fetchStatus() {
         statusCache.ciPassRate = ciPassRate;
         statusCache.agentMetrics = agentMetrics;
         statusCache.tokens = tokenCache;
+        // Attach governor thresholds from governor.env
+        try {
+          const govEnv = parseEnvFile(GOVERNOR_ENV_PATH);
+          if (statusCache.governor) {
+            const DEFAULT_QUIET = 2;
+            const DEFAULT_BUSY = 10;
+            const DEFAULT_SURGE = 20;
+            statusCache.governor.thresholds = {
+              quiet: Number(govEnv.QUIET_THRESHOLD) || DEFAULT_QUIET,
+              busy: Number(govEnv.BUSY_THRESHOLD) || DEFAULT_BUSY,
+              surge: Number(govEnv.SURGE_THRESHOLD) || DEFAULT_SURGE,
+            };
+          }
+        } catch (_) {}
         // Attach governor model/budget state
         try {
           const budgetFile = path.join(GOVERNOR_STATE_DIR, 'budget_state');
