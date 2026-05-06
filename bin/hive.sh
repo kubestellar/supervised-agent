@@ -620,6 +620,7 @@ cmd_status() {
         next_kick="$(TZ=America/New_York date -d @$_next '+%-m/%-d %-I:%M %p')"
       fi
     elif [[ "$cadence" == "paused" ]]; then next_kick="paused"
+    elif [[ "$cadence" == "off" ]]; then next_kick="off"
     fi
     if tmux has-session -t "$s" 2>/dev/null; then
       local pane pane_tail
@@ -834,6 +835,7 @@ cmd_status_json() {
         nk="$(TZ=America/New_York date -d @$_next '+%-m/%-d %-I:%M %p')"
       fi
     elif [[ "$cadence" == "paused" ]]; then nk="paused"
+    elif [[ "$cadence" == "off" ]]; then nk="off"
     fi
     # Format last kick time
     local lk_fmt=""
@@ -934,7 +936,7 @@ for a in agents:
     cells = {}
     for m in modes:
         s = defaults.get((a, m), -1)
-        if s == 0: cells[m] = 'paused'
+        if s == 0: cells[m] = 'off'
         elif s < 60: cells[m] = f'{s}s'
         elif s < 3600: cells[m] = f'{s//60}m'
         else: cells[m] = f'{s//3600}h'

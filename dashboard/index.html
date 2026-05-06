@@ -47,6 +47,7 @@
     .agent-state.working { color: var(--green); }
     .agent-state.idle { color: var(--muted); }
     .agent-state.paused { color: #f85149; }
+    .agent-state.off { color: #484f58; }
     .status-badge { display: inline-block; font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
     .status-badge.blocked { background: rgba(248,81,73,0.2); color: #f85149; border: 1px solid rgba(248,81,73,0.4); }
     .status-badge.needs-context { background: rgba(210,153,34,0.2); color: #d2992a; border: 1px solid rgba(210,153,34,0.4); }
@@ -93,9 +94,13 @@
     .btn-toggle:hover { border-color: var(--accent); color: var(--text); }
     .btn-toggle.paused { background: rgba(248,81,73,0.15); border-color: #f85149; color: #f85149; }
     .btn-toggle.running { background: rgba(63,185,80,0.15); border-color: #3fb950; color: #3fb950; }
+    .btn-toggle.off { background: rgba(72,79,88,0.15); border-color: #484f58; color: #8b949e; }
     .agent-card.paused { border-color: #f85149; opacity: 0.7; }
     .agent-card.paused .agent-state { color: #f85149; }
+    .agent-card.off { border-color: #484f58; opacity: 0.6; }
+    .agent-card.off .agent-state { color: #484f58; }
     .pause-badge { display: inline-block; font-size: 0.6rem; background: rgba(248,81,73,0.15); color: #f85149; border: 1px solid rgba(248,81,73,0.3); border-radius: 3px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }
+    .off-badge { display: inline-block; font-size: 0.6rem; background: rgba(72,79,88,0.25); color: #8b949e; border: 1px solid rgba(72,79,88,0.4); border-radius: 3px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }
 
     /* Health status panel */
     .health { margin-bottom: 24px; }
@@ -301,6 +306,7 @@
     .gov-matrix td.col-active.mode-busy  { background: rgba(210,153,34,0.08); color: #d29922; }
     .gov-matrix td.col-active.mode-surge { background: rgba(248,81,73,0.08); color: #f85149; }
     .gov-matrix td.paused { color: #484f58; font-style: italic; }
+    .gov-matrix td.off { color: #484f58; font-style: italic; }
     .gov-matrix .agent-dot {
       display: inline-block; width: 6px; height: 6px; border-radius: 50%;
       background: var(--green); margin-right: 4px; vertical-align: middle;
@@ -971,7 +977,7 @@
     }
 
     function parseCadenceMinutes(cadence) {
-      if (!cadence || cadence === 'paused') return 0;
+      if (!cadence || cadence === 'paused' || cadence === 'off') return 0;
       const m = cadence.match(/^(\d+)(m|h)$/);
       if (!m) return 0;
       const MINUTES_PER_HOUR = 60;
@@ -1043,18 +1049,21 @@
       });
       const cards = agents.map(a => {
         const needsLogin = a.needsLogin === true;
-        const isPaused = a.paused === true;
-        const isStopped = a.state === 'stopped' && !isPaused;
+        const isOff = a.offByCadence === true;
+        const isPaused = a.paused === true && !isOff;
+        const isStopped = a.state === 'stopped' && !isPaused && !isOff;
         const STALE_MS = 1200000; // 20 minutes
         const isStale = a.summaryUpdated && !isPaused && a.busy === 'working' && (Date.now() - new Date(a.summaryUpdated).getTime()) > STALE_MS;
         let statusCls = '';
         if (a.structuredStatus === 'BLOCKED') statusCls = 'status-blocked';
         else if (a.structuredStatus === 'NEEDS_CONTEXT') statusCls = 'status-needs-context';
         else if (isStale) statusCls = 'status-stale';
-        const cls = needsLogin ? 'needs-login' : isPaused ? 'paused' : isStopped ? 'stopped' : `${a.busy} ${statusCls}`.trim();
+        const cls = needsLogin ? 'needs-login' : isPaused ? 'paused' : isOff ? 'off' : isStopped ? 'stopped' : `${a.busy} ${statusCls}`.trim();
         const dotCls = a.state === 'stopped' ? 'stopped' : 'running';
         const canToggle = a.name !== 'supervisor';
-        const toggleBtn = canToggle ? `<button class="btn-toggle ${isPaused ? 'paused' : 'running'}" onclick="toggleAgent('${a.name}', ${isPaused})">${isPaused ? '▶ resume' : '⏸ pause'}</button>` : '';
+        const toggleBtn = canToggle ? (isOff
+          ? `<button class="btn-toggle off" onclick="openConfigDialog('agent','${a.name}')" title="Agent is off in this mode — click to configure cadences">⚙ off</button>`
+          : `<button class="btn-toggle ${isPaused ? 'paused' : 'running'}" onclick="toggleAgent('${a.name}', ${isPaused})">${isPaused ? '▶ resume' : '⏸ pause'}</button>`) : '';
         // liveSummary is pushed via SSE every 5s — no separate fetch needed
         let summaryEl = '';
         if (a.liveSummary) {
@@ -1076,12 +1085,12 @@
           <div class="agent-name"><span class="dot ${dotCls}"></span>${a.name} ${toggleBtn} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a> <button class="restart-btn" onclick="restartAgent('${a.name}')" title="Kill tmux session — supervisor will respawn with fresh context">↻ restart</button> <button class="config-gear" onclick="openConfigDialog('agent','${a.name}')" title="Configure ${a.name}">⚙️</button></div>
           <div class="agent-field"><span class="label">cli</span><span class="value">${cliChip(a.cli, a.pinnedBoth || a.pinnedCli, a.name)}${(a.pinnedBoth || a.pinnedCli) ? '' : ` <button class="pin-toggle" onclick="togglePin('${a.name}', 'cli', false)" title="Pin CLI — lock current backend">📌</button>`}</span></div>
           <div class="agent-field"><span class="label">model</span><span class="value">${modelChip(a.model, a.govReason, a.pinnedBoth || a.pinnedModel, a.name)}${(a.pinnedBoth || a.pinnedModel) ? '' : ` <button class="pin-toggle" onclick="togglePin('${a.name}', 'model', false)" title="Pin model — lock current model">📌</button>`}</span></div>
-          <div class="agent-field"><span class="label">interval</span><span class="value">${isPaused ? 'paused' : a.cadence}</span></div>
+          <div class="agent-field"><span class="label">interval</span><span class="value">${isPaused ? 'paused' : isOff ? 'off' : a.cadence}</span></div>
           <div class="agent-field"><span class="label">last run</span><span class="value">${a.lastKick || '—'}</span></div>
-          <div class="agent-field"><span class="label">next run</span><span class="value">${isPaused ? 'paused' : (a.nextKick || '—')}</span></div>
+          <div class="agent-field"><span class="label">next run</span><span class="value">${isPaused ? 'paused' : isOff ? 'off' : (a.nextKick || '—')}</span></div>
           ${agentTokenRow(a.name, a.cadence)}
           <div class="agent-field"><span class="label">restarts</span><span class="value${(a.restarts || 0) > 5 ? ' restart-high' : (a.restarts || 0) > 0 ? ' restart-warn' : ''}">${a.restarts || 0}<span class="restart-label">24h</span>${(a.restarts || 0) > 0 ? `<button class="restart-reset" onclick="resetRestarts('${a.name}')" title="Reset restart counter">✕</button>` : ''}<span class="restart-spark">${restartSparkSvg(a.name)}</span></span></div>
-          <div class="agent-state ${isPaused ? 'paused' : a.busy}">${isPaused ? 'paused' : a.busy}${(() => {
+          <div class="agent-state ${isPaused ? 'paused' : isOff ? 'off' : a.busy}">${isPaused ? 'paused' : isOff ? 'off' : a.busy}${(() => {
             if (a.structuredStatus === 'BLOCKED') return '<span class="status-badge blocked" title="' + esc(a.statusEvidence) + '">blocked</span>';
             if (a.structuredStatus === 'NEEDS_CONTEXT') return '<span class="status-badge needs-context" title="' + esc(a.statusEvidence) + '">needs context</span>';
             if (a.structuredStatus === 'DONE_WITH_CONCERNS') return '<span class="status-badge done-concerns" title="' + esc(a.statusEvidence) + '">concerns</span>';
@@ -1228,19 +1237,23 @@
         if (!row) return '';
         const agentData = agents.find(a => a.name === aname);
         const isWorking = agentData && agentData.busy === 'working';
-        const agentPaused = agentData && agentData.paused === true;
+        const agentPaused = agentData && agentData.paused === true && !agentData.offByCadence;
+        const agentOff = agentData && agentData.offByCadence === true;
         const cells = modes.map(m => {
           const val = row[m] || '?';
           const isActive = m === currentMode;
+          const isOff = val === 'off';
           const isPaused = val === 'paused';
-          const showPaused = isPaused || agentPaused;
+          const showPaused = isPaused || (agentPaused && isActive);
+          const showOff = isOff || (agentOff && isActive && !showPaused);
           const colCls = isActive ? `col-active mode-${m}` : '';
-          const pausedCls = showPaused ? ' paused' : '';
-          const dot = (isActive && isWorking && !agentPaused) ? '<span class="active-dot"></span>' : '';
-          return `<td class="${colCls}${pausedCls}">${dot}${showPaused ? '<span class="pause-badge">paused</span>' : val}</td>`;
+          const stateCls = showPaused ? ' paused' : showOff ? ' off' : '';
+          const dot = (isActive && isWorking && !agentPaused && !agentOff) ? '<span class="active-dot"></span>' : '';
+          const badge = showPaused ? '<span class="pause-badge">paused</span>' : showOff ? '<span class="off-badge">off</span>' : val;
+          return `<td class="${colCls}${stateCls}">${dot}${badge}</td>`;
         }).join('');
         const nameDot = isWorking ? '<span class="agent-dot"></span>' : '';
-        const pauseBadge = agentPaused ? '<span class="pause-badge">paused</span>' : '';
+        const pauseBadge = agentPaused ? '<span class="pause-badge">paused</span>' : agentOff ? '<span class="off-badge">off</span>' : '';
         const cliPinned = agentData && (agentData.pinnedBoth || agentData.pinnedCli);
         const modelPinned = agentData && (agentData.pinnedBoth || agentData.pinnedModel);
         const cChip = agentData && agentData.cli ? cliChip(agentData.cli, cliPinned, aname) : '?';
@@ -1419,12 +1432,13 @@
 
         const avg = tokenData.avgPerSession || 0;
         const cadenceMin = parseCadenceMinutes(agentData.cadence);
-        const isPaused = !cadenceMin;
-        const passesPerHour = isPaused ? 0 : MINUTES_PER_HOUR / cadenceMin;
+        const isOff = agentData.offByCadence === true;
+        const isPaused = !cadenceMin && !isOff;
+        const passesPerHour = (isPaused || isOff) ? 0 : MINUTES_PER_HOUR / cadenceMin;
         const weeklyBurn = avg * passesPerHour * HOURS_PER_WEEK;
         totalWeeklyBurn += weeklyBurn;
 
-        rows.push({ name, avg, cadenceMin, isPaused, passesPerHour, weeklyBurn, cli: agentData.cli });
+        rows.push({ name, avg, cadenceMin, isPaused, isOff, passesPerHour, weeklyBurn, cli: agentData.cli });
       }
 
       if (totalWeeklyBurn === 0) return '';
@@ -1443,8 +1457,8 @@
 
       const architect = rows.find(r => r.name === 'architect');
       if (architect) {
-        if (architect.isPaused) {
-          tips.push(`<b>architect</b> is paused — no architect work happening. Consider enabling at 1h cadence.`);
+        if (architect.isPaused || architect.isOff) {
+          tips.push(`<b>architect</b> is ${architect.isPaused ? 'paused' : 'off'} — no architect work happening. Consider enabling at 1h cadence.`);
         } else if (architect.weeklyBurn > 0) {
           const architectPct = Math.round((architect.weeklyBurn / totalWeeklyBurn) * 100);
           if (architectPct < 15 && architect.cadenceMin > 15) {
@@ -1485,21 +1499,21 @@
         if (budget.PROJECTED_PCT > WARN_THRESHOLD) {
           tips.push(`Budget projected at <b>${budget.PROJECTED_PCT}%</b> — governor is auto-downgrading models to stay within budget.`);
         } else if (budget.PROJECTED_PCT < SAFE_THRESHOLD) {
-          const paused = rows.filter(r => r.isPaused);
-          if (paused.length > 0) {
-            tips.push(`Budget at ${budget.PROJECTED_PCT}% — headroom to enable paused agents: ${paused.map(r => `<b>${r.name}</b>`).join(', ')}.`);
+          const inactive = rows.filter(r => r.isPaused || r.isOff);
+          if (inactive.length > 0) {
+            tips.push(`Budget at ${budget.PROJECTED_PCT}% — headroom to enable inactive agents: ${inactive.map(r => `<b>${r.name}</b>`).join(', ')}.`);
           }
         }
       }
 
-      const barRows = rows.filter(r => r.weeklyBurn > 0 || !r.isPaused).map(r => {
+      const barRows = rows.filter(r => r.weeklyBurn > 0 || (!r.isPaused && !r.isOff)).map(r => {
         const pct = totalWeeklyBurn > 0 ? Math.round((r.weeklyBurn / totalWeeklyBurn) * 100) : 0;
         const barColor = r.name === 'scanner' ? 'var(--blue)' : r.name === 'reviewer' ? 'var(--green)' : r.name === 'architect' ? 'var(--purple)' : r.name === 'outreach' ? 'var(--cyan)' : 'var(--yellow)';
-        const label = r.isPaused ? 'paused' : `${fmtTokens(r.weeklyBurn)}/wk`;
+        const label = r.isPaused ? 'paused' : r.isOff ? 'off' : `${fmtTokens(r.weeklyBurn)}/wk`;
         return `<div class="advisor-bar-row">
           <span class="advisor-agent">${r.name}</span>
           <div class="advisor-bar-track"><div class="advisor-bar-fill" style="width:${Math.max(pct, 2)}%;background:${barColor}"></div></div>
-          <span class="advisor-pct">${r.isPaused ? '—' : pct + '%'}</span>
+          <span class="advisor-pct">${(r.isPaused || r.isOff) ? '—' : pct + '%'}</span>
           <span class="advisor-burn">${label}</span>
         </div>`;
       }).join('');
@@ -1978,7 +1992,7 @@ function burnAreaChart() {
         const nameEl = card.querySelector('.agent-name');
         if (!nameEl || !nameEl.textContent.includes(agent)) continue;
         const nowPaused = action === 'pause';
-        card.className = card.className.replace(/\b(paused|idle|working|stopped)\b/g, '').trim() + (nowPaused ? ' paused' : ' idle');
+        card.className = card.className.replace(/\b(paused|off|idle|working|stopped)\b/g, '').trim() + (nowPaused ? ' paused' : ' idle');
         const stateEl = card.querySelector('.agent-state');
         if (stateEl) { stateEl.className = `agent-state ${nowPaused ? 'paused' : 'idle'}`; stateEl.textContent = nowPaused ? 'paused' : 'idle'; }
         const fields = card.querySelectorAll('.agent-field');
@@ -2303,7 +2317,7 @@ function burnAreaChart() {
 
     function renderAgentCadences(c) {
       return `
-        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Minutes between kicks per governor mode. Set to 0 to pause the agent in that mode.</p>
+        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Minutes between kicks per governor mode. Set to 0 to turn the agent off in that mode.</p>
         <div class="config-field-row4">
           <div class="config-field"><label>Surge</label><input type="number" min="0" step="1" value="${cadenceToMin(c.surge)}" onchange="markDirty('cadences','surge',cadenceFromMin(this.value))"></div>
           <div class="config-field"><label>Busy</label><input type="number" min="0" step="1" value="${cadenceToMin(c.busy)}" onchange="markDirty('cadences','busy',cadenceFromMin(this.value))"></div>

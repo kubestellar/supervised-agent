@@ -359,7 +359,10 @@ function fetchStatus() {
             const pf = path.join(GOVERNOR_STATE_DIR, `paused_${a.name}`);
             const opf = path.join(GOVERNOR_STATE_DIR, `operator_paused_${a.name}`);
             const cpf = path.join(GOVERNOR_STATE_DIR, `cadence_paused_${a.name}`);
-            if (fs.existsSync(pf) || fs.existsSync(opf) || fs.existsSync(cpf)) { a.paused = true; a.cadence = 'paused'; }
+            const operatorPaused = fs.existsSync(pf) || fs.existsSync(opf);
+            const cadenceOff = fs.existsSync(cpf);
+            if (operatorPaused) { a.paused = true; a.cadence = 'paused'; }
+            else if (cadenceOff) { a.paused = true; a.cadence = 'off'; a.offByCadence = true; }
           } catch (_) {}
           // Pin state
           try {
@@ -783,7 +786,7 @@ app.post('/api/model/:agent/:model', (req, res) => {
 const GOVERNOR_CADENCE_DIR = '/var/run/kick-governor';
 
 // Cadence matrix (seconds) — mirrors kick-governor.sh defaults.
-// 0 means paused in that mode.
+// 0 means off in that mode (governor rule — agent doesn't run).
 const CADENCE_MATRIX = {
   scanner:    { surge: 900, busy: 900,  quiet: 900,  idle: 900  },
   reviewer:   { surge: 0,   busy: 3600, quiet: 2700, idle: 900  },
@@ -793,7 +796,7 @@ const CADENCE_MATRIX = {
 };
 
 const SEC_TO_LABEL = (s) => {
-  if (s <= 0) return 'paused';
+  if (s <= 0) return 'off';
   if (s < 60) return `${s}s`;
   if (s < 3600) return `${s / 60}min`;
   return `${s / 3600}h`;

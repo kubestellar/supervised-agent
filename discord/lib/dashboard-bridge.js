@@ -8,7 +8,7 @@ const SSE_RECONNECT_MAX_MS = 60000;
 const DASHBOARD_STALE_WARN_MS = 30000;
 const TOPIC_DEBOUNCE_MS = 5000;
 const TOPIC_AGENT_ORDER_DEFAULT = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
-const TOPIC_STATE_ICONS = { working: '🟢', idle: '⚪', paused: '🔴' };
+const TOPIC_STATE_ICONS = { working: '🟢', idle: '⚪', paused: '🔴', off: '⚫' };
 
 class DashboardBridge {
   constructor(config, sendMessage, sendEmbed, setTopic) {
@@ -125,6 +125,8 @@ class DashboardBridge {
           this.sendMessage(agentMessage(name, `Working${doing}`));
         } else if (agent.cadence === 'paused' && old.cadence !== 'paused') {
           this.sendMessage(agentMessage(name, 'Paused'));
+        } else if (agent.cadence === 'off' && old.cadence !== 'off') {
+          this.sendMessage(agentMessage(name, 'Off (cadence rule)'));
         }
       }
 
@@ -149,7 +151,7 @@ class DashboardBridge {
       const a = agentMap[name];
       if (!a) return null;
       const emoji = (AGENTS[name] || {}).emoji || '?';
-      const state = a.cadence === 'paused' ? 'paused' : (a.busy || 'idle');
+      const state = a.cadence === 'paused' ? 'paused' : a.cadence === 'off' ? 'off' : (a.busy || 'idle');
       const icon = TOPIC_STATE_ICONS[state] || TOPIC_STATE_ICONS.idle;
       return `${emoji}${icon}`;
     }).filter(Boolean);

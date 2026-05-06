@@ -774,7 +774,7 @@ for _agent in scanner reviewer architect outreach supervisor; do
     if [[ -f "$STATE_DIR/operator_resumed_${_agent}" ]]; then
       echo "on demand"
     else
-      echo "paused"
+      echo "off"
     fi
   else
     secs_to_label "$_secs"
