@@ -2311,17 +2311,33 @@ function burnAreaChart() {
     }
 
     const SECONDS_PER_MIN = 60;
-    function cadenceToMin(sec) { return Math.round((sec || 0) / SECONDS_PER_MIN); }
-    function cadenceFromMin(min) { return Math.round((parseFloat(min) || 0) * SECONDS_PER_MIN); }
+    const SECONDS_PER_HOUR = 3600;
+    function cadenceToHuman(sec) {
+      const s = sec || 0;
+      if (s === 0) return '0';
+      if (s >= SECONDS_PER_HOUR && s % SECONDS_PER_HOUR === 0) return `${s / SECONDS_PER_HOUR}h`;
+      return `${Math.round(s / SECONDS_PER_MIN)}m`;
+    }
+    function cadenceFromHuman(val) {
+      const str = String(val).trim().toLowerCase();
+      if (!str || str === '0') return 0;
+      const match = str.match(/^(\d+(?:\.\d+)?)\s*(h|m|s)?$/);
+      if (!match) return 0;
+      const num = parseFloat(match[1]);
+      const unit = match[2] || 'm';
+      if (unit === 'h') return Math.round(num * SECONDS_PER_HOUR);
+      if (unit === 's') return Math.round(num);
+      return Math.round(num * SECONDS_PER_MIN);
+    }
 
     function renderAgentCadences(c) {
       return `
-        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Minutes between kicks per governor mode. Set to 0 to turn the agent off in that mode.</p>
+        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Time between kicks per governor mode. Use <b>m</b> (minutes) or <b>h</b> (hours), e.g. <code>30m</code>, <code>2h</code>. Set to <code>0</code> to turn the agent off in that mode.</p>
         <div class="config-field-row4">
-          <div class="config-field"><label>Surge</label><input type="number" min="0" step="1" value="${cadenceToMin(c.surge)}" onchange="markDirty('cadences','surge',cadenceFromMin(this.value))"></div>
-          <div class="config-field"><label>Busy</label><input type="number" min="0" step="1" value="${cadenceToMin(c.busy)}" onchange="markDirty('cadences','busy',cadenceFromMin(this.value))"></div>
-          <div class="config-field"><label>Quiet</label><input type="number" min="0" step="1" value="${cadenceToMin(c.quiet)}" onchange="markDirty('cadences','quiet',cadenceFromMin(this.value))"></div>
-          <div class="config-field"><label>Idle</label><input type="number" min="0" step="1" value="${cadenceToMin(c.idle)}" onchange="markDirty('cadences','idle',cadenceFromMin(this.value))"></div>
+          <div class="config-field"><label>Surge</label><input type="text" value="${cadenceToHuman(c.surge)}" onchange="markDirty('cadences','surge',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
+          <div class="config-field"><label>Busy</label><input type="text" value="${cadenceToHuman(c.busy)}" onchange="markDirty('cadences','busy',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
+          <div class="config-field"><label>Quiet</label><input type="text" value="${cadenceToHuman(c.quiet)}" onchange="markDirty('cadences','quiet',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
+          <div class="config-field"><label>Idle</label><input type="text" value="${cadenceToHuman(c.idle)}" onchange="markDirty('cadences','idle',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
         </div>`;
     }
 
