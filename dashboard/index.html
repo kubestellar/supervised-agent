@@ -51,6 +51,198 @@
     @media (max-width: 800px) { body.deck-mode .agents { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 600px) { body.deck-mode .agents { grid-template-columns: 1fr; } }
 
+    /* ── OpenClaw mode ── */
+    body.openclaw-mode {
+      --bg: #f8f9fa; --surface: #ffffff; --border: #e5e7eb;
+      --text: #1a1a2e; --muted: #6b7280; --green: #16a34a;
+      --yellow: #ca8a04; --red: #dc2626; --blue: #2563eb;
+      --cyan: #0891b2; --purple: #7c3aed;
+      --oc-accent: #dc2626; --oc-accent-light: rgba(220,38,38,0.08);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg); color: var(--text);
+      padding: 0; margin: 0;
+    }
+    body.openclaw-mode .connection { display: none; }
+    body.openclaw-mode .gh-rate-alert { border-radius: 8px; }
+
+    /* OpenClaw sidebar */
+    .oc-sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0; width: 200px;
+      background: #ffffff; border-right: 1px solid #e5e7eb;
+      display: flex; flex-direction: column; padding: 0;
+      z-index: 100; overflow-y: auto;
+    }
+    .oc-sidebar-logo {
+      display: flex; align-items: center; gap: 10px;
+      padding: 20px 16px 16px; border-bottom: 1px solid #e5e7eb;
+    }
+    .oc-logo-icon { font-size: 1.6rem; }
+    .oc-logo-title { font-size: 0.95rem; font-weight: 800; letter-spacing: 1px; color: #1a1a2e; }
+    .oc-logo-sub { font-size: 0.55rem; color: #6b7280; letter-spacing: 0.5px; text-transform: uppercase; }
+    .oc-nav-group { padding: 8px 0; }
+    .oc-nav-label {
+      font-size: 0.6rem; font-weight: 600; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 8px 16px 4px; user-select: none;
+    }
+    .oc-nav-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 16px; font-size: 0.82rem; color: #374151;
+      cursor: pointer; text-decoration: none; border-radius: 0;
+      transition: background 0.15s, color 0.15s;
+    }
+    .oc-nav-item:hover { background: #f3f4f6; color: #111827; }
+    .oc-nav-item.active {
+      background: #fef2f2; color: #dc2626; font-weight: 600;
+      border-left: 3px solid #dc2626; padding-left: 13px;
+    }
+    .oc-sidebar-footer {
+      padding: 12px 16px; border-top: 1px solid #e5e7eb;
+      margin-top: auto;
+    }
+    .oc-sidebar-footer .layout-toggle {
+      width: 100%; text-align: center;
+      background: #f9fafb; border: 1px solid #e5e7eb;
+      color: #6b7280; font-size: 0.72rem; padding: 6px;
+      border-radius: 6px; cursor: pointer;
+    }
+    .oc-sidebar-footer .layout-toggle:hover { background: #f3f4f6; color: #111827; }
+
+    /* OpenClaw top bar */
+    .oc-topbar {
+      position: fixed; top: 0; left: 200px; right: 0; height: 48px;
+      background: #ffffff; border-bottom: 1px solid #e5e7eb;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px; z-index: 99;
+    }
+    .oc-topbar-left { font-size: 0.85rem; color: #6b7280; }
+    .oc-topbar-right { display: flex; align-items: center; gap: 14px; }
+    .oc-health-badge {
+      font-size: 0.78rem; font-weight: 600; color: #16a34a;
+      background: #f0fdf4; border: 1px solid #bbf7d0;
+      padding: 4px 12px; border-radius: 20px;
+    }
+    .oc-topbar-ts { font-size: 0.75rem; color: #6b7280; }
+    .oc-topbar .git-version { color: #9ca3af; }
+    .oc-topbar .widget-dl {
+      font-size: 0.72rem; color: #dc2626; border-color: #dc2626;
+      padding: 3px 10px; border-radius: 6px;
+    }
+    .oc-topbar .widget-dl:hover { background: #dc2626; color: #fff; }
+
+    /* OpenClaw main content area */
+    body.openclaw-mode > .governor,
+    body.openclaw-mode > .token-usage,
+    body.openclaw-mode > .repos,
+    body.openclaw-mode > div:has(> .beads),
+    body.openclaw-mode > .agents,
+    body.openclaw-mode > .gh-rate-alert {
+      margin-left: 200px; padding-top: 0;
+    }
+    body.openclaw-mode {
+      padding-left: 216px; padding-top: 64px; padding-right: 16px; padding-bottom: 24px;
+    }
+
+    /* OpenClaw card overrides */
+    body.openclaw-mode .agent-card {
+      background: #ffffff; border: 1px solid #e5e7eb;
+      border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      transition: box-shadow 0.2s;
+    }
+    body.openclaw-mode .agent-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    body.openclaw-mode .agent-card.working { border-color: #16a34a; }
+    body.openclaw-mode .agent-card.stopped { border-color: #dc2626; }
+    body.openclaw-mode .agent-card.paused { border-color: #dc2626; opacity: 0.8; }
+    body.openclaw-mode .agent-card.off { border-color: #d1d5db; opacity: 0.7; }
+
+    /* OpenClaw agents grid */
+    body.openclaw-mode .agents {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;
+    }
+
+    /* OpenClaw surface panels */
+    body.openclaw-mode .governor,
+    body.openclaw-mode .token-panel {
+      background: #ffffff; border: 1px solid #e5e7eb;
+      border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    body.openclaw-mode .repo-card {
+      background: #ffffff; border: 1px solid #e5e7eb;
+      border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    /* OpenClaw typography */
+    body.openclaw-mode h1, body.openclaw-mode h2,
+    body.openclaw-mode .gov-title, body.openclaw-mode .token-title,
+    body.openclaw-mode .agent-name { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body.openclaw-mode .doing { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+    /* OpenClaw button overrides */
+    body.openclaw-mode .btn { background: #f9fafb; border-color: #e5e7eb; color: #374151; }
+    body.openclaw-mode .btn:hover { background: #f3f4f6; border-color: #d1d5db; }
+    body.openclaw-mode .terminal-link { border-color: #dc2626; color: #dc2626; }
+    body.openclaw-mode .terminal-link:hover { background: #dc2626; color: #fff; }
+    body.openclaw-mode .restart-btn { border-color: #ca8a04; color: #ca8a04; }
+    body.openclaw-mode .restart-btn:hover { background: #ca8a04; color: #fff; }
+    body.openclaw-mode .btn-toggle.running { background: #f0fdf4; border-color: #16a34a; color: #16a34a; }
+    body.openclaw-mode .btn-toggle.paused { background: #fef2f2; border-color: #dc2626; color: #dc2626; }
+
+    /* OpenClaw status badges */
+    body.openclaw-mode .status-badge.blocked { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+    body.openclaw-mode .status-badge.done { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+    body.openclaw-mode .pause-badge { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+
+    /* OpenClaw governor gauge */
+    body.openclaw-mode .temp-gauge-track { border: 1px solid #e5e7eb; }
+    body.openclaw-mode .temp-gauge-needle { background: #1a1a2e; box-shadow: 0 0 6px rgba(26,26,46,0.4); }
+
+    /* OpenClaw config modal */
+    body.openclaw-mode .config-overlay { background: rgba(0,0,0,0.3); }
+    body.openclaw-mode .config-modal {
+      background: #ffffff; border: 1px solid #e5e7eb;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    }
+    body.openclaw-mode .config-header { border-color: #e5e7eb; }
+    body.openclaw-mode .config-tabs { border-color: #e5e7eb; }
+    body.openclaw-mode .config-tab { color: #6b7280; }
+    body.openclaw-mode .config-tab.active { color: #dc2626; border-bottom-color: #dc2626; }
+    body.openclaw-mode .config-body { scrollbar-color: #d1d5db transparent; }
+    body.openclaw-mode .config-field input,
+    body.openclaw-mode .config-field select {
+      background: #f9fafb; border-color: #e5e7eb; color: #1a1a2e;
+    }
+    body.openclaw-mode .config-field input:focus,
+    body.openclaw-mode .config-field select:focus { border-color: #dc2626; }
+    body.openclaw-mode .config-footer { border-color: #e5e7eb; }
+    body.openclaw-mode .config-footer .config-save { background: #dc2626; }
+    body.openclaw-mode .config-footer .config-cancel { color: #6b7280; border-color: #e5e7eb; }
+
+    /* OpenClaw toast overrides */
+    body.openclaw-mode .toast.success { background: #16a34a; border-color: #15803d; }
+    body.openclaw-mode .toast.error { background: #dc2626; border-color: #b91c1c; }
+    body.openclaw-mode .toast.info { background: #2563eb; border-color: #1d4ed8; }
+
+    /* OpenClaw model chips */
+    body.openclaw-mode .model-chip.free { background: #f0fdf4; color: #16a34a; }
+    body.openclaw-mode .model-chip.paid { background: #fefce8; color: #ca8a04; }
+    body.openclaw-mode .model-chip.opus { background: #fef2f2; color: #dc2626; }
+    body.openclaw-mode .model-chip.sonnet { background: #fefce8; color: #ca8a04; }
+    body.openclaw-mode .model-chip.haiku { background: #eff6ff; color: #2563eb; }
+
+    /* OpenClaw kick prompt */
+    body.openclaw-mode .kick-prompt {
+      background: #f9fafb; border-color: #e5e7eb; color: #1a1a2e;
+    }
+    body.openclaw-mode .kick-prompt:focus { border-color: #dc2626; }
+    body.openclaw-mode .kick-prompt::placeholder { color: #9ca3af; }
+
+    /* OpenClaw responsive */
+    @media (max-width: 768px) {
+      .oc-sidebar { display: none !important; }
+      .oc-topbar { left: 0; }
+      body.openclaw-mode { padding-left: 16px; }
+    }
+
     /* Agent cards */
     .agents { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 24px; }
     .agent-card {
@@ -732,6 +924,51 @@
 <div class="gh-auth-alert" id="gh-auth-alert">GitHub CLI authentication failed (401). Agents cannot use <code>gh</code> commands. Run <code>gh auth login</code> on the dev server to fix.</div>
   <div class="gh-rate-alert" id="gh-rate-alert"></div>
 
+  <!-- OpenClaw sidebar (hidden by default) -->
+  <nav id="oc-sidebar" class="oc-sidebar" style="display:none">
+    <div class="oc-sidebar-logo">
+      <span class="oc-logo-icon">🐝</span>
+      <div>
+        <div class="oc-logo-title">HIVE</div>
+        <div class="oc-logo-sub">GATEWAY DASHBOARD</div>
+      </div>
+    </div>
+    <div class="oc-nav-group">
+      <div class="oc-nav-label">Control</div>
+      <a class="oc-nav-item active" data-section="governor" onclick="ocNavigate('governor')">📊 Governor</a>
+      <a class="oc-nav-item" data-section="token-panel" onclick="ocNavigate('token-panel')">🪙 Tokens</a>
+    </div>
+    <div class="oc-nav-group">
+      <div class="oc-nav-label">Agents</div>
+      <a class="oc-nav-item" data-section="agents" onclick="ocNavigate('agents')">👁 Overview</a>
+    </div>
+    <div class="oc-nav-group">
+      <div class="oc-nav-label">Resources</div>
+      <a class="oc-nav-item" data-section="repos" onclick="ocNavigate('repos')">📦 Repos</a>
+      <a class="oc-nav-item" data-section="beads" onclick="ocNavigate('beads')">🔮 Beads</a>
+    </div>
+    <div class="oc-nav-group" style="margin-top:auto">
+      <div class="oc-nav-label">Settings</div>
+      <a class="oc-nav-item" onclick="openConfigDialog('global')">⚙️ Config</a>
+    </div>
+    <div class="oc-sidebar-footer">
+      <button class="layout-toggle" onclick="toggleLayout()" title="Switch layout">☰ Classic</button>
+    </div>
+  </nav>
+
+  <!-- OpenClaw top bar (hidden by default) -->
+  <header id="oc-topbar" class="oc-topbar" style="display:none">
+    <div class="oc-topbar-left">
+      <span id="oc-project-name"></span>
+    </div>
+    <div class="oc-topbar-right">
+      <span class="oc-health-badge" id="oc-health">● Health OK</span>
+      <span class="oc-topbar-ts" id="oc-ts"></span>
+      <span id="oc-git-version" class="git-version"></span>
+      <a href="/api/widget" class="widget-dl" title="Download Übersicht widget">⬇ Widget</a>
+    </div>
+  </header>
+
   <div class="connection live" id="conn">
     <span class="dot-live">●</span> live
   </div>
@@ -759,22 +996,44 @@
   <div class="agents" id="agents"></div>
 
   <script>
-    // ── Layout mode (Classic / Deck) ──
+    // ── Layout mode (Classic / Deck / OpenClaw) ──
     const LAYOUT_KEY = 'hive-layout-mode';
+    const LAYOUT_MODES = ['classic', 'deck', 'openclaw'];
+    const LAYOUT_LABELS = { classic: '☰ Classic', deck: '▥ Deck', openclaw: '🦞 OpenClaw' };
     function getLayout() { return localStorage.getItem(LAYOUT_KEY) || 'classic'; }
     function setLayout(mode) { localStorage.setItem(LAYOUT_KEY, mode); }
     function applyLayout(mode) {
       document.body.classList.toggle('deck-mode', mode === 'deck');
+      document.body.classList.toggle('openclaw-mode', mode === 'openclaw');
       const btn = document.getElementById('layout-toggle');
       if (btn) {
-        btn.textContent = mode === 'deck' ? '▥ Deck' : '☰ Classic';
-        btn.classList.toggle('active', mode === 'deck');
+        btn.textContent = LAYOUT_LABELS[mode] || LAYOUT_LABELS.classic;
+        btn.classList.toggle('active', mode !== 'classic');
       }
+      // Show/hide OpenClaw sidebar
+      const sidebar = document.getElementById('oc-sidebar');
+      if (sidebar) sidebar.style.display = mode === 'openclaw' ? 'flex' : 'none';
+      // Show/hide classic header
+      const h1 = document.querySelector('body > h1');
+      if (h1) h1.style.display = mode === 'openclaw' ? 'none' : 'flex';
+      // Show/hide OpenClaw top bar
+      const topbar = document.getElementById('oc-topbar');
+      if (topbar) topbar.style.display = mode === 'openclaw' ? 'flex' : 'none';
     }
     function toggleLayout() {
-      const next = getLayout() === 'classic' ? 'deck' : 'classic';
+      const current = getLayout();
+      const idx = LAYOUT_MODES.indexOf(current);
+      const next = LAYOUT_MODES[(idx + 1) % LAYOUT_MODES.length];
       setLayout(next);
       applyLayout(next);
+    }
+    function ocNavigate(section) {
+      const el = document.getElementById(section);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Update active sidebar item
+      document.querySelectorAll('.oc-nav-item').forEach(i => i.classList.remove('active'));
+      const active = document.querySelector(`.oc-nav-item[data-section="${section}"]`);
+      if (active) active.classList.add('active');
     }
     applyLayout(getLayout());
 
@@ -1950,12 +2209,33 @@ function burnAreaChart() {
     function render(data) {
       if (!data || data.error) return;
       const scrollY = window.scrollY;
-      document.getElementById('ts').textContent = new Date(data.timestamp).toLocaleDateString([], {month:'numeric',day:'numeric'}) + ' ' + new Date(data.timestamp).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
+      const tsStr = new Date(data.timestamp).toLocaleDateString([], {month:'numeric',day:'numeric'}) + ' ' + new Date(data.timestamp).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
+      document.getElementById('ts').textContent = tsStr;
+      const ocTs = document.getElementById('oc-ts');
+      if (ocTs) ocTs.textContent = tsStr;
       currentAgentMetrics = data.agentMetrics || {};
       window._healthData = data.health || {};
       window._tokensByAgent = (data.tokens || {}).byAgent || {};
       window._lastAgents = data.agents || [];
       window._lastBudget = data.budget || {};
+      // Update OpenClaw health badge
+      const ocHealth = document.getElementById('oc-health');
+      if (ocHealth) {
+        const h = data.health || {};
+        const ciOk = !h.ci || h.ci >= 70;
+        const anyFail = Object.values(h).some(v => v === false);
+        if (anyFail || (h.ci && h.ci < 70)) {
+          ocHealth.textContent = '● Issues';
+          ocHealth.style.color = '#dc2626';
+          ocHealth.style.background = '#fef2f2';
+          ocHealth.style.borderColor = '#fecaca';
+        } else {
+          ocHealth.textContent = '● Health OK';
+          ocHealth.style.color = '#16a34a';
+          ocHealth.style.background = '#f0fdf4';
+          ocHealth.style.borderColor = '#bbf7d0';
+        }
+      }
       renderGhRateLimits(data.ghRateLimits || {});
       if (!_dropdownOpen && !_configModalOpen) {
         applyPinOverrides(data.agents || []);
@@ -2124,10 +2404,12 @@ function burnAreaChart() {
         const res = await fetch('/api/version');
         const v = await res.json();
         const el = document.getElementById('git-version');
+        const ocEl = document.getElementById('oc-git-version');
         let html = `<a href="https://github.com/kubestellar/hive/commit/${v.hash}" target="_blank" style="color:inherit;text-decoration:none" title="${v.hash}">${v.short}</a>`;
         if (v.dirty) html += ' <span class="git-dirty">*</span>';
         if (v.behind > 0) html += ` <span class="git-behind">${v.behind} behind</span>`;
         el.innerHTML = html;
+        if (ocEl) ocEl.innerHTML = html;
       } catch (_) {}
     }
     fetchGitVersion();
@@ -2201,6 +2483,8 @@ function burnAreaChart() {
         el.textContent = "for " + cfg.primaryRepo;
         document.title = "🐝 Hive Dashboard for " + cfg.primaryRepo;
       }
+      const ocEl = document.getElementById("oc-project-name");
+      if (ocEl && cfg.primaryRepo) ocEl.textContent = cfg.primaryRepo;
       if (cfg.primaryRepo) window._primaryRepo = cfg.primaryRepo;
     }).catch(() => {});
 
