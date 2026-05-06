@@ -208,8 +208,12 @@ const API_COLLECTOR_INTERVAL_MS = 300000;
 setInterval(fetchGitHubCache, API_COLLECTOR_INTERVAL_MS);
 
 // Fetch agent summaries from ~/.hive/<agent>_status.txt on every status refresh cycle
+let _summaryInFlight = false;
 function fetchSummaries() {
+  if (_summaryInFlight) return;
+  _summaryInFlight = true;
   execFile(path.join(__dirname, 'agent-summaries.sh'), [], { timeout: 10000 }, (err, stdout) => {
+    _summaryInFlight = false;
     if (!err && stdout.trim()) {
       try {
         const d = JSON.parse(stdout.trim());
@@ -222,9 +226,13 @@ fetchSummaries();
 setInterval(fetchSummaries, REFRESH_MS);
 
 // Fetch live agent activity from Claude Code JSONL session files
+let _activityInFlight = false;
 function fetchActivity() {
+  if (_activityInFlight) return;
+  _activityInFlight = true;
   execFile('python3', [path.join(__dirname, 'agent-activity.py')],
     { timeout: 10000 }, (err, stdout) => {
+    _activityInFlight = false;
     if (!err && stdout.trim()) {
       try { activityCache = JSON.parse(stdout.trim()); } catch (_) {}
     }
@@ -289,10 +297,14 @@ setInterval(persistSnapshot, PERSIST_INTERVAL_MS);
 // Also persist on startup after first fetch
 setTimeout(persistSnapshot, 10000);
 
+let _fetchInFlight = false;
 function fetchStatus() {
   return new Promise((resolve) => {
+    if (_fetchInFlight) { resolve(statusCache); return; }
+    _fetchInFlight = true;
     const hiveEnv = { ...process.env, HIVE_TZ: process.env.HIVE_TZ || 'America/New_York' };
     execFile('/usr/local/bin/hive', ['status', '--json'], { timeout: 30000, env: hiveEnv }, (err, stdout, stderr) => {
+      _fetchInFlight = false;
       if (err) {
         console.error('hive status --json failed:', err.message, stderr ? 'stderr: ' + stderr.slice(0, 200) : '');
         resolve(statusCache); // return stale data
