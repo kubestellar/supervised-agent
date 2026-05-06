@@ -1435,8 +1435,21 @@ app.get('/api/config/governor', (_req, res) => {
     const rawLabels = govEnv.GOVERNOR_EXEMPT_LABELS || govEnv.EXEMPT_LABELS || DEFAULT_EXEMPT_LABELS;
     const labels = rawLabels.split(/[|,]/).filter(Boolean);
 
+    // Fall back to runtime budget_state if env var not set
+    let runtimeBudgetTokens = 0;
+    try {
+      const budgetFile = path.join(GOVERNOR_STATE_DIR, 'budget_state');
+      if (fs.existsSync(budgetFile)) {
+        const blines = fs.readFileSync(budgetFile, 'utf8').trim().split('\n');
+        for (const l of blines) {
+          const [k, v] = l.split('=');
+          if (k === 'TOTAL' && v) runtimeBudgetTokens = Number(v);
+        }
+      }
+    } catch (_) {}
+    const envTokens = parseInt(govEnv.BUDGET_TOTAL_TOKENS || '0', 10);
     const budget = {
-      totalTokens: parseInt(govEnv.BUDGET_TOTAL_TOKENS || '0', 10),
+      totalTokens: envTokens || runtimeBudgetTokens,
       periodDays: parseInt(govEnv.BUDGET_PERIOD_DAYS || '7', 10),
       criticalPct: parseInt(govEnv.BUDGET_CRITICAL_PCT || '90', 10),
     };
