@@ -154,7 +154,7 @@
     .oc-agent-detail-header .status-dot.stopped { background: #dc2626; }
     .oc-agent-detail-header .status-dot.off { background: #9ca3af; }
     .oc-detail-fields {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; margin-bottom: 16px;
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px 24px; margin-bottom: 16px;
     }
     .oc-detail-field { font-size: 0.82rem; }
     .oc-detail-field .label { color: #6b7280; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.3px; }
@@ -166,7 +166,7 @@
       background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
       margin-bottom: 12px; font-size: 0.72rem; flex-wrap: wrap;
     }
-    body.openclaw-mode.oc-agent-focused .oc-gov-strip { display: flex; }
+    body.openclaw-mode.oc-agent-focused #oc-gov-strip-outer { display: flex; }
     .oc-gov-strip .gov-metric { display: flex; flex-direction: column; gap: 1px; }
     .oc-gov-strip .gov-metric .gm-label { font-size: 0.6rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px; }
     .oc-gov-strip .gov-metric .gm-val { font-weight: 700; font-size: 0.8rem; }
@@ -174,14 +174,10 @@
     .oc-gov-strip .gov-metric .gm-val.mode-quiet { color: #2563eb; }
     .oc-gov-strip .gov-metric .gm-val.mode-busy { color: #ca8a04; }
     .oc-gov-strip .gov-metric .gm-val.mode-surge { color: #dc2626; }
-    .oc-detail-sparks {
-      display: flex; gap: 24px; margin-bottom: 16px; padding: 10px 14px;
-      background: #f0f4ff; border-radius: 8px; border: 1px solid #c7d2fe;
-    }
-    .oc-spark-stat { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-    .oc-spark-stat .spark-label { font-size: 0.65rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.3px; }
-    .oc-spark-stat .spark-row { display: flex; align-items: center; gap: 6px; }
-    .oc-spark-stat .spark-val { font-size: 1rem; font-weight: 700; }
+    .oc-gov-gauge { flex-basis: 100%; margin-top: 4px; }
+    .oc-gov-gauge .temp-gauge-track { height: 14px; }
+    .oc-gov-gauge .temp-gauge-labels { font-size: 0.55rem; }
+    .spark-row { display: flex; align-items: center; gap: 6px; }
     .oc-chat-prompt {
       display: flex; gap: 8px; align-items: flex-end;
       padding-top: 12px; border-top: 1px solid #e5e7eb;
@@ -231,7 +227,7 @@
       color: #374151; line-height: 1.5;
       padding: 14px; background: #f9fafb;
       border-radius: 8px; border: 1px solid #e5e7eb;
-      height: calc(1.5em * 40 + 28px); max-height: none; overflow-y: auto;
+      height: calc(1.5em * 20 + 28px); max-height: none; overflow-y: auto;
       resize: vertical;
       font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
       font-size: 0.78rem;
@@ -1152,6 +1148,9 @@
     .hive-chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
     .chat-sources { font-size: 0.6rem; color: var(--muted); margin-top: 4px; }
     .chat-sources span { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; margin-right: 3px; }
+    .chat-raw-details { margin-top: 6px; font-size: 0.7rem; }
+    .chat-raw-details summary { cursor: pointer; color: var(--muted); font-size: 0.65rem; }
+    .chat-raw-details pre { white-space: pre-wrap; word-break: break-all; font-size: 0.65rem; color: var(--muted); margin-top: 4px; max-height: 200px; overflow-y: auto; }
     @media (max-width: 500px) {
       .hive-chat-panel { width: calc(100vw - 32px); right: 16px; bottom: 72px; }
     }
@@ -1211,8 +1210,8 @@
         <span class="oc-tree-arrow">▼</span> <span style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Agents</span>
       </div>
       <div class="oc-tree-children" id="oc-agent-tree">
-        <a class="oc-nav-item" data-section="agents" onclick="ocNavigate('agents')">👁 Overview</a>
         <div id="oc-agent-nav"></div>
+        <a class="oc-nav-item" style="color:#6b7280;font-style:italic" onclick="openConfigDialog('agent')">+ add agent</a>
       </div>
     </div>
     <div class="oc-nav-group">
@@ -1266,6 +1265,7 @@
     <div class="beads" id="beads"></div>
   </div>
 
+  <div id="oc-gov-strip-outer" class="oc-gov-strip"></div>
   <div id="oc-agent-detail" class="oc-agent-detail"></div>
   <div class="agents" id="agents"></div>
 
@@ -1349,20 +1349,6 @@
         const y = detail.getBoundingClientRect().top + window.scrollY - OC_TOPBAR_HEIGHT;
         window.scrollTo({ top: y, behavior: 'smooth' });
       }
-    }
-
-    function ocRenderDetailSparklines() {
-      const actionableItems = (window._lastStatus?.repos || []).reduce((n, r) => n + (r.actionableIssues || []).length, 0);
-      const openPrItems = (window._lastStatus?.repos || []).reduce((n, r) => n + (r.openPrs || []).length, 0);
-      const mergeableItems = (window._lastStatus?.repos || []).reduce((n, r) => n + (r.openPrs || []).filter(p => p.mergeable).length, 0);
-      const aSpark = sparkSvg(historyData.map(s => s.actionableCount ?? 0), '#f85149');
-      const pSpark = sparkSvg(historyData.map(s => s.openPrCount ?? 0), '#bc8cff');
-      const mSpark = sparkSvg(historyData.map(s => s.mergeableCount ?? 0), '#3fb950');
-      return `<div class="oc-detail-sparks">
-        <div class="oc-spark-stat"><span class="spark-label">Actionable Issues</span><div class="spark-row"><span class="spark-val" style="color:#f85149">${actionableItems}</span>${aSpark}</div></div>
-        <div class="oc-spark-stat"><span class="spark-label">Open PRs</span><div class="spark-row"><span class="spark-val" style="color:#bc8cff">${openPrItems}</span>${pSpark}</div></div>
-        <div class="oc-spark-stat"><span class="spark-label">Mergeable</span><div class="spark-row"><span class="spark-val" style="color:#3fb950">${mergeableItems}</span>${mSpark}</div></div>
-      </div>`;
     }
 
     function ocFormatSummary(raw) {
@@ -1481,14 +1467,42 @@
       const govActionable = (window._lastStatus?.repos || []).reduce((n, r) => n + (r.actionableIssues || []).length, 0);
       const govPrs = (window._lastStatus?.repos || []).reduce((n, r) => n + (r.openPrs || []).length, 0);
 
-      detail.innerHTML = `
-        <div class="oc-gov-strip">
+      const govOuter = document.getElementById('oc-gov-strip-outer');
+      if (govOuter) {
+        const itm = window._lastStatus?.issueToMerge || {};
+        const itmMedian = itm.median_minutes || 0;
+        const MTTR_COLOR = '#d2a8ff';
+        const GOV_GAUGE_MAX = 30;
+        const gaugePct = Math.min(govActionable / GOV_GAUGE_MAX * 100, 100);
+        govOuter.innerHTML = `
           <div class="gov-metric"><span class="gm-label">timer</span><span class="gm-val" style="color:#16a34a">${gov.active !== false ? '● active' : '○ off'}</span></div>
           <div class="gov-metric"><span class="gm-label">mode</span><span class="gm-val ${govModeClass}">${gov.mode || '—'}</span></div>
           <div class="gov-metric"><span class="gm-label">actionable</span><span class="gm-val">${govActionable}</span></div>
           <div class="gov-metric"><span class="gm-label">PRs</span><span class="gm-val">${govPrs}</span></div>
+          <div class="gov-metric"><span class="gm-label">MTTR</span><span class="gm-val" style="color:${MTTR_COLOR}">${formatFixTime(itmMedian)}</span></div>
           <div class="gov-metric"><span class="gm-label">next run</span><span class="gm-val">${gov.nextRun || '—'}</span></div>
-        </div>
+          <div class="oc-gov-gauge">
+            <div class="temp-gauge-track">
+              <div class="temp-gauge-glow" style="width:100%"></div>
+              <div class="temp-gauge-needle" style="left:${gaugePct}%" data-val="${govActionable}"></div>
+            </div>
+            <div class="temp-gauge-labels">
+              <span class="tl-idle lbl-idle">idle</span>
+              <span class="tl-quiet lbl-quiet">quiet</span>
+              <span class="tl-busy lbl-busy">busy</span>
+              <span class="tl-surge lbl-surge">surge</span>
+            </div>
+          </div>
+        `;
+      }
+
+      const _ocSparkCounts = {
+        actionable: govActionable,
+        openPrs: govPrs,
+        mergeable: (window._lastStatus?.repos || []).reduce((n, r) => n + (r.openPrs || []).filter(p => p.mergeable).length, 0),
+      };
+
+      detail.innerHTML = `
         <div class="oc-agent-detail-header">
           <span class="status-dot ${dotCls}"></span>
           <span class="agent-name-big">${a.name}</span>
@@ -1507,10 +1521,14 @@
           <div class="oc-detail-field"><div class="label">Last Run</div><div class="value">${a.lastKick || '—'}</div></div>
           <div class="oc-detail-field"><div class="label">Next Run</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : (a.nextKick || '—')}</div></div>
           <div class="oc-detail-field"><div class="label">Tokens (24h)</div><div class="value">${a.tokens24h || '—'}</div></div>
+          <div class="oc-detail-field"><div class="label">Actionable</div><div class="value"><div class="spark-row"><span style="color:#f85149">${_ocSparkCounts.actionable}</span>${sparkSvg(historyData.map(s => s.actionableCount ?? 0), '#f85149')}</div></div></div>
           <div class="oc-detail-field"><div class="label">Restarts</div><div class="value">${a.restarts ?? 0}</div></div>
           <div class="oc-detail-field"><div class="label">Avg/Pass</div><div class="value">${a.avgTokensPerPass || '—'}</div></div>
+          <div class="oc-detail-field"><div class="label">Open PRs</div><div class="value"><div class="spark-row"><span style="color:#bc8cff">${_ocSparkCounts.openPrs}</span>${sparkSvg(historyData.map(s => s.openPrCount ?? 0), '#bc8cff')}</div></div></div>
+          <div class="oc-detail-field"><div class="label">Sessions</div><div class="value">${a.sessions ?? '—'}</div></div>
+          <div class="oc-detail-field"><div class="label">Messages</div><div class="value">${a.messages ?? '—'}</div></div>
+          <div class="oc-detail-field"><div class="label">Mergeable</div><div class="value"><div class="spark-row"><span style="color:#3fb950">${_ocSparkCounts.mergeable}</span>${sparkSvg(historyData.map(s => s.mergeableCount ?? 0), '#3fb950')}</div></div></div>
         </div>
-        ${ocRenderDetailSparklines()}
         <div class="oc-detail-summary-wrap">
           <div class="oc-detail-summary" id="oc-summary-scroll">${a.liveSummary ? ocFormatSummary(a.liveSummary) : '<span style="color:#9ca3af">No activity summary</span>'}</div>
           <button class="oc-summary-follow-btn" id="oc-summary-follow" title="Follow new output" onclick="ocSummaryResumeTail()">⬇</button>
@@ -1563,6 +1581,14 @@
       } catch (e) { showToast('Kick failed: ' + e.message, 'error'); }
     }
 
+    const AGENT_DESCRIPTIONS = {
+      supervisor: 'Orchestrates all agents — runs periodic sweeps, enforces cadence, monitors health, and coordinates cross-agent handoffs',
+      scanner: 'Triages GitHub issues and PRs — dispatches fix agents, enforces SLA, manages the beads work ledger',
+      reviewer: 'Post-merge quality gate — monitors CI health, code coverage, GA4 errors, and produces adoption digests',
+      architect: 'Designs RFCs for cross-cutting changes — produces phase plans that scanner implements',
+      outreach: 'Drives CNCF ecosystem engagement — ADOPTERS outreach, ACMM badges, community PRs',
+    };
+
     function ocUpdateSidebarAgents() {
       const nav = document.getElementById('oc-agent-nav');
       if (!nav) return;
@@ -1574,7 +1600,8 @@
         const isRunning = a.busy === 'working' && !isPaused && !isOff && !isStopped;
         const dotCls = isStopped ? 'stopped' : isPaused ? 'paused' : isOff ? 'off' : isRunning ? 'running' : 'idle';
         const isActive = _ocSelectedAgent === a.name ? ' active' : '';
-        return `<a class="oc-nav-item${isActive}" data-agent-nav="${a.name}" onclick="ocSelectAgent('${a.name}')"><span class="oc-agent-dot ${dotCls}"></span> ${a.name}</a>`;
+        const agentDesc = AGENT_DESCRIPTIONS[a.name] || '';
+        return `<a class="oc-nav-item${isActive}" data-agent-nav="${a.name}" onclick="ocSelectAgent('${a.name}')" title="${agentDesc}"><span class="oc-agent-dot ${dotCls}"></span> ${a.name}</a>`;
       }).join('');
       if (nav.innerHTML !== html) nav.innerHTML = html;
     }
@@ -2769,10 +2796,12 @@ function burnAreaChart() {
     function render(data) {
       if (!data || data.error) return;
       const scrollY = window.scrollY;
-      const tsStr = new Date(data.timestamp).toLocaleDateString([], {month:'numeric',day:'numeric'}) + ' ' + new Date(data.timestamp).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
-      document.getElementById('ts').textContent = tsStr;
+      const tsDt = new Date(data.timestamp);
+      const tsStr = tsDt.toLocaleDateString([], {month:'numeric',day:'numeric'}) + ' ' + tsDt.toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
+      const tzAbbr = tsDt.toLocaleTimeString([], {timeZoneName:'short'}).split(' ').pop();
+      document.getElementById('ts').textContent = tsStr + ' ' + tzAbbr;
       const ocTs = document.getElementById('oc-ts');
-      if (ocTs) ocTs.textContent = tsStr;
+      if (ocTs) ocTs.textContent = tsStr + ' ' + tzAbbr;
       currentAgentMetrics = data.agentMetrics || {};
       window._healthData = data.health || {};
       window._tokensByAgent = (data.tokens || {}).byAgent || {};
@@ -3632,7 +3661,7 @@ function burnAreaChart() {
       chatSend.disabled = true;
       chatInput.value = '';
       chatAddMsg(esc(q), 'user');
-      const thinking = chatAddMsg('Searching hive data…', 'thinking');
+      const thinking = chatAddMsg('Thinking…', 'thinking');
       try {
         const resp = await fetch('/api/chat', {
           method: 'POST',
@@ -3644,7 +3673,11 @@ function burnAreaChart() {
         if (data.error) {
           chatAddMsg('Error: ' + esc(data.error), 'system');
         } else {
-          let html = (data.answer || 'No results found.').replace(/\n/g, '<br>');
+          let html = esc(data.answer || 'No results found.').replace(/\n/g, '<br>');
+          if (data.raw) {
+            const rawId = 'chat-raw-' + Date.now();
+            html += `<details class="chat-raw-details"><summary>Search data</summary><pre id="${rawId}">${esc(data.raw)}</pre></details>`;
+          }
           if (data.sources && data.sources.length) {
             html += '<div class="chat-sources">Sources: ' + data.sources.map(s => '<span>' + esc(s) + '</span>').join('') + '</div>';
           }

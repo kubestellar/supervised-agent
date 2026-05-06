@@ -1711,7 +1711,10 @@ function formatChatResponse(query, parsed, beadResults, statusResults, dashResul
   return { answer: sections.join('\n\n'), sources };
 }
 
-app.post('/api/chat', (req, res) => {
+const COPILOT_TIMEOUT_MS = 20000;
+const COPILOT_MAX_CONTEXT_CHARS = 3000;
+
+app.post('/api/chat', async (req, res) => {
   const query = (req.body.query || '').trim();
   if (!query) return res.json({ error: 'Empty query' });
   const MAX_QUERY_LEN = 200;
@@ -1722,8 +1725,37 @@ app.post('/api/chat', (req, res) => {
     const beadResults = searchBeads(parsed);
     const statusResults = searchStatus(parsed);
     const dashResults = searchDashboardState(parsed);
-    const response = formatChatResponse(query, parsed, beadResults, statusResults, dashResults);
-    res.json(response);
+    const rawResponse = formatChatResponse(query, parsed, beadResults, statusResults, dashResults);
+
+    const context = (rawResponse.answer || '').slice(0, COPILOT_MAX_CONTEXT_CHARS);
+    if (!context || context.startsWith('No results found')) {
+      return res.json(rawResponse);
+    }
+
+    const prompt = `You are a concise assistant for the KubeStellar Hive dashboard. Given the following search context about agents, issues, PRs, and beads, answer the user's question in 2-4 sentences. Be specific with numbers and names.\n\nContext:\n${context}\n\nUser question: ${query}`;
+
+    const aiAnswer = await new Promise((resolve) => {
+      const proc = spawn('copilot', ['-p', prompt], {
+        timeout: COPILOT_TIMEOUT_MS,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      let out = '';
+      let err = '';
+      proc.stdout.on('data', (d) => { out += d.toString(); });
+      proc.stderr.on('data', (d) => { err += d.toString(); });
+      proc.on('close', (code) => {
+        const text = out.trim() || err.trim();
+        resolve(code === 0 && text ? text : null);
+      });
+      proc.on('error', () => resolve(null));
+      proc.stdin.end();
+    });
+
+    if (aiAnswer) {
+      res.json({ answer: aiAnswer, sources: rawResponse.sources, raw: rawResponse.answer });
+    } else {
+      res.json(rawResponse);
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
