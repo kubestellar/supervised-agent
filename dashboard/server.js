@@ -790,7 +790,7 @@ const GOVERNOR_CADENCE_DIR = '/var/run/kick-governor';
 const CADENCE_MATRIX = {
   scanner:    { surge: 900, busy: 900,  quiet: 900,  idle: 900  },
   reviewer:   { surge: 0,   busy: 3600, quiet: 2700, idle: 900  },
-  architect:  { surge: 0,   busy: 0,    quiet: 0,    idle: 1800 },
+  architect:  { surge: 0,   busy: 0,    quiet: 0,    idle: 7200 },
   outreach:   { surge: 0,   busy: 0,    quiet: 0,    idle: 7200 },
   supervisor: { surge: 300, busy: 600,  quiet: 900,  idle: 1800 },
 };
