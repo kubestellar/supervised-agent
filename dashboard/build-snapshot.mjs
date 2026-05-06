@@ -65,6 +65,10 @@ async function main() {
   const connectIdx = originalScript.indexOf('function connect()');
   const renderFunctions = originalScript.slice(0, connectIdx);
 
+  const AUTO_REFRESH_SECONDS = 300;
+
+  const metaRefresh = `<meta http-equiv="refresh" content="${AUTO_REFRESH_SECONDS}">`;
+
   const staticCss = `
     /* Static snapshot overrides — hide all interactive elements */
     .connection { display: none !important; }
@@ -89,12 +93,14 @@ async function main() {
     .snapshot-banner .snap-icon { font-size: 1.2rem; }
     .snapshot-banner .snap-label { color: #58a6ff; font-weight: 600; }
     .snapshot-banner .snap-time { color: #e6edf3; }
+    .snapshot-banner .snap-refresh { color: #8b949e; margin-left: auto; font-size: 0.75rem; }
   `;
 
   const banner = `
   <div class="snapshot-banner">
     <span class="snap-icon">📸</span>
     <span><span class="snap-label">Read-only snapshot</span> &mdash; captured <span class="snap-time" id="snap-time"></span></span>
+    <span class="snap-refresh" id="snap-refresh"></span>
   </div>`;
 
   const initScript = `
@@ -135,6 +141,26 @@ async function main() {
         ' ' + d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
     }
 
+    // Auto-refresh countdown
+    (function() {
+      const REFRESH_SEC = ${AUTO_REFRESH_SECONDS};
+      const el = document.getElementById('snap-refresh');
+      if (!el) return;
+      let remaining = REFRESH_SEC;
+      function fmt(s) {
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return m > 0 ? m + 'm ' + (sec < 10 ? '0' : '') + sec + 's' : sec + 's';
+      }
+      function tick() {
+        el.textContent = '\\u{1F504} refreshes in ' + fmt(remaining);
+        if (remaining <= 0) return;
+        remaining--;
+        setTimeout(tick, 1000);
+      }
+      tick();
+    })();
+
     // Disable all interactive functions in snapshot mode
     function kick() {}
     function switchCli() {}
@@ -151,7 +177,7 @@ async function main() {
   const output = [
     headAndStyles,
     staticCss,
-    '\n  </style>\n</head>\n<body>',
+    '\n  </style>\n  ' + metaRefresh + '\n</head>\n<body>',
     banner,
     bodyContent,
     '  <script>',
