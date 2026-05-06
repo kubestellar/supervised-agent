@@ -1714,11 +1714,14 @@ function formatChatResponse(query, parsed, beadResults, statusResults, dashResul
 const COPILOT_TIMEOUT_MS = 20000;
 const COPILOT_MAX_CONTEXT_CHARS = 3000;
 
+const CHAT_HISTORY_LIMIT = 6;
+
 app.post('/api/chat', async (req, res) => {
   const query = (req.body.query || '').trim();
   if (!query) return res.json({ error: 'Empty query' });
   const MAX_QUERY_LEN = 200;
   if (query.length > MAX_QUERY_LEN) return res.json({ error: 'Query too long' });
+  const history = (req.body.history || []).slice(-CHAT_HISTORY_LIMIT);
 
   try {
     const parsed = parseQuery(query);
@@ -1728,11 +1731,19 @@ app.post('/api/chat', async (req, res) => {
     const rawResponse = formatChatResponse(query, parsed, beadResults, statusResults, dashResults);
 
     const context = (rawResponse.answer || '').slice(0, COPILOT_MAX_CONTEXT_CHARS);
-    if (!context || context.startsWith('No results found')) {
+
+    const historyText = history.map(h => `${h.role === 'user' ? 'User' : 'Assistant'}: ${(h.text || '').slice(0, 300)}`).join('\n');
+    const hasHistory = historyText.length > 0;
+    const hasContext = context && !context.startsWith('No results found');
+
+    if (!hasContext && !hasHistory) {
       return res.json(rawResponse);
     }
 
-    const prompt = `You are a concise assistant for the KubeStellar Hive dashboard. Given the following search context about agents, issues, PRs, and beads, answer the user's question in 2-4 sentences. Be specific with numbers and names.\n\nContext:\n${context}\n\nUser question: ${query}`;
+    let prompt = 'You are a concise assistant for the KubeStellar Hive dashboard. Answer in 2-4 sentences. Be specific with numbers, names, and URLs when available.';
+    if (hasHistory) prompt += `\n\nConversation so far:\n${historyText}`;
+    if (hasContext) prompt += `\n\nSearch results:\n${context}`;
+    prompt += `\n\nUser: ${query}`;
 
     const aiAnswer = await new Promise((resolve) => {
       const proc = spawn('copilot', ['-p', prompt], {

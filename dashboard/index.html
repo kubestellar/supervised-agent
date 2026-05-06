@@ -3652,6 +3652,8 @@ function burnAreaChart() {
     const chatInput = document.getElementById('hiveChatInput');
     const chatSend = document.getElementById('hiveChatSend');
     let chatBusy = false;
+    const CHAT_CONTEXT_LIMIT = 6;
+    let chatContext = [];
 
     chatFab.onclick = () => {
       const isOpen = chatPanel.classList.toggle('open');
@@ -3676,19 +3678,24 @@ function burnAreaChart() {
       chatSend.disabled = true;
       chatInput.value = '';
       chatAddMsg(esc(q), 'user');
+      chatContext.push({ role: 'user', text: q });
+      if (chatContext.length > CHAT_CONTEXT_LIMIT) chatContext = chatContext.slice(-CHAT_CONTEXT_LIMIT);
       const thinking = chatAddMsg('Thinking…', 'thinking');
       try {
         const resp = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q }),
+          body: JSON.stringify({ query: q, history: chatContext.slice(0, -1) }),
         });
         const data = await resp.json();
         thinking.remove();
         if (data.error) {
           chatAddMsg('Error: ' + esc(data.error), 'system');
         } else {
-          let html = esc(data.answer || 'No results found.').replace(/\n/g, '<br>');
+          const answer = data.answer || 'No results found.';
+          chatContext.push({ role: 'assistant', text: answer });
+          if (chatContext.length > CHAT_CONTEXT_LIMIT) chatContext = chatContext.slice(-CHAT_CONTEXT_LIMIT);
+          let html = esc(answer).replace(/\n/g, '<br>');
           if (data.raw) {
             const rawId = 'chat-raw-' + Date.now();
             html += `<details class="chat-raw-details"><summary>Search data</summary><pre id="${rawId}">${esc(data.raw)}</pre></details>`;
