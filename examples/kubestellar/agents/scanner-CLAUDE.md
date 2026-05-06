@@ -166,6 +166,19 @@ Scanner owns ONLY: ${PROJECT_ORG} GitHub issues and PRs (triage, bug fixes, CI h
 6. **Merge sequence:** merge one → wait for next PR's CI to re-trigger and pass → merge next. Never batch-merge.
 7. **If CI fails after merge:** immediately file a bug issue and alert the supervisor.
 
+### Netlify Deploy Preview Failures — Self-Heal Protocol
+
+When a PR has failing Netlify checks (`netlify/kubestellar-docs/deploy-preview`, `Header rules`, `Redirect rules`, `Pages changed`):
+
+1. **Read PR comments** for a comment from the `netlify-error-reporter` workflow. It posts the Netlify error message automatically.
+2. **Diagnose from the error message**:
+   - **Submodule/gitlink error** (e.g., "No url found for submodule path 'worktrees/X'"): a stale git worktree was accidentally committed as a submodule reference. Fix: remove the offending path from the branch's git tree via the GitHub Git API — create a new tree excluding the bad entry, create a commit with that tree, update the branch ref.
+   - **Build command failure** (e.g., "Build script returned non-zero exit code", Hugo/mkdocs errors): likely a syntax error in docs content. Dispatch a fix agent to correct the file.
+   - **Dependency error** (e.g., "Module not found", "pip install failed"): check if `requirements.txt` or `package.json` changed. Dispatch a fix agent if it's a branch issue.
+   - **Infrastructure error** (e.g., "Build minutes exhausted", "Site not found", timeout with no code error): escalate to operator — this is not fixable from a PR.
+3. **After pushing a fix**, wait for Netlify to rebuild (next kick). Do NOT merge until the deploy preview passes.
+4. **If no `netlify-error-reporter` comment exists** and you cannot determine the cause, skip the PR and report it in your status output as "Netlify failure — awaiting error details."
+
 ### Claim Protocol — Bead Per Dispatch (MANDATORY)
 
 **NEVER dispatch a fix agent without first creating a tracking bead.** This prevents orphaned work and duplicate dispatches.
