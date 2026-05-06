@@ -31,6 +31,26 @@
     }
     .widget-dl:hover { background: var(--cyan); color: var(--bg); }
 
+    /* Layout toggle */
+    .layout-toggle { font-size: 0.7rem; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; background: var(--surface); transition: all 0.2s; margin-right: 8px; font-family: inherit; }
+    .layout-toggle:hover { border-color: var(--text); color: var(--text); }
+    .layout-toggle.active { border-color: var(--cyan); color: var(--cyan); }
+
+    /* Deck mode */
+    body.deck-mode .agents { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: start; gap: 8px; }
+    body.deck-mode .agent-card { border-top: 3px solid transparent; padding: 10px; }
+    body.deck-mode .agent-card[data-agent="scanner"]    { border-top-color: #58a6ff; }
+    body.deck-mode .agent-card[data-agent="reviewer"]   { border-top-color: #3fb950; }
+    body.deck-mode .agent-card[data-agent="architect"]  { border-top-color: #bc8cff; }
+    body.deck-mode .agent-card[data-agent="outreach"]   { border-top-color: #39d2c0; }
+    body.deck-mode .agent-card[data-agent="supervisor"] { border-top-color: #d29922; }
+    body.deck-mode .agent-name { font-size: 0.9rem; }
+    body.deck-mode .doing { min-height: 4em; font-size: 0.7rem; }
+    body.deck-mode .agent-actions { flex-direction: column; }
+    body.deck-mode .agent-field { font-size: 0.72rem; }
+    @media (max-width: 800px) { body.deck-mode .agents { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px) { body.deck-mode .agents { grid-template-columns: 1fr; } }
+
     /* Agent cards */
     .agents { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 24px; }
     .agent-card {
@@ -718,6 +738,7 @@
 
   <h1><span class="bee">🐝</span> KubeStellar Hive Dashboard&nbsp;<span id="project-name">for KubeStellar/Console</span> <span class="timestamp" id="ts"></span>
     <span class="git-version" id="git-version"></span>
+    <button class="layout-toggle" id="layout-toggle" onclick="toggleLayout()" title="Switch layout">☰ Classic</button>
     <a href="/api/widget" class="widget-dl" title="Download Übersicht widget">⬇ Widget</a>
   </h1>
 
@@ -738,6 +759,25 @@
   <div class="agents" id="agents"></div>
 
   <script>
+    // ── Layout mode (Classic / Deck) ──
+    const LAYOUT_KEY = 'hive-layout-mode';
+    function getLayout() { return localStorage.getItem(LAYOUT_KEY) || 'classic'; }
+    function setLayout(mode) { localStorage.setItem(LAYOUT_KEY, mode); }
+    function applyLayout(mode) {
+      document.body.classList.toggle('deck-mode', mode === 'deck');
+      const btn = document.getElementById('layout-toggle');
+      if (btn) {
+        btn.textContent = mode === 'deck' ? '▥ Deck' : '☰ Classic';
+        btn.classList.toggle('active', mode === 'deck');
+      }
+    }
+    function toggleLayout() {
+      const next = getLayout() === 'classic' ? 'deck' : 'classic';
+      setLayout(next);
+      applyLayout(next);
+    }
+    applyLayout(getLayout());
+
     // ── Sparkline helper ──
     let historyData = [];
     const SPARK_W = 80, SPARK_H = 20;
@@ -1080,7 +1120,7 @@
           summaryEl = `<div class="doing">${ageBadge}${esc(a.liveSummary)}</div>`;
         }
         const indEl = agentIndicators(a.name);
-        return `<div class="agent-card ${cls}">
+        return `<div class="agent-card ${cls}" data-agent="${a.name}">
           <span class="working-indicator"></span>
           <div class="agent-name"><span class="dot ${dotCls}"></span>${a.name} ${toggleBtn} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a> <button class="restart-btn" onclick="restartAgent('${a.name}')" title="Kill tmux session — supervisor will respawn with fresh context">↻ restart</button> <button class="config-gear" onclick="openConfigDialog('agent','${a.name}')" title="Configure ${a.name}">⚙️</button></div>
           <div class="agent-field"><span class="label">cli</span><span class="value">${cliChip(a.cli, a.pinnedBoth || a.pinnedCli, a.name)}${(a.pinnedBoth || a.pinnedCli) ? '' : ` <button class="pin-toggle" onclick="togglePin('${a.name}', 'cli', false)" title="Pin CLI — lock current backend">📌</button>`}</span></div>
