@@ -205,15 +205,26 @@
     @keyframes oc-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
     /* Agent detail summary — monospace, respect newlines */
+    .oc-detail-summary-wrap { position: relative; margin-bottom: 16px; }
     .oc-detail-summary {
       font-size: 0.82rem; color: #374151; line-height: 1.55;
-      margin-bottom: 16px; padding: 14px; background: #f9fafb;
+      padding: 14px; background: #f9fafb;
       border-radius: 8px; border: 1px solid #e5e7eb;
       min-height: 60px; max-height: 600px; overflow-y: auto;
       white-space: pre-wrap; word-break: break-word;
       font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
       font-size: 0.78rem;
     }
+    .oc-summary-follow-btn {
+      position: absolute; bottom: 10px; right: 10px;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(0,0,0,0.6); color: #fff; border: none;
+      cursor: pointer; font-size: 0.75rem; display: none;
+      align-items: center; justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: opacity 0.15s;
+    }
+    .oc-summary-follow-btn:hover { background: rgba(0,0,0,0.8); }
+    .oc-summary-follow-btn.visible { display: flex; }
 
     /* Hide non-agent sections when an agent is focused in OpenClaw */
     body.openclaw-mode.oc-agent-focused .governor,
@@ -371,7 +382,7 @@
     .value.idle { color: var(--muted); }
     .value.copilot { color: var(--cyan); }
     .value.claude { color: var(--purple); }
-    .doing { font-size: 0.75rem; color: var(--cyan); margin-top: 6px; word-break: break-word; white-space: normal; line-height: 1.5; min-height: 5.6em; width: 100%; }
+    .doing { font-size: 0.75rem; color: var(--cyan); margin-top: 6px; word-break: break-word; white-space: pre-wrap; line-height: 1.5; min-height: 5.6em; width: 100%; }
     .summary-age { display: inline-block; font-size: 0.6rem; font-style: normal; border-radius: 3px; padding: 1px 5px; margin-right: 5px; vertical-align: middle; white-space: nowrap; }
     .summary-age.age-recent { background: rgba(210,153,34,0.15); color: #d29922; border: 1px solid rgba(210,153,34,0.3); }
     .summary-age.age-stale  { background: rgba(248,81,73,0.15);  color: #f85149; border: 1px solid rgba(248,81,73,0.3); }
@@ -491,6 +502,20 @@
     .repo-issue-pill:hover { background: rgba(88,166,255,0.25); text-decoration: none; }
     .repo-issue-pill .pill-num { font-weight: 700; white-space: nowrap; }
     .repo-issue-pill .pill-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .repo-pr-pill {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 0.65rem; padding: 2px 6px; border-radius: 4px;
+      background: rgba(188,140,255,0.12); color: #bc8cff;
+      border: 1px solid rgba(188,140,255,0.25);
+      text-decoration: none; max-width: 100%;
+      transition: background 0.15s;
+    }
+    .repo-pr-pill:hover { background: rgba(188,140,255,0.25); text-decoration: none; }
+    .repo-pr-pill.mergeable { border-color: rgba(63,185,80,0.6); background: rgba(63,185,80,0.1); color: #3fb950; }
+    .repo-pr-pill.mergeable:hover { background: rgba(63,185,80,0.22); }
+    .repo-pr-pill .pill-num { font-weight: 700; white-space: nowrap; }
+    .repo-pr-pill .pill-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .repo-pr-pill .pill-merge-icon { font-size: 0.6rem; margin-left: 1px; }
 
     /* Sparklines */
     .sparkline { display: inline-block; vertical-align: middle; margin-left: 6px; flex-shrink: 0; }
@@ -1001,10 +1026,93 @@
       .config-body { padding: 14px; }
       .config-field-row, .config-field-row4 { grid-template-columns: 1fr; }
     }
+
+    /* Hive Chat Panel */
+    .hive-chat-fab {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9000;
+      width: 48px; height: 48px; border-radius: 50%;
+      background: var(--purple); color: #fff; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      transition: transform 0.15s, background 0.15s;
+    }
+    .hive-chat-fab:hover { transform: scale(1.1); background: #a371f7; }
+    .hive-chat-fab.has-unread::after {
+      content: ''; position: absolute; top: 2px; right: 2px;
+      width: 10px; height: 10px; border-radius: 50%; background: #f85149;
+    }
+    .hive-chat-panel {
+      position: fixed; bottom: 80px; right: 24px; z-index: 9001;
+      width: 420px; max-height: 600px; border-radius: 12px;
+      background: var(--bg); border: 1px solid var(--border);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      display: none; flex-direction: column; overflow: hidden;
+    }
+    .hive-chat-panel.open { display: flex; }
+    .hive-chat-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      background: var(--card); font-size: 0.8rem; font-weight: 600;
+    }
+    .hive-chat-header .chat-title { display: flex; align-items: center; gap: 6px; }
+    .hive-chat-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 4px; }
+    .hive-chat-close:hover { color: var(--text); }
+    .hive-chat-messages {
+      flex: 1; overflow-y: auto; padding: 12px 14px;
+      display: flex; flex-direction: column; gap: 10px;
+      min-height: 200px; max-height: 440px;
+    }
+    .chat-msg {
+      max-width: 88%; padding: 8px 12px; border-radius: 10px;
+      font-size: 0.75rem; line-height: 1.5; word-break: break-word; white-space: pre-wrap;
+    }
+    .chat-msg.user { align-self: flex-end; background: var(--purple); color: #fff; border-bottom-right-radius: 2px; }
+    .chat-msg.system { align-self: flex-start; background: var(--card); color: var(--text); border-bottom-left-radius: 2px; border: 1px solid var(--border); }
+    .chat-msg.system a { color: var(--cyan); }
+    .chat-msg.thinking { align-self: flex-start; background: var(--card); color: var(--muted); font-style: italic; border: 1px dashed var(--border); }
+    .hive-chat-input-row {
+      display: flex; gap: 8px; padding: 10px 14px;
+      border-top: 1px solid var(--border); background: var(--card);
+    }
+    .hive-chat-input {
+      flex: 1; background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 12px; font-size: 0.75rem; font-family: inherit;
+      outline: none; resize: none; min-height: 36px; max-height: 80px;
+    }
+    .hive-chat-input:focus { border-color: var(--purple); }
+    .hive-chat-send {
+      background: var(--purple); color: #fff; border: none; border-radius: 8px;
+      padding: 0 14px; cursor: pointer; font-size: 0.8rem; font-weight: 600;
+      transition: background 0.15s;
+    }
+    .hive-chat-send:hover { background: #a371f7; }
+    .hive-chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
+    .chat-sources { font-size: 0.6rem; color: var(--muted); margin-top: 4px; }
+    .chat-sources span { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; margin-right: 3px; }
+    @media (max-width: 500px) {
+      .hive-chat-panel { width: calc(100vw - 32px); right: 16px; bottom: 72px; }
+    }
   </style>
 </head>
 <body>
 <div id="toast-container"></div>
+
+<!-- Hive Chat FAB + Panel -->
+<button class="hive-chat-fab" id="hiveChatFab" title="Ask Hive">💬</button>
+<div class="hive-chat-panel" id="hiveChatPanel">
+  <div class="hive-chat-header">
+    <span class="chat-title">🐝 Hive Chat</span>
+    <button class="hive-chat-close" id="hiveChatClose">✕</button>
+  </div>
+  <div class="hive-chat-messages" id="hiveChatMessages">
+    <div class="chat-msg system">Ask me about agents, beads, PRs, issues, status, or anything in the hive. I search across all agent data to answer.</div>
+  </div>
+  <div class="hive-chat-input-row">
+    <textarea class="hive-chat-input" id="hiveChatInput" placeholder="Ask about agents, beads, PRs..." rows="1"></textarea>
+    <button class="hive-chat-send" id="hiveChatSend">Send</button>
+  </div>
+</div>
 <div id="config-overlay" class="config-overlay hidden">
   <div class="config-modal">
     <div class="config-header">
@@ -1183,6 +1291,9 @@
       return esc(raw);
     }
 
+    let _ocSummaryTailing = true;
+    let _ocSummaryScrollTop = null;
+
     function ocRenderAgentDetail() {
       const detail = document.getElementById('oc-agent-detail');
       if (!detail || !_ocSelectedAgent) return;
@@ -1203,6 +1314,11 @@
       const kickId = `oc-kick-${a.name}`;
       const prevInput = document.getElementById(kickId);
       const prevVal = prevInput ? prevInput.value : '';
+
+      const existingSummary = detail.querySelector('.oc-detail-summary');
+      if (existingSummary && !_ocSummaryTailing) {
+        _ocSummaryScrollTop = existingSummary.scrollTop;
+      }
 
       detail.innerHTML = `
         <div class="oc-agent-detail-header">
@@ -1226,12 +1342,41 @@
           <div class="oc-detail-field"><div class="label">Restarts</div><div class="value">${a.restarts ?? 0}</div></div>
           <div class="oc-detail-field"><div class="label">Avg/Pass</div><div class="value">${a.avgTokensPerPass || '—'}</div></div>
         </div>
-        <div class="oc-detail-summary">${a.liveSummary ? ocFormatSummary(a.liveSummary) : '<span style="color:#9ca3af">No activity summary</span>'}</div>
+        <div class="oc-detail-summary-wrap">
+          <div class="oc-detail-summary" id="oc-summary-scroll">${a.liveSummary ? ocFormatSummary(a.liveSummary) : '<span style="color:#9ca3af">No activity summary</span>'}</div>
+          <button class="oc-summary-follow-btn" id="oc-summary-follow" title="Follow new output" onclick="ocSummaryResumeTail()">⬇</button>
+        </div>
         <div class="oc-chat-prompt">
           <input type="text" class="oc-chat-input" id="${kickId}" placeholder="Send a message to ${a.name}..." value="${prevVal.replace(/"/g, '&quot;')}" onkeydown="if(event.key==='Enter'){ocSendKick('${a.name}')}" />
           <button class="oc-chat-send" onclick="ocSendKick('${a.name}')">Send</button>
         </div>
       `;
+
+      const summaryEl = document.getElementById('oc-summary-scroll');
+      const followBtn = document.getElementById('oc-summary-follow');
+      if (summaryEl) {
+        if (_ocSummaryTailing) {
+          summaryEl.scrollTop = summaryEl.scrollHeight;
+        } else if (_ocSummaryScrollTop !== null) {
+          summaryEl.scrollTop = _ocSummaryScrollTop;
+        }
+        summaryEl.addEventListener('scroll', () => {
+          const SCROLL_THRESHOLD = 40;
+          const atBottom = summaryEl.scrollHeight - summaryEl.scrollTop - summaryEl.clientHeight < SCROLL_THRESHOLD;
+          _ocSummaryTailing = atBottom;
+          if (followBtn) followBtn.classList.toggle('visible', !atBottom);
+        });
+        const atBottom = summaryEl.scrollHeight - summaryEl.scrollTop - summaryEl.clientHeight < 40;
+        if (followBtn && !atBottom && !_ocSummaryTailing) followBtn.classList.add('visible');
+      }
+    }
+
+    function ocSummaryResumeTail() {
+      _ocSummaryTailing = true;
+      const el = document.getElementById('oc-summary-scroll');
+      if (el) el.scrollTop = el.scrollHeight;
+      const btn = document.getElementById('oc-summary-follow');
+      if (btn) btn.classList.remove('visible');
     }
 
     async function ocSendKick(name) {
@@ -1809,11 +1954,18 @@
         const pSpark = sparkSvg(historyData.map(s => s.repos?.[r.name]?.prs ?? 0), '#bc8cff');
         const repoUrl = 'https://github.com/' + (r.full || r.name);
         const MAX_PILL_TITLE_LEN = 50;
-        const pills = (r.actionableIssues || []).map(i => {
+        const issuePills = (r.actionableIssues || []).map(i => {
           const title = i.title && i.title.length > MAX_PILL_TITLE_LEN ? i.title.slice(0, MAX_PILL_TITLE_LEN) + '…' : (i.title || '');
           return `<a class="repo-issue-pill" href="${esc(i.url)}" target="_blank" rel="noopener" title="${esc(i.title || '')}"><span class="pill-num">#${i.number}</span><span class="pill-title">${esc(title)}</span></a>`;
         }).join('');
-        const pillsHtml = pills ? `<div class="repo-issues">${pills}</div>` : '';
+        const prPills = (r.openPrs || []).map(p => {
+          const title = p.title && p.title.length > MAX_PILL_TITLE_LEN ? p.title.slice(0, MAX_PILL_TITLE_LEN) + '…' : (p.title || '');
+          const mergeIcon = p.mergeable ? '<span class="pill-merge-icon">✓</span>' : '';
+          const mergeClass = p.mergeable ? ' mergeable' : '';
+          return `<a class="repo-pr-pill${mergeClass}" href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc(p.title || '')}${p.mergeable ? ' (merge eligible)' : ''}"><span class="pill-num">#${p.number}</span><span class="pill-title">${esc(title)}</span>${mergeIcon}</a>`;
+        }).join('');
+        const allPills = issuePills + prPills;
+        const pillsHtml = allPills ? `<div class="repo-issues">${allPills}</div>` : '';
         return `
         <div class="repo-card">
           <div class="repo-name"><a href="${repoUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${r.full || r.name}</a></div>
@@ -3276,6 +3428,75 @@ function burnAreaChart() {
         _configState.dirty = {};
       }
     }
+
+    // --- Hive Chat ---
+    const CHAT_MAX_HISTORY = 50;
+    const chatFab = document.getElementById('hiveChatFab');
+    const chatPanel = document.getElementById('hiveChatPanel');
+    const chatClose = document.getElementById('hiveChatClose');
+    const chatMessages = document.getElementById('hiveChatMessages');
+    const chatInput = document.getElementById('hiveChatInput');
+    const chatSend = document.getElementById('hiveChatSend');
+    let chatBusy = false;
+
+    chatFab.onclick = () => {
+      const isOpen = chatPanel.classList.toggle('open');
+      if (isOpen) chatInput.focus();
+    };
+    chatClose.onclick = () => chatPanel.classList.remove('open');
+
+    function chatAddMsg(text, cls) {
+      const el = document.createElement('div');
+      el.className = 'chat-msg ' + cls;
+      el.innerHTML = text;
+      chatMessages.appendChild(el);
+      if (chatMessages.children.length > CHAT_MAX_HISTORY) chatMessages.removeChild(chatMessages.firstChild);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      return el;
+    }
+
+    async function chatSendQuery() {
+      const q = chatInput.value.trim();
+      if (!q || chatBusy) return;
+      chatBusy = true;
+      chatSend.disabled = true;
+      chatInput.value = '';
+      chatAddMsg(esc(q), 'user');
+      const thinking = chatAddMsg('Searching hive data…', 'thinking');
+      try {
+        const resp = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q }),
+        });
+        const data = await resp.json();
+        thinking.remove();
+        if (data.error) {
+          chatAddMsg('Error: ' + esc(data.error), 'system');
+        } else {
+          let html = (data.answer || 'No results found.').replace(/\n/g, '<br>');
+          if (data.sources && data.sources.length) {
+            html += '<div class="chat-sources">Sources: ' + data.sources.map(s => '<span>' + esc(s) + '</span>').join('') + '</div>';
+          }
+          chatAddMsg(html, 'system');
+        }
+      } catch (err) {
+        thinking.remove();
+        chatAddMsg('Network error: ' + esc(err.message), 'system');
+      }
+      chatBusy = false;
+      chatSend.disabled = false;
+      chatInput.focus();
+    }
+
+    chatSend.onclick = chatSendQuery;
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSendQuery(); }
+    });
+    chatInput.addEventListener('input', () => {
+      chatInput.style.height = 'auto';
+      chatInput.style.height = Math.min(chatInput.scrollHeight, 80) + 'px';
+    });
 
     connect();
   </script>
