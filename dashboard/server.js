@@ -1909,8 +1909,16 @@ app.get('/api/nous/status', (_req, res) => {
     }
   } catch (_) { /* ignore */ }
 
+  const scope = (campaign.campaign && campaign.campaign.scope) || 'governor';
+  const readPhaseState = (p) => {
+    const s = readJsonFile(p);
+    if (!s) return { phase: 'IDLE', iteration: 0 };
+    return { phase: s.phase || 'UNKNOWN', iteration: s.iteration || 0 };
+  };
+
   res.json({
     mode,
+    scope,
     campaign: campaign.campaign || {},
     activeExperiment,
     pending,
@@ -1919,6 +1927,10 @@ app.get('/api/nous/status', (_req, res) => {
     snapshotTarget: SNAPSHOT_COUNT_TARGET,
     hasRecommendations: !!recommendations,
     recommendations,
+    phases: {
+      governor: readPhaseState(path.join(NOUS_STATE_DIR, 'governor', 'state.json')),
+      repo: readPhaseState(path.join(NOUS_STATE_DIR, 'repo', 'state.json')),
+    },
   });
 });
 
@@ -2032,6 +2044,96 @@ app.put('/api/nous/mode', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// PUT /api/nous/scope — change experiment scope (governor | repo | both)
+const VALID_SCOPES = ['governor', 'repo', 'both'];
+app.put('/api/nous/scope', (req, res) => {
+  const { scope } = req.body;
+  if (!VALID_SCOPES.includes(scope)) {
+    return res.status(400).json({ error: `Invalid scope: ${scope}. Must be one of: ${VALID_SCOPES.join(', ')}` });
+  }
+
+  const campaign = readNousCampaign();
+  const previousScope = (campaign.campaign && campaign.campaign.scope) || 'governor';
+
+  try {
+    if (!campaign.campaign) campaign.campaign = {};
+    campaign.campaign.scope = scope;
+    if (yaml) {
+      fs.writeFileSync(NOUS_CAMPAIGN_PATH, yaml.dump(campaign, { lineWidth: 120 }));
+    } else {
+      return res.status(500).json({ error: 'js-yaml not available — cannot write campaign yaml' });
+    }
+    res.json({ ok: true, scope, previousScope });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/nous/phase — current Nous phase for each scope
+const NOUS_GOV_STATE = path.join(NOUS_STATE_DIR, 'governor', 'state.json');
+const NOUS_REPO_STATE = path.join(NOUS_STATE_DIR, 'repo', 'state.json');
+app.get('/api/nous/phase', (_req, res) => {
+  const readPhase = (p) => {
+    const s = readJsonFile(p);
+    if (!s) return { phase: 'IDLE', iteration: 0 };
+    return { phase: s.phase || 'UNKNOWN', iteration: s.iteration || 0 };
+  };
+  res.json({
+    governor: readPhase(NOUS_GOV_STATE),
+    repo: readPhase(NOUS_REPO_STATE),
+  });
+});
+
+// PUT /api/nous/gate-decision — gate posts pending decision here
+let _pendingGateDecision = null;
+let _gateResponseResolve = null;
+app.put('/api/nous/gate-decision', (req, res) => {
+  _pendingGateDecision = {
+    ...req.body,
+    received_at: new Date().toISOString(),
+  };
+  res.json({ ok: true });
+});
+
+// GET /api/nous/gate-pending — dashboard reads pending gate decision
+app.get('/api/nous/gate-pending', (_req, res) => {
+  if (!_pendingGateDecision) {
+    return res.status(404).json({ pending: false });
+  }
+  res.json({ pending: true, decision: _pendingGateDecision });
+});
+
+// POST /api/nous/gate-respond — operator approves/rejects gate decision
+app.post('/api/nous/gate-respond', (req, res) => {
+  const { decision } = req.body;
+  if (!['approve', 'reject', 'abort'].includes(decision)) {
+    return res.status(400).json({ error: 'decision must be approve, reject, or abort' });
+  }
+  _pendingGateDecision = null;
+  if (_gateResponseResolve) {
+    _gateResponseResolve(decision);
+    _gateResponseResolve = null;
+  }
+  res.json({ ok: true, decision });
+});
+
+// GET /api/nous/gate-response — gate script long-polls for operator decision
+const GATE_POLL_TIMEOUT_MS = 30000;
+app.get('/api/nous/gate-response', (req, res) => {
+  if (!_pendingGateDecision) {
+    return res.status(404).json({ decision: null });
+  }
+  const timeout = setTimeout(() => {
+    _gateResponseResolve = null;
+    res.json({ decision: null, timeout: true });
+  }, GATE_POLL_TIMEOUT_MS);
+
+  _gateResponseResolve = (decision) => {
+    clearTimeout(timeout);
+    res.json({ decision });
+  };
 });
 
 app.listen(PORT, () => {

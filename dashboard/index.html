@@ -1266,6 +1266,10 @@
       <div class="oc-tree-children">
         <div id="oc-agent-nav-strategy"></div>
         <a class="oc-nav-item" data-section="nous-section" onclick="ocNavigate('nous-section')">🧪 Strategy Lab</a>
+        <div id="nous-sidebar-config" style="padding:2px 8px 6px 24px;font-size:0.65rem;color:var(--muted);line-height:1.5;display:none">
+          <div><span id="nous-sb-scope" style="font-weight:600"></span> · <span id="nous-sb-mode"></span></div>
+          <div id="nous-sb-phase" style="opacity:0.8"></div>
+        </div>
       </div>
     </div>
     <div class="oc-nav-group">
@@ -2910,13 +2914,38 @@ function burnAreaChart() {
       const ledger = _nousCache.ledger || [];
       const principles = _nousCache.principles || [];
       const mode = s.mode || 'observe';
+      const scope = s.scope || 'governor';
+      const phases = s.phases || {};
 
       const modeColors = { observe: '#2563eb', suggest: '#d97706', evolve: '#16a34a' };
       const modeLabels = { observe: 'Observing', suggest: 'Suggesting', evolve: 'Evolving' };
       if (badge) {
-        badge.textContent = modeLabels[mode] || mode;
+        badge.textContent = `${modeLabels[mode] || mode} · ${scope}`;
         badge.style.background = modeColors[mode] || '#6b7280';
         badge.style.color = 'white';
+      }
+
+      // Update sidebar config
+      const sbConfig = document.getElementById('nous-sidebar-config');
+      const sbScope = document.getElementById('nous-sb-scope');
+      const sbMode = document.getElementById('nous-sb-mode');
+      const sbPhase = document.getElementById('nous-sb-phase');
+      if (sbConfig) {
+        sbConfig.style.display = '';
+        if (sbScope) sbScope.textContent = scope;
+        if (sbMode) { sbMode.textContent = mode; sbMode.style.color = modeColors[mode] || 'var(--muted)'; }
+        if (sbPhase) {
+          const parts = [];
+          if (scope === 'governor' || scope === 'both') {
+            const gp = (phases.governor || {}).phase || 'IDLE';
+            parts.push('gov:' + gp);
+          }
+          if (scope === 'repo' || scope === 'both') {
+            const rp = (phases.repo || {}).phase || 'IDLE';
+            parts.push('repo:' + rp);
+          }
+          sbPhase.textContent = parts.join(' · ');
+        }
       }
 
       let html = '';
@@ -2933,6 +2962,35 @@ function burnAreaChart() {
         html += `<button class="nous-mode-btn${active}" title="${titles[m]}" onclick="nousSetMode('${m}')">${m.charAt(0).toUpperCase() + m.slice(1)}</button>`;
       }
       html += '</div>';
+
+      // Scope toggle
+      html += '<div class="nous-mode-toggle" style="margin-bottom:14px">';
+      const scopeTitles = {
+        governor: 'Experiment with governor config (cadences, models, thresholds)',
+        repo: 'Experiment with repo code (always requires approval)',
+        both: 'Alternate between governor and repo experiments',
+      };
+      for (const sc of ['governor', 'repo', 'both']) {
+        const active = sc === scope ? ' active-suggest' : '';
+        html += `<button class="nous-mode-btn${active}" title="${scopeTitles[sc]}" onclick="nousSetScope('${sc}')" style="${sc === scope ? 'background:#7c3aed;color:white' : ''}">${sc.charAt(0).toUpperCase() + sc.slice(1)}</button>`;
+      }
+      html += '</div>';
+
+      // Phase progress per scope
+      const NOUS_PHASES = ['INIT', 'FRAMING', 'DESIGN', 'DESIGN_REVIEW', 'EXECUTING', 'ANALYSIS', 'FINDINGS_REVIEW', 'EXTRACTION'];
+      const NOUS_PHASE_COUNT = NOUS_PHASES.length;
+      const phaseScopes = scope === 'both' ? ['governor', 'repo'] : [scope];
+      for (const ps of phaseScopes) {
+        const phaseInfo = phases[ps] || { phase: 'IDLE', iteration: 0 };
+        if (phaseInfo.phase !== 'IDLE') {
+          const phaseIdx = NOUS_PHASES.indexOf(phaseInfo.phase);
+          const phasePct = phaseIdx >= 0 ? Math.round(((phaseIdx + 1) / NOUS_PHASE_COUNT) * 100) : 0;
+          html += `<div style="font-size:0.72rem;color:var(--muted);margin-bottom:8px">`;
+          html += `<strong>${ps}</strong>: ${phaseInfo.phase} (iteration ${phaseInfo.iteration})`;
+          html += `<div class="nous-progress"><div class="nous-progress-fill" style="width:${phasePct}%;background:#7c3aed"></div></div>`;
+          html += '</div>';
+        }
+      }
 
       // Stats row
       const snapPct = s.snapshotTarget ? Math.min(Math.round((s.snapshotCount / s.snapshotTarget) * 100), 100) : 0;
@@ -3071,6 +3129,17 @@ function burnAreaChart() {
         });
         fetchNousStatus();
       } catch (e) { showToast('Failed to change mode: ' + e.message, 'error'); }
+    }
+
+    async function nousSetScope(scope) {
+      try {
+        await fetch('/api/nous/scope', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope }),
+        });
+        fetchNousStatus();
+        showToast(`Scope set to: ${scope}`, 'success');
+      } catch (e) { showToast('Failed to change scope: ' + e.message, 'error'); }
     }
 
     async function nousApprove() {
