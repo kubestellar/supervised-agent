@@ -1257,6 +1257,53 @@ function deriveCli(launchCmd) {
   return 'claude';
 }
 
+const GH_WRAPPER_PATH = '/usr/local/bin/gh';
+let _ghWrapperRestrictions = null;
+let _ghWrapperMtime = 0;
+
+function parseGhWrapperRestrictions() {
+  try {
+    const stat = fs.statSync(GH_WRAPPER_PATH);
+    if (_ghWrapperRestrictions && stat.mtimeMs === _ghWrapperMtime) return _ghWrapperRestrictions;
+    const src = fs.readFileSync(GH_WRAPPER_PATH, 'utf8');
+    const rules = [];
+    if (/BLOCKED.*gh.*issue.*list/i.test(src)) rules.push({ cmd: 'gh issue list', reason: 'Use /var/run/hive-metrics/actionable.json', source: 'gh-wrapper' });
+    if (/BLOCKED.*gh.*pr.*list/i.test(src)) rules.push({ cmd: 'gh pr list', reason: 'Use /var/run/hive-metrics/actionable.json', source: 'gh-wrapper' });
+    if (/BLOCKED.*gh.*api.*issue.*listing/i.test(src)) rules.push({ cmd: 'gh api (issue/PR listing)', reason: 'Use /var/run/hive-metrics/actionable.json', source: 'gh-wrapper' });
+    if (/BLOCKED.*gh.*search/i.test(src)) rules.push({ cmd: 'gh search', reason: 'Enumeration disabled', source: 'gh-wrapper' });
+    _ghWrapperRestrictions = rules;
+    _ghWrapperMtime = stat.mtimeMs;
+    return rules;
+  } catch (_) { return []; }
+}
+
+function parsePolicyRestrictions(agentName) {
+  const rules = [];
+  try {
+    const policyPath = `${ENV_DIR}/${agentName}-CLAUDE.md`;
+    const src = fs.readFileSync(policyPath, 'utf8');
+    const lines = src.split('\n');
+    for (const line of lines) {
+      const trimmed = line.replace(/^\*+\s*/, '').trim();
+      if (!trimmed) continue;
+      if (/^(NEVER|DO NOT|MUST NOT|SHALL NOT)\b/i.test(trimmed) || /HARD RULE/i.test(trimmed)) {
+        const MAX_RULE_LEN = 200;
+        const text = trimmed.length > MAX_RULE_LEN ? trimmed.slice(0, MAX_RULE_LEN) + '...' : trimmed;
+        rules.push({ cmd: text, reason: '', source: 'policy' });
+      }
+    }
+  } catch (_) { /* policy file may not exist */ }
+  return rules;
+}
+
+function detectRestrictions(agentName, manualList) {
+  const all = [];
+  for (const m of manualList) all.push({ cmd: m, reason: '', source: 'env' });
+  all.push(...parseGhWrapperRestrictions());
+  all.push(...parsePolicyRestrictions(agentName));
+  return all;
+}
+
 app.get('/api/config/agent/:name', (req, res) => {
   const { name } = req.params;
   if (!ENABLED_AGENTS.includes(name)) {
@@ -1307,7 +1354,8 @@ app.get('/api/config/agent/:name', (req, res) => {
       postIdle: agentEnv.POST_IDLE_HOOKS ? agentEnv.POST_IDLE_HOOKS.split(',').filter(Boolean) : [],
     };
 
-    const restrictions = agentEnv.AGENT_RESTRICTIONS ? agentEnv.AGENT_RESTRICTIONS.split(',').filter(Boolean) : [];
+    const manualRestrictions = agentEnv.AGENT_RESTRICTIONS ? agentEnv.AGENT_RESTRICTIONS.split(',').filter(Boolean) : [];
+    const restrictions = detectRestrictions(name, manualRestrictions);
 
     let prompt = '';
     try {
