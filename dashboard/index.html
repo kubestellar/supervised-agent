@@ -4445,6 +4445,10 @@ function burnAreaChart() {
         if (!_configState.data.labels) _configState.data.labels = [];
         _configState.data.labels.push(val);
         markDirty('labels', 'list', _configState.data.labels);
+      } else if (section === 'repos') {
+        if (!_configState.data.repos) _configState.data.repos = [];
+        _configState.data.repos.push(val);
+        markDirty('repos', 'list', _configState.data.repos);
       }
       input.value = '';
       renderConfigTab(_configState.tab);
@@ -4457,6 +4461,9 @@ function burnAreaChart() {
       } else if (section === 'labels') {
         _configState.data.labels.splice(index, 1);
         markDirty('labels', 'list', _configState.data.labels);
+      } else if (section === 'repos') {
+        _configState.data.repos.splice(index, 1);
+        markDirty('repos', 'list', _configState.data.repos);
       }
       renderConfigTab(_configState.tab);
     }
