@@ -641,7 +641,7 @@
     }
     .temp-gauge-ticks {
       position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-      display: flex; align-items: center; justify-content: space-between;
+      display: flex; align-items: center;
       padding: 0 4px; font-size: 0.55rem; color: rgba(255,255,255,0.6); pointer-events: none;
     }
     .temp-gauge-needle {
@@ -1553,7 +1553,7 @@
           <div class="oc-gov-gauge">
             <div class="temp-gauge-track" style="background:linear-gradient(to right, #238636 0%, #238636 ${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%, #1f6feb ${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%, #1f6feb ${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%, #d29922 ${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%, #d29922 ${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%, #f85149 ${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%, #f85149 100%)">
               <div class="temp-gauge-glow" style="width:100%"></div>
-              <div class="temp-gauge-ticks"><span>0</span><span>${OC_THRESH_QUIET}</span><span>${OC_THRESH_BUSY}</span><span>${OC_THRESH_SURGE}</span><span>${OC_GAUGE_MAX}</span></div>
+              <div class="temp-gauge-ticks"><span style="position:absolute;left:0">0</span><span style="position:absolute;left:${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%;transform:translateX(-50%)">${OC_THRESH_QUIET}</span><span style="position:absolute;left:${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%;transform:translateX(-50%)">${OC_THRESH_BUSY}</span><span style="position:absolute;left:${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%;transform:translateX(-50%)">${OC_THRESH_SURGE}</span><span style="position:absolute;right:0">${OC_GAUGE_MAX}</span></div>
               <div class="temp-gauge-needle" style="left:${gaugePct}%" data-val="${govActionable}"></div>
             </div>
             <div class="temp-gauge-labels">
