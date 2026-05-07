@@ -4004,6 +4004,10 @@ function burnAreaChart() {
         <ul class="config-agent-list">${list}</ul>
         <div class="config-list-add" style="margin-top:12px">
           <input type="text" id="cfg-new-agent" placeholder="agent name">
+          <select id="cfg-copy-from" style="margin-left:6px;font-size:0.75rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px">
+            <option value="">blank</option>
+            ${agents.map(a => '<option value="' + a + '">copy ' + a + '</option>').join('')}
+          </select>
           <button onclick="addAgent()">+ Add Agent</button>
         </div>`;
     }
@@ -4278,12 +4282,15 @@ function burnAreaChart() {
         showToast(`Agent "${name}" already exists`, 'error');
         return;
       }
+      const copySelect = document.getElementById('cfg-copy-from');
+      const copyFrom = copySelect ? copySelect.value : '';
+      const payload = copyFrom ? { name, copyFrom } : { name };
       fetch('/api/config/governor/agents', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify(payload)
       }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
         .then(() => {
-          showToast(`Agent "${name}" added`, 'success');
+          showToast(copyFrom ? `Agent "${name}" created from ${copyFrom}` : `Agent "${name}" added`, 'success');
           if (!_configState.data.agents) _configState.data.agents = [];
           _configState.data.agents.push(name);
           input.value = '';
