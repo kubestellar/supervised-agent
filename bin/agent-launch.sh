@@ -30,6 +30,10 @@ elif [[ -f /usr/local/bin/hive-config.sh ]]; then
 fi
 unset GH_TOKEN
 
+# Export agent identity so the gh wrapper can load per-agent restrictions.
+# AGENT_SESSION_NAME is set by the supervisor from the agent's .env file.
+export HIVE_AGENT_ID="${AGENT_SESSION_NAME:-unknown}"
+
 # Source the centralized backend/model config
 BACKENDS_CONF="${SCRIPT_DIR}/../config/backends.conf"
 if [[ -f "$BACKENDS_CONF" ]]; then
