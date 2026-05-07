@@ -347,13 +347,13 @@ function fetchStatus() {
         try {
           const govEnv = parseEnvFile(GOVERNOR_ENV_PATH);
           if (statusCache.governor) {
-            const DEFAULT_QUIET = 2;
+            const DEFAULT_IDLE = 2;
             const DEFAULT_BUSY = 10;
             const DEFAULT_SURGE = 20;
             statusCache.governor.thresholds = {
-              quiet: Number(govEnv.QUIET_THRESHOLD) || DEFAULT_QUIET,
-              busy: Number(govEnv.BUSY_THRESHOLD) || DEFAULT_BUSY,
-              surge: Number(govEnv.SURGE_THRESHOLD) || DEFAULT_SURGE,
+              quiet: Number(govEnv.IDLE_THRESHOLD_ISSUES || govEnv.QUIET_THRESHOLD) || DEFAULT_IDLE,
+              busy: Number(govEnv.BUSY_THRESHOLD_ISSUES || govEnv.BUSY_THRESHOLD) || DEFAULT_BUSY,
+              surge: Number(govEnv.SURGE_THRESHOLD_ISSUES || govEnv.SURGE_THRESHOLD) || DEFAULT_SURGE,
             };
           }
         } catch (_) {}
@@ -1460,9 +1460,9 @@ app.get('/api/config/governor', (_req, res) => {
     const agents = ENABLED_AGENTS.slice();
 
     const thresholds = {
-      surge: parseInt(govEnv.SURGE_THRESHOLD || '20', 10),
-      busy: parseInt(govEnv.BUSY_THRESHOLD || '10', 10),
-      quiet: parseInt(govEnv.QUIET_THRESHOLD || '2', 10),
+      surge: parseInt(govEnv.SURGE_THRESHOLD_ISSUES || govEnv.SURGE_THRESHOLD || '20', 10),
+      busy: parseInt(govEnv.BUSY_THRESHOLD_ISSUES || govEnv.BUSY_THRESHOLD || '10', 10),
+      quiet: parseInt(govEnv.IDLE_THRESHOLD_ISSUES || govEnv.QUIET_THRESHOLD || '2', 10),
     };
 
     const DEFAULT_EXEMPT_LABELS = 'nightly-tests|LFX|do-not-merge|meta-tracker|auto-qa-tuning-report|hold|adopters|changes-requested|waiting-on-author';
@@ -1511,9 +1511,9 @@ app.get('/api/config/governor', (_req, res) => {
 app.put('/api/config/governor/thresholds', (req, res) => {
   try {
     const { surge, busy, quiet } = req.body;
-    if (surge !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'SURGE_THRESHOLD', String(surge));
-    if (busy !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'BUSY_THRESHOLD', String(busy));
-    if (quiet !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'QUIET_THRESHOLD', String(quiet));
+    if (surge !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'SURGE_THRESHOLD_ISSUES', String(surge));
+    if (busy !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'BUSY_THRESHOLD_ISSUES', String(busy));
+    if (quiet !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'IDLE_THRESHOLD_ISSUES', String(quiet));
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
