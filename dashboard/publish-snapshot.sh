@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Build a dashboard snapshot and push it to the docs repo.
-# Designed to run as a cron job on the hive server.
+# Build dashboard snapshots (light + classic) and push to the docs repo.
+# Creates a PR and merges with --admin to satisfy branch protection.
 #
-# Pushes directly to main (no PR) to avoid branch protection check delays.
+# Produces:
+#   public/live/hive/index.html        — default (light mode)
+#   public/live/hive/light/index.html   — light mode
+#   public/live/hive/classic/index.html — classic mode
 #
 # Usage: ./publish-snapshot.sh
 # Env vars:
@@ -14,8 +17,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DASHBOARD_URL="${HIVE_DASHBOARD_URL:-http://localhost:3001}"
 DOCS_REPO="${DOCS_REPO_DIR:-/tmp/kubestellar-docs-snapshot}"
-OUTPUT_DIR="${DOCS_REPO}/public/live/hive"
-BRANCH="main"
 DOCS_REPO_SLUG="kubestellar/docs"
 
 GH_APP_TOKEN_FILE="/var/run/hive-metrics/gh-app-token.cache"
@@ -30,41 +31,49 @@ fi
 
 # Ensure docs repo clone exists
 if [ ! -d "$DOCS_REPO/.git" ]; then
-  git clone --depth 1 --single-branch -b "$BRANCH" "$DOCS_REMOTE" "$DOCS_REPO"
+  git clone --depth 1 --single-branch -b main "$DOCS_REMOTE" "$DOCS_REPO"
 fi
 
 cd "$DOCS_REPO"
 git remote set-url origin "$DOCS_REMOTE"
-git fetch origin "$BRANCH"
-git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/$BRANCH"
-git reset --hard "origin/$BRANCH"
+git fetch origin main
+git checkout main 2>/dev/null || git checkout -b main origin/main
+git reset --hard origin/main
 
-# Build snapshot
-mkdir -p "$OUTPUT_DIR"
-node "${SCRIPT_DIR}/build-snapshot.mjs" "$DASHBOARD_URL" "${OUTPUT_DIR}/index.html"
+# Build all three snapshots from the same API data
+mkdir -p public/live/hive/light public/live/hive/classic
+
+node "${SCRIPT_DIR}/build-snapshot.mjs" --mode light "$DASHBOARD_URL" public/live/hive/light/index.html
+node "${SCRIPT_DIR}/build-snapshot.mjs" --mode classic "$DASHBOARD_URL" public/live/hive/classic/index.html
+cp public/live/hive/light/index.html public/live/hive/index.html
 
 # Check if anything changed
 if git diff --quiet -- public/live/hive/; then
-  echo "No changes to snapshot — skipping commit."
+  echo "No changes to snapshot — skipping."
   exit 0
 fi
 
 TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M UTC')
+SNAPSHOT_BRANCH="chore/hive-snapshot-$(date -u '+%Y%m%d-%H%M%S')"
 
-# Commit and push directly to main
-git add public/live/hive/index.html
+git checkout -b "$SNAPSHOT_BRANCH"
+git add public/live/hive/
 git commit -s -m "chore: update hive dashboard snapshot $TIMESTAMP"
+git push origin "$SNAPSHOT_BRANCH"
 
-MAX_RETRIES=3
-RETRY_DELAY_SECONDS=5
-for i in $(seq 1 $MAX_RETRIES); do
-  if git pull --rebase origin "$BRANCH" && git push origin "$BRANCH"; then
-    echo "Snapshot published directly to main."
-    exit 0
-  fi
-  echo "Push attempt $i/$MAX_RETRIES failed, retrying in ${RETRY_DELAY_SECONDS}s..."
-  sleep "$RETRY_DELAY_SECONDS"
-done
+PR_URL=$(gh pr create \
+  --repo "$DOCS_REPO_SLUG" \
+  --title "chore: hive dashboard snapshot $TIMESTAMP" \
+  --body "Automated snapshot update from hive server." \
+  --head "$SNAPSHOT_BRANCH" \
+  --base main 2>&1)
 
-echo "ERROR: all $MAX_RETRIES push attempts failed."
-exit 1
+PR_NUM=$(echo "$PR_URL" | grep -o '[0-9]*$')
+echo "Created PR #${PR_NUM}: ${PR_URL}"
+
+gh pr merge "$PR_NUM" --repo "$DOCS_REPO_SLUG" --admin --squash --delete-branch
+echo "Snapshot published via PR #${PR_NUM}."
+
+# Reset back to main for next run
+git checkout main
+git reset --hard origin/main
