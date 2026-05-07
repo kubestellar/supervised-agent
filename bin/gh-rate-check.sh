@@ -19,8 +19,8 @@ GOVERNOR_FLAG_DIR="/var/run/kick-governor"
 NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
 NTFY_TOPIC="${NTFY_TOPIC:-hive}"
 TMUX_BIN="${TMUX_BIN:-tmux}"
-TTL_SECONDS=900   # 15 minutes — cleared sooner if API shows recovery
-PULLBACK_SECONDS=900  # 15 minutes
+DEFAULT_TTL_SECONDS=900
+DEFAULT_PULLBACK_SECONDS=900
 
 mkdir -p "$PULLBACK_STATE_DIR"
 
@@ -43,12 +43,22 @@ get_agent_cli() {
   echo "${cli:-unknown}"
 }
 
-# GitHub API rate limit patterns — must match actual error messages, not casual mentions
-# Removed bare "rate limit" which false-positives on code output like "good rate limiting"
-GH_RATE_PATTERNS='API rate limit exceeded|secondary rate limit|403.*rate limit|You have exceeded a secondary rate|retry-after:[[:space:]]*[0-9]|gh: Resource not accessible|abuse detection mechanism'
+# Sensing patterns — read from governor.env if available, else use defaults
+GOVERNOR_ENV="${GOVERNOR_ENV:-/etc/hive/governor.env}"
+_load_env_pattern() {
+  local var="$1" default="$2"
+  local val
+  val=$(grep -s "^${var}=" "$GOVERNOR_ENV" 2>/dev/null | cut -d= -f2- | sed "s/^['\"]//;s/['\"]$//" || true)
+  echo "${val:-$default}"
+}
 
-# Claude/Copilot CLI patterns to EXCLUDE
-CLI_EXCLUDE_PATTERNS="You.re out of extra usage|out of extra usage|extra usage.*resets|resets [0-9]+(:[0-9]+)?[aApP][mM]"
+DEFAULT_GH_RATE_PATTERNS='API rate limit exceeded|secondary rate limit|403.*rate limit|You have exceeded a secondary rate|retry-after:[[:space:]]*[0-9]|gh: Resource not accessible|abuse detection mechanism'
+DEFAULT_CLI_EXCLUDE_PATTERNS='You.re out of extra usage|out of extra usage|extra usage.*resets|resets [0-9]+(:[0-9]+)?[aApP][mM]'
+
+GH_RATE_PATTERNS=$(_load_env_pattern SENSING_GH_RATE_PATTERNS "$DEFAULT_GH_RATE_PATTERNS")
+CLI_EXCLUDE_PATTERNS=$(_load_env_pattern SENSING_CLI_EXCLUDE_PATTERNS "$DEFAULT_CLI_EXCLUDE_PATTERNS")
+TTL_SECONDS=$(_load_env_pattern SENSING_TTL_SECONDS "$DEFAULT_TTL_SECONDS")
+PULLBACK_SECONDS=$(_load_env_pattern SENSING_PULLBACK_SECONDS "$DEFAULT_PULLBACK_SECONDS")
 
 now_epoch=$(date +%s)
 now_iso=$(date -Is)

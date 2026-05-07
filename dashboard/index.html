@@ -3755,7 +3755,7 @@ function burnAreaChart() {
     let _configState = { type: null, agent: null, tab: null, data: {}, dirty: {} };
 
     const AGENT_CONFIG_TABS = ['General', 'Cadences', 'Pipeline', 'Hooks', 'Restrictions', 'Stats', 'Prompts'];
-    const GOVERNOR_CONFIG_TABS = ['Agents', 'Thresholds', 'Labels', 'Repos', 'Budget', 'Notifications', 'Health'];
+    const GOVERNOR_CONFIG_TABS = ['Agents', 'Thresholds', 'Labels', 'Repos', 'Budget', 'Notifications', 'Health', 'Sensing'];
     const PIPELINE_STAGES = ['resolve-beads', 'track-prs', 'stale-check', 'repo-scan', 'coverage-gate', 'prompt-compose', 'budget-check', 'api-collect', 'final-compose'];
     const RESTART_STRATEGIES = ['immediate', 'backoff', 'none'];
 
@@ -3841,6 +3841,7 @@ function burnAreaChart() {
         case 'Budget': return renderGovBudget(d.budget || {});
         case 'Notifications': return renderGovNotifications(d.notifications || {});
         case 'Health': return renderGovHealth(d.health || {});
+        case 'Sensing': return renderGovSensing(d.sensing || {});
         default: return '';
       }
     }
@@ -4321,6 +4322,60 @@ function burnAreaChart() {
           <div class="config-toggle-switch ${h.modelLock ? 'on' : ''}" onclick="toggleConfigSwitch(this,'health','modelLock')"></div>
           <span class="config-toggle-label">Model Lock (prevent automatic model changes)</span>
         </div>`;
+    }
+
+    function renderGovSensing(s) {
+      const ghPatterns = (s.ghRatePatterns || []).map((p, i) =>
+        `<div class="config-list-item"><code style="font-size:0.7rem">${esc(p)}</code><button class="remove-item" onclick="removeSensingItem('ghRatePatterns',${i})">✕</button></div>`
+      ).join('');
+      const cliPatterns = (s.cliExcludePatterns || []).map((p, i) =>
+        `<div class="config-list-item"><code style="font-size:0.7rem">${esc(p)}</code><button class="remove-item" onclick="removeSensingItem('cliExcludePatterns',${i})">✕</button></div>`
+      ).join('');
+      return `
+        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Patterns scanned in agent tmux panes to detect rate limits and CLI usage caps.</p>
+        <div style="margin-bottom:18px">
+          <label style="font-weight:600;font-size:0.78rem;display:block;margin-bottom:6px">GitHub API Rate Limit Patterns <span style="font-weight:400;color:var(--muted)">(regex, matched against pane output)</span></label>
+          <div class="config-list">
+            ${ghPatterns || '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">No patterns configured</div>'}
+            <div class="config-list-add">
+              <input type="text" id="cfg-sensing-gh-input" placeholder="e.g. 403.*rate limit" style="font-family:monospace;font-size:0.75rem">
+              <button onclick="addSensingItem('ghRatePatterns','cfg-sensing-gh-input')">+ Add</button>
+            </div>
+          </div>
+        </div>
+        <div style="margin-bottom:18px">
+          <label style="font-weight:600;font-size:0.78rem;display:block;margin-bottom:6px">CLI Exclude Patterns <span style="font-weight:400;color:var(--muted)">(lines matching these are ignored before rate-limit check)</span></label>
+          <div class="config-list">
+            ${cliPatterns || '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">No exclude patterns</div>'}
+            <div class="config-list-add">
+              <input type="text" id="cfg-sensing-cli-input" placeholder="e.g. out of extra usage" style="font-family:monospace;font-size:0.75rem">
+              <button onclick="addSensingItem('cliExcludePatterns','cfg-sensing-cli-input')">+ Add</button>
+            </div>
+          </div>
+        </div>
+        <div class="config-field-row">
+          <div class="config-field"><label>Alert TTL (sec)</label><input type="number" value="${s.ttlSeconds || 900}" onchange="markDirty('sensing','ttlSeconds',Number(this.value))"></div>
+          <div class="config-field"><label>Pullback Duration (sec)</label><input type="number" value="${s.pullbackSeconds || 900}" onchange="markDirty('sensing','pullbackSeconds',Number(this.value))"></div>
+        </div>`;
+    }
+
+    function addSensingItem(key, inputId) {
+      const input = document.getElementById(inputId);
+      const val = input.value.trim();
+      if (!val) return;
+      if (!_configState.data.sensing) _configState.data.sensing = {};
+      if (!_configState.data.sensing[key]) _configState.data.sensing[key] = [];
+      _configState.data.sensing[key].push(val);
+      markDirty('sensing', key, _configState.data.sensing[key]);
+      input.value = '';
+      renderConfigTab(_configState.tab);
+    }
+
+    function removeSensingItem(key, index) {
+      if (!_configState.data.sensing || !_configState.data.sensing[key]) return;
+      _configState.data.sensing[key].splice(index, 1);
+      markDirty('sensing', key, _configState.data.sensing[key]);
+      renderConfigTab(_configState.tab);
     }
 
     // ── Config Interaction Helpers ──

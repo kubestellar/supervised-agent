@@ -1669,8 +1669,30 @@ app.get('/api/config/governor', (_req, res) => {
       modelLock: govEnv.MODEL_LOCK === 'true',
     };
 
+    const DEFAULT_GH_RATE_PATTERNS = 'API rate limit exceeded|secondary rate limit|403.*rate limit|You have exceeded a secondary rate|retry-after:[[:space:]]*[0-9]|gh: Resource not accessible|abuse detection mechanism';
+    const DEFAULT_CLI_EXCLUDE_PATTERNS = 'You.re out of extra usage|out of extra usage|extra usage.*resets|resets [0-9]+(:[0-9]+)?[aApP][mM]';
+    const sensing = {
+      ghRatePatterns: (govEnv.SENSING_GH_RATE_PATTERNS || DEFAULT_GH_RATE_PATTERNS).split('|').filter(Boolean),
+      cliExcludePatterns: (govEnv.SENSING_CLI_EXCLUDE_PATTERNS || DEFAULT_CLI_EXCLUDE_PATTERNS).split('|').filter(Boolean),
+      ttlSeconds: parseInt(govEnv.SENSING_TTL_SECONDS || '900', 10),
+      pullbackSeconds: parseInt(govEnv.SENSING_PULLBACK_SECONDS || '900', 10),
+    };
+
     const repos = ((projectConfig.project || {}).repos || []).slice();
-    res.json({ agents, thresholds, labels, budget, notifications, health, repos });
+    res.json({ agents, thresholds, labels, budget, notifications, health, repos, sensing });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/config/governor/sensing', (req, res) => {
+  try {
+    const { ghRatePatterns, cliExcludePatterns, ttlSeconds, pullbackSeconds } = req.body;
+    if (ghRatePatterns !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'SENSING_GH_RATE_PATTERNS', ghRatePatterns.join('|'));
+    if (cliExcludePatterns !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'SENSING_CLI_EXCLUDE_PATTERNS', cliExcludePatterns.join('|'));
+    if (ttlSeconds !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'SENSING_TTL_SECONDS', String(ttlSeconds));
+    if (pullbackSeconds !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'SENSING_PULLBACK_SECONDS', String(pullbackSeconds));
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
