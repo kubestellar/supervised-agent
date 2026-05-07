@@ -43,8 +43,9 @@ get_agent_cli() {
   echo "${cli:-unknown}"
 }
 
-# GitHub API rate limit patterns
-GH_RATE_PATTERNS='API rate limit exceeded|secondary rate limit|rate limit|403.*rate|You have exceeded|retry-after|gh: Resource not accessible'
+# GitHub API rate limit patterns — must match actual error messages, not casual mentions
+# Removed bare "rate limit" which false-positives on code output like "good rate limiting"
+GH_RATE_PATTERNS='API rate limit exceeded|secondary rate limit|403.*rate limit|You have exceeded a secondary rate|retry-after:[[:space:]]*[0-9]|gh: Resource not accessible|abuse detection mechanism'
 
 # Claude/Copilot CLI patterns to EXCLUDE
 CLI_EXCLUDE_PATTERNS="You.re out of extra usage|out of extra usage|extra usage.*resets|resets [0-9]+(:[0-9]+)?[aApP][mM]"
