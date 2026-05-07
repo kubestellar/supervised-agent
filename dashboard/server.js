@@ -534,12 +534,12 @@ function enrichReposWithActionable() {
   for (const r of statusCache.repos) {
     r.actionableIssues = issues
       .filter(i => i.repo === r.full)
-      .map(i => ({ number: i.number, title: i.title, url: i.url, labels: i.labels || [] }));
+      .map(i => ({ number: i.number, title: i.title, url: i.url, labels: i.labels || [], author: i.author || '', created_at: i.created_at || '' }));
     r.openPrs = prs
       .filter(p => p.repo === r.full)
       .map(p => ({
         number: p.number, title: p.title, url: p.url,
-        labels: p.labels || [], author: p.author || '',
+        labels: p.labels || [], author: p.author || '', created_at: p.created_at || '',
         mergeable: eligibleNums.has(`${r.full}#${p.number}`),
       }));
   }
