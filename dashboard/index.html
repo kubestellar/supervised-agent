@@ -3005,25 +3005,76 @@ function burnAreaChart() {
       html += `<div class="nous-stat"><div class="val">${ledger.length}</div><div class="lbl">Experiments</div></div>`;
       html += '</div>';
 
-      // Data collection progress (observe mode emphasis)
-      if (mode === 'observe') {
+      // Snapshot summary — what's being collected
+      const ss = s.snapshotSummary;
+      if (ss) {
         html += '<div class="nous-card" style="margin-top:12px">';
-        html += '<h3>Data Collection</h3>';
-        html += `<div class="nous-progress"><div class="nous-progress-fill" style="width:${snapPct}%;background:#2563eb"></div></div>`;
-        html += `<div style="font-size:0.72rem;color:var(--muted)">${s.snapshotCount || 0} / ${s.snapshotTarget || 672} snapshots — ${snapPct >= 75 ? 'Ready to upgrade to Suggest' : 'Collecting baseline data'}</div>`;
+        html += '<h3>Baseline Data</h3>';
+        const timeRange = ss.firstTs && ss.latestTs
+          ? `${new Date(ss.firstTs).toLocaleDateString([], {month:'short',day:'numeric'})} – ${new Date(ss.latestTs).toLocaleDateString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}`
+          : '';
+        if (timeRange) html += `<div style="font-size:0.7rem;color:var(--muted);margin-bottom:8px">${timeRange} · ${ss.recentWindow} recent samples</div>`;
 
-        // Show dry_run proposals
-        const dryRuns = ledger.filter(e => e.type === 'dry_run').slice(-5);
-        if (dryRuns.length > 0) {
-          html += '<h3 style="margin-top:12px">Would Have Tested</h3>';
-          for (const dr of dryRuns) {
-            html += `<div style="font-size:0.75rem;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border)">`;
-            html += `<strong>${dr.id || '?'}</strong>: ${dr.hypothesis || 'no description'}`;
-            html += '</div>';
-          }
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.78rem">';
+
+        // Current values
+        const cur = ss.latest || {};
+        const regimeBadge = cur.mode ? `<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.7rem;background:${cur.mode==='quiet'?'#dbeafe':cur.mode==='busy'?'#fef3c7':'#fee2e2'};color:${cur.mode==='quiet'?'#1e40af':cur.mode==='busy'?'#92400e':'#991b1b'}">${cur.mode}</span>` : '';
+        html += `<div style="padding:8px;background:var(--bg);border-radius:6px"><div style="font-size:0.7rem;color:var(--muted)">Current Regime</div><div style="font-weight:600;margin-top:2px">${regimeBadge}</div></div>`;
+        html += `<div style="padding:8px;background:var(--bg);border-radius:6px"><div style="font-size:0.7rem;color:var(--muted)">Queue Depth</div><div style="font-weight:600;margin-top:2px">${cur.queue_depth != null ? cur.queue_depth : '–'}</div></div>`;
+        html += `<div style="padding:8px;background:var(--bg);border-radius:6px"><div style="font-size:0.7rem;color:var(--muted)">MTTR (avg)</div><div style="font-weight:600;margin-top:2px">${cur.mttr_avg != null ? cur.mttr_avg + ' min' : '–'}</div></div>`;
+        html += `<div style="padding:8px;background:var(--bg);border-radius:6px"><div style="font-size:0.7rem;color:var(--muted)">Budget Used</div><div style="font-weight:600;margin-top:2px">${cur.budget_pct != null ? cur.budget_pct + '%' : '–'}</div></div>`;
+        html += '</div>';
+
+        // Ranges from recent window
+        const qd = ss.queue_depth || {};
+        const mt = ss.mttr_avg || {};
+        if (qd.min != null || mt.min != null) {
+          html += '<div style="margin-top:8px;font-size:0.72rem;color:var(--muted)">';
+          html += '<strong>Recent ranges:</strong> ';
+          if (qd.min != null) html += `Queue ${qd.min}–${qd.max} (avg ${qd.avg})`;
+          if (qd.min != null && mt.min != null) html += ' · ';
+          if (mt.min != null) html += `MTTR ${mt.min}–${mt.max} min (avg ${mt.avg})`;
+          html += '</div>';
         }
+
+        // Regime distribution
+        const regimes = ss.regimes || {};
+        const regimeKeys = Object.keys(regimes);
+        if (regimeKeys.length > 0) {
+          html += '<div style="margin-top:6px;font-size:0.72rem;color:var(--muted)">';
+          html += '<strong>Regime distribution:</strong> ';
+          html += regimeKeys.map(r => `${r} ${regimes[r]}/${ss.recentWindow}`).join(', ');
+          html += '</div>';
+        }
+
         html += '</div>';
       }
+
+      // Data collection progress
+      html += '<div class="nous-card" style="margin-top:12px">';
+      html += '<h3>Data Collection</h3>';
+      html += `<div class="nous-progress"><div class="nous-progress-fill" style="width:${snapPct}%;background:#2563eb"></div></div>`;
+      html += `<div style="font-size:0.72rem;color:var(--muted)">${s.snapshotCount || 0} / ${s.snapshotTarget || 672} snapshots — ${snapPct >= 75 ? (mode === 'observe' ? 'Ready to upgrade to Suggest' : 'Baseline sufficient') : 'Collecting baseline data'}</div>`;
+
+      // Show experiment proposals from ledger
+      const dryRuns = ledger.filter(e => e.type === 'dry_run').slice(-5);
+      if (dryRuns.length > 0) {
+        html += `<h3 style="margin-top:12px">${mode === 'observe' ? 'Would Have Tested' : 'Recent Proposals'}</h3>`;
+        for (const dr of dryRuns) {
+          const paramKeys = dr.params ? Object.entries(dr.params).map(([k,v]) => `<code style="font-size:0.7rem;background:var(--bg);padding:1px 4px;border-radius:3px">${k}=${v}</code>`).join(' ') : '';
+          html += `<div style="font-size:0.75rem;padding:6px 0;border-bottom:1px solid var(--border)">`;
+          html += `<div><strong>${dr.id || '?'}</strong></div>`;
+          html += `<div style="color:var(--muted);margin-top:2px">${dr.hypothesis || 'no description'}</div>`;
+          if (paramKeys) html += `<div style="margin-top:4px">${paramKeys}</div>`;
+          if (dr.predicted) {
+            const preds = Object.entries(dr.predicted).map(([k,v]) => `${k.replace(/_/g,' ')}: ${v > 0 ? '+' : ''}${v}%`).join(', ');
+            html += `<div style="font-size:0.7rem;color:#7c3aed;margin-top:2px">Predicted: ${preds}</div>`;
+          }
+          html += '</div>';
+        }
+      }
+      html += '</div>';
 
       // Active experiment card
       if (s.activeExperiment) {

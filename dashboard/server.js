@@ -1906,9 +1906,38 @@ app.get('/api/nous/status', (_req, res) => {
 
   const SNAPSHOT_COUNT_TARGET = 672;
   let snapshotCount = 0;
+  let snapshotSummary = null;
   try {
     if (fs.existsSync(NOUS_SNAPSHOTS_DIR)) {
-      snapshotCount = fs.readdirSync(NOUS_SNAPSHOTS_DIR).filter((f) => f.endsWith('.json')).length;
+      const files = fs.readdirSync(NOUS_SNAPSHOTS_DIR).filter((f) => f.endsWith('.json')).sort();
+      snapshotCount = files.length;
+      if (files.length > 0) {
+        const RECENT_LIMIT = 20;
+        const recentFiles = files.slice(-RECENT_LIMIT);
+        const snaps = recentFiles.map((f) => {
+          try { return JSON.parse(fs.readFileSync(path.join(NOUS_SNAPSHOTS_DIR, f), 'utf8')); }
+          catch (_) { return null; }
+        }).filter(Boolean);
+        if (snaps.length > 0) {
+          const latest = snaps[snaps.length - 1];
+          const first = JSON.parse(fs.readFileSync(path.join(NOUS_SNAPSHOTS_DIR, files[0]), 'utf8'));
+          const vals = (key) => snaps.map((s) => s[key]).filter((v) => v != null && !isNaN(Number(v))).map(Number);
+          const avg = (arr) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+          const mn = (arr) => arr.length ? Math.min(...arr) : null;
+          const mx = (arr) => arr.length ? Math.max(...arr) : null;
+          const qd = vals('queue_depth');
+          const mttr = vals('mttr_avg');
+          snapshotSummary = {
+            firstTs: first.ts,
+            latestTs: latest.ts,
+            latest: { mode: latest.mode, queue_depth: latest.queue_depth, budget_pct: latest.budget_pct, mttr_avg: latest.mttr_avg },
+            recentWindow: snaps.length,
+            queue_depth: { avg: avg(qd), min: mn(qd), max: mx(qd) },
+            mttr_avg: { avg: avg(mttr), min: mn(mttr), max: mx(mttr) },
+            regimes: snaps.reduce((acc, s) => { acc[s.mode] = (acc[s.mode] || 0) + 1; return acc; }, {}),
+          };
+        }
+      }
     }
   } catch (_) { /* ignore */ }
 
@@ -1928,6 +1957,7 @@ app.get('/api/nous/status', (_req, res) => {
     principleCount: Array.isArray(principles) ? principles.length : 0,
     snapshotCount,
     snapshotTarget: SNAPSHOT_COUNT_TARGET,
+    snapshotSummary,
     hasRecommendations: !!recommendations,
     recommendations,
     phases: {
