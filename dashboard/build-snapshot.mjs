@@ -34,13 +34,16 @@ async function fetchJson(endpoint, fallback = '{}') {
 async function main() {
   console.log(`Fetching data from ${dashboardUrl} (mode: ${snapshotMode})...`);
 
-  const [statusRaw, historyRaw, trendsRaw, timelineRaw, configRaw, versionRaw] = await Promise.all([
+  const [statusRaw, historyRaw, trendsRaw, timelineRaw, configRaw, versionRaw, nousStatusRaw, nousLedgerRaw, nousPrinciplesRaw] = await Promise.all([
     fetchJson('/api/status'),
     fetchJson('/api/history', '[]'),
     fetchJson('/api/trends?range=week', '[]'),
     fetchJson('/api/timeline', '[]'),
     fetchJson('/api/config'),
     fetchJson('/api/version'),
+    fetchJson('/api/nous/status'),
+    fetchJson('/api/nous/ledger', '[]'),
+    fetchJson('/api/nous/principles', '[]'),
   ]);
 
   // Validate status
@@ -155,6 +158,14 @@ async function main() {
     // Render baked status
     render(${statusRaw});
 
+    // Render Strategy Lab (Nous)
+    _nousCache = {
+      status: ${nousStatusRaw},
+      ledger: ${nousLedgerRaw},
+      principles: ${nousPrinciplesRaw},
+    };
+    renderNous();
+
     // Git version
     const _v = ${versionRaw};
     const _gv = document.getElementById('git-version');
@@ -207,6 +218,11 @@ async function main() {
     function closeConfigDialog() {}
     function saveConfig() {}
     function toggleLayout() {}
+    function nousSetMode() {}
+    function nousSetScope() {}
+    function nousApprove() {}
+    function nousReject() {}
+    function nousAbort() {}
   `;
 
   const output = [
