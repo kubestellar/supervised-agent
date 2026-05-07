@@ -4049,6 +4049,7 @@ function burnAreaChart() {
         showToast('Configuration saved', 'success');
         _configState.dirty = {};
         closeConfigDialog();
+        fetch('/api/status').then(r => r.json()).then(render).catch(() => {});
       }
     }
 
