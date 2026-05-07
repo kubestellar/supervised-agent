@@ -2268,13 +2268,17 @@
         const MAX_PILL_TITLE_LEN = 50;
         const issuePills = (r.actionableIssues || []).map(i => {
           const title = i.title && i.title.length > MAX_PILL_TITLE_LEN ? i.title.slice(0, MAX_PILL_TITLE_LEN) + '…' : (i.title || '');
-          return `<a class="repo-issue-pill" href="${esc(i.url)}" target="_blank" rel="noopener" title="${esc(i.title || '')}"><span class="pill-num">#${i.number}</span><span class="pill-title">${esc(title)}</span></a>`;
+          const age = pillAge(i.created_at);
+          const tip = (i.title || '') + (i.author ? ' — @' + i.author : '') + (age ? ' (' + age + ')' : '');
+          return `<a class="repo-issue-pill" href="${esc(i.url)}" target="_blank" rel="noopener" title="${esc(tip)}"><span class="pill-num">#${i.number}</span><span class="pill-title">${esc(title)}</span></a>`;
         }).join('');
         const prPills = (r.openPrs || []).map(p => {
           const title = p.title && p.title.length > MAX_PILL_TITLE_LEN ? p.title.slice(0, MAX_PILL_TITLE_LEN) + '…' : (p.title || '');
           const mergeIcon = p.mergeable ? '<span class="pill-merge-icon">✓</span>' : '';
           const mergeClass = p.mergeable ? ' mergeable' : '';
-          return `<a class="repo-pr-pill${mergeClass}" href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc(p.title || '')}${p.mergeable ? ' (merge eligible)' : ''}"><span class="pill-num">#${p.number}</span><span class="pill-title">${esc(title)}</span>${mergeIcon}</a>`;
+          const prAge = pillAge(p.created_at);
+          const prTip = (p.title || '') + (p.author ? ' — @' + p.author : '') + (prAge ? ' (' + prAge + ')' : '') + (p.mergeable ? ' (merge eligible)' : '');
+          return `<a class="repo-pr-pill${mergeClass}" href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc(prTip)}"><span class="pill-num">#${p.number}</span><span class="pill-title">${esc(title)}</span>${mergeIcon}</a>`;
         }).join('');
         const allPills = issuePills + prPills;
         const pillsHtml = allPills ? `<div class="repo-issues">${allPills}</div>` : '';
@@ -2307,6 +2311,17 @@
       if (b >= 0.1) return b.toFixed(2) + 'B';
       if (b >= 0.01) return b.toFixed(3) + 'B';
       return b.toFixed(3) + 'B';
+    }
+    function pillAge(createdAt) {
+      if (!createdAt) return '';
+      const MS_PER_MIN = 60000;
+      const MS_PER_HOUR = 3600000;
+      const MS_PER_DAY = 86400000;
+      const ms = Date.now() - new Date(createdAt).getTime();
+      if (ms < 0 || isNaN(ms)) return '';
+      if (ms < MS_PER_HOUR) return Math.floor(ms / MS_PER_MIN) + 'm ago';
+      if (ms < MS_PER_DAY) return Math.floor(ms / MS_PER_HOUR) + 'h ago';
+      return Math.floor(ms / MS_PER_DAY) + 'd ago';
     }
 
     let budgetIgnored = false;
