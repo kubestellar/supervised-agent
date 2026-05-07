@@ -1584,7 +1584,7 @@
         </div>
         <div class="oc-detail-actions">
           <button class="btn-toggle ${isPaused ? 'paused' : isOff ? 'off' : 'running'}" onclick="toggleAgent('${a.name}', ${isPaused})">${isPaused ? '▶ resume' : isOff ? '▶ start' : '⏸ pause'}</button>
-          <a href="/api/terminal/${a.name}" target="_blank" class="terminal-link">▶ terminal</a>
+          <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link">▶ terminal</a>
           <button class="restart-btn" onclick="restartAgent('${a.name}')">↻ restart</button>
           <button class="config-gear" onclick="openConfigDialog('agent','${a.name}')" style="font-size:1rem;opacity:0.7">⚙️</button>
         </div>
@@ -1992,6 +1992,9 @@
       reviewer: 'reviewer',
       architect: 'architect',
       outreach: 'outreach',
+      strategist: 'strategist',
+      analyst: 'analyst',
+      guardian: 'guardian',
     };
     const TTYD_PORT = 7681;
 
