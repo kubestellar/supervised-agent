@@ -2,6 +2,8 @@
 // Build a static HTML snapshot of the hive dashboard.
 // Reads index.html, fetches live data from the dashboard API,
 // and produces a self-contained static HTML file.
+//
+// Usage: node build-snapshot.mjs [--mode light|classic] [DASHBOARD_URL] [OUTPUT_FILE]
 
 import { readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -10,8 +12,12 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FETCH_TIMEOUT_MS = 10_000;
 
-const dashboardUrl = process.argv[2] || process.env.HIVE_DASHBOARD_URL || 'http://localhost:3001';
-const outputFile = process.argv[3] || 'snapshot.html';
+const args = process.argv.slice(2);
+const modeIdx = args.indexOf('--mode');
+const snapshotMode = modeIdx >= 0 ? args[modeIdx + 1] : 'classic';
+const positional = args.filter((_, i) => i !== modeIdx && i !== modeIdx + 1);
+const dashboardUrl = positional[0] || process.env.HIVE_DASHBOARD_URL || 'http://localhost:3001';
+const outputFile = positional[1] || 'snapshot.html';
 
 async function fetchJson(endpoint, fallback = '{}') {
   try {
@@ -26,7 +32,7 @@ async function fetchJson(endpoint, fallback = '{}') {
 }
 
 async function main() {
-  console.log(`Fetching data from ${dashboardUrl}...`);
+  console.log(`Fetching data from ${dashboardUrl} (mode: ${snapshotMode})...`);
 
   const [statusRaw, historyRaw, trendsRaw, timelineRaw, configRaw, versionRaw] = await Promise.all([
     fetchJson('/api/status'),
@@ -47,7 +53,7 @@ async function main() {
   const projectName = config.projectName || 'Hive';
   const snapshotTs = new Date().toISOString();
 
-  console.log(`Building snapshot for ${projectName} (${snapshotTs})...`);
+  console.log(`Building ${snapshotMode} snapshot for ${projectName} (${snapshotTs})...`);
 
   const sourceHtml = readFileSync(join(__dirname, 'index.html'), 'utf-8');
 
@@ -69,6 +75,15 @@ async function main() {
 
   const metaRefresh = `<meta http-equiv="refresh" content="${AUTO_REFRESH_SECONDS}">`;
 
+  const isLight = snapshotMode === 'light';
+
+  const bannerBg = isLight
+    ? 'background: linear-gradient(135deg, #f0f4ff 0%, #ffffff 100%); border: 1px solid #e5e7eb; color: #6b7280;'
+    : 'background: linear-gradient(135deg, #1a1f2e 0%, #161b22 100%); border: 1px solid #30363d; color: #8b949e;';
+  const bannerLabelColor = isLight ? 'color: #2563eb;' : 'color: #58a6ff;';
+  const bannerTimeColor = isLight ? 'color: #1a1a2e;' : 'color: #e6edf3;';
+  const bannerRefreshColor = isLight ? 'color: #6b7280;' : 'color: #8b949e;';
+
   const staticCss = `
     /* Static snapshot overrides — hide all interactive elements */
     .connection { display: none !important; }
@@ -82,26 +97,39 @@ async function main() {
     .pin-toggle { display: none !important; }
     .terminal-link { display: none !important; }
     .config-overlay { display: none !important; }
+    .layout-toggle { display: none !important; }
+    .oc-chat-prompt { display: none !important; }
+    .oc-detail-actions { display: none !important; }
     button[onclick] { pointer-events: none !important; opacity: 0.5 !important; }
     .snapshot-banner {
-      background: linear-gradient(135deg, #1a1f2e 0%, #161b22 100%);
-      border: 1px solid #30363d; border-radius: 8px;
+      ${bannerBg}
+      border-radius: 8px;
       padding: 12px 20px; margin-bottom: 16px;
       display: flex; align-items: center; gap: 12px;
-      font-size: 0.8rem; color: #8b949e;
+      font-size: 0.8rem;
     }
     .snapshot-banner .snap-icon { font-size: 1.2rem; }
-    .snapshot-banner .snap-label { color: #58a6ff; font-weight: 600; }
-    .snapshot-banner .snap-time { color: #e6edf3; }
-    .snapshot-banner .snap-refresh { color: #8b949e; margin-left: auto; font-size: 0.75rem; }
+    .snapshot-banner .snap-label { ${bannerLabelColor} font-weight: 600; }
+    .snapshot-banner .snap-time { ${bannerTimeColor} }
+    .snapshot-banner .snap-refresh { ${bannerRefreshColor} margin-left: auto; font-size: 0.75rem; }
+    .snapshot-banner .snap-links { margin-left: 12px; font-size: 0.75rem; }
+    .snapshot-banner .snap-links a { ${bannerLabelColor} text-decoration: none; margin: 0 6px; }
+    .snapshot-banner .snap-links a:hover { text-decoration: underline; }
   `;
 
+  const altMode = isLight ? 'classic' : 'light';
+  const altLabel = isLight ? 'Classic' : 'Light';
   const banner = `
   <div class="snapshot-banner">
-    <span class="snap-icon">📸</span>
+    <span class="snap-icon">${isLight ? '📊' : '📸'}</span>
     <span><span class="snap-label">Read-only snapshot</span> &mdash; captured <span class="snap-time" id="snap-time"></span></span>
+    <span class="snap-links"><a href="/live/hive/${altMode}">${altLabel} mode</a></span>
     <span class="snap-refresh" id="snap-refresh"></span>
   </div>`;
+
+  const layoutInit = isLight
+    ? `applyLayout('light');`
+    : `applyLayout('classic');`;
 
   const initScript = `
     // ── Static snapshot initialization ──
@@ -116,8 +144,13 @@ async function main() {
       _projEl.textContent = 'for ' + _cfg.primaryRepo;
       document.title = '\\u{1F41D} Hive Dashboard for ' + _cfg.primaryRepo + ' (Snapshot)';
     }
+    const _ocProjEl = document.getElementById('oc-project-name');
+    if (_ocProjEl && _cfg.primaryRepo) _ocProjEl.textContent = _cfg.primaryRepo;
     if (_cfg.primaryRepo) window._primaryRepo = _cfg.primaryRepo;
     if (_cfg.repo) window._hiveRepo = _cfg.repo;
+
+    // Apply layout mode
+    ${layoutInit}
 
     // Render baked status
     render(${statusRaw});
@@ -163,6 +196,7 @@ async function main() {
 
     // Disable all interactive functions in snapshot mode
     function kick() {}
+    function ocSendKick() {}
     function switchCli() {}
     function switchModel() {}
     function toggleAgent() {}
@@ -172,6 +206,7 @@ async function main() {
     function openConfigDialog() {}
     function closeConfigDialog() {}
     function saveConfig() {}
+    function toggleLayout() {}
   `;
 
   const output = [
@@ -188,7 +223,7 @@ async function main() {
 
   writeFileSync(outputFile, output);
   const size = Buffer.byteLength(output);
-  console.log(`Snapshot written to ${outputFile} (${size} bytes)`);
+  console.log(`${snapshotMode} snapshot written to ${outputFile} (${size} bytes)`);
 }
 
 main().catch(err => {
