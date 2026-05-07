@@ -71,8 +71,13 @@ PR_URL=$(gh pr create \
 PR_NUM=$(echo "$PR_URL" | grep -o '[0-9]*$')
 echo "Created PR #${PR_NUM}: ${PR_URL}"
 
-gh pr merge "$PR_NUM" --repo "$DOCS_REPO_SLUG" --admin --squash --delete-branch
-echo "Snapshot published via PR #${PR_NUM}."
+if gh pr merge "$PR_NUM" --repo "$DOCS_REPO_SLUG" --admin --squash --delete-branch 2>/dev/null; then
+  echo "Snapshot published via PR #${PR_NUM} (admin merge)."
+else
+  echo "Admin merge unavailable — enabling auto-merge on PR #${PR_NUM}."
+  gh pr merge "$PR_NUM" --repo "$DOCS_REPO_SLUG" --squash --auto --delete-branch
+  echo "Auto-merge enabled on PR #${PR_NUM} — will merge when checks pass."
+fi
 
 # Reset back to main for next run
 git checkout main
