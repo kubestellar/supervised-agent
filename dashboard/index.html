@@ -3768,18 +3768,50 @@ function burnAreaChart() {
     }
 
     function renderAgentRestrictions(restrictions) {
-      const list = restrictions.map((r, i) =>
-        `<div class="config-list-item"><span>${esc(r)}</span><button class="remove-item" onclick="removeListItem('restrictions','list',${i})">✕</button></div>`
-      ).join('');
-      return `
-        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Commands this agent is not allowed to execute (blacklist).</p>
-        <div class="config-list">
-          ${list || '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">No restrictions configured</div>'}
-          <div class="config-list-add">
+      const sourceColors = { 'gh-wrapper': '#dc2626', policy: '#7c3aed', env: '#2563eb' };
+      const sourceLabels = { 'gh-wrapper': 'gh wrapper', policy: 'CLAUDE.md', env: 'env' };
+      const isObj = restrictions.length > 0 && typeof restrictions[0] === 'object';
+      const detected = isObj ? restrictions.filter(r => r.source !== 'env') : [];
+      const manual = isObj ? restrictions.filter(r => r.source === 'env') : restrictions;
+
+      let html = '<p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Enforced restrictions detected from gh wrapper, CLAUDE.md policy, and manual overrides.</p>';
+
+      if (detected.length > 0) {
+        const grouped = {};
+        for (const r of detected) {
+          const src = r.source || 'unknown';
+          if (!grouped[src]) grouped[src] = [];
+          grouped[src].push(r);
+        }
+        for (const [src, rules] of Object.entries(grouped)) {
+          const color = sourceColors[src] || '#6b7280';
+          const label = sourceLabels[src] || src;
+          html += `<div style="margin-bottom:12px">`;
+          html += `<div style="font-size:0.7rem;font-weight:600;color:${color};margin-bottom:4px;text-transform:uppercase">${esc(label)}</div>`;
+          for (const r of rules) {
+            html += `<div style="font-size:0.78rem;padding:6px 8px;margin-bottom:4px;background:var(--bg);border-left:3px solid ${color};border-radius:0 4px 4px 0">`;
+            html += `<code style="font-size:0.75rem">${esc(r.cmd)}</code>`;
+            if (r.reason) html += `<div style="font-size:0.7rem;color:var(--muted);margin-top:2px">${esc(r.reason)}</div>`;
+            html += '</div>';
+          }
+          html += '</div>';
+        }
+      }
+
+      html += '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">';
+      html += '<div style="font-size:0.7rem;font-weight:600;color:#2563eb;margin-bottom:4px;text-transform:uppercase">Manual overrides</div>';
+      const manualList = manual.map((r, i) => {
+        const text = typeof r === 'object' ? r.cmd : r;
+        return `<div class="config-list-item"><span>${esc(text)}</span><button class="remove-item" onclick="removeListItem('restrictions','list',${i})">✕</button></div>`;
+      }).join('');
+      html += '<div class="config-list">';
+      html += manualList || '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">No manual restrictions</div>';
+      html += `<div class="config-list-add">
             <input type="text" id="cfg-restriction-input" placeholder="command pattern">
             <button onclick="addListItem('restrictions','list','cfg-restriction-input')">+ Add</button>
-          </div>
-        </div>`;
+          </div>`;
+      html += '</div></div>';
+      return html;
     }
 
     function renderAgentPrompts(prompt) {
