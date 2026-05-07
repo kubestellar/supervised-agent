@@ -1615,14 +1615,15 @@
           <div class="oc-detail-field"><div class="label">Last Run</div><div class="value">${a.lastKick || '—'}</div></div>
           <div class="oc-detail-field"><div class="label">Next Run</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : (a.nextKick || '—')}</div></div>
           <div class="oc-detail-field"><div class="label">Tokens (24h)</div><div class="value">${_tokTotal > 0 ? fmtTokens(_tokTotal) : (_tok.sessions > 0 ? _tok.sessions + ' sess' : '—')}</div></div>
-          <div class="oc-detail-field"><div class="label">Actionable</div><div class="value"><div class="spark-row"><span style="color:#f85149">${_ocSparkCounts.actionable}</span>${sparkSvg(historyData.map(s => s.actionableCount ?? 0), '#f85149')}</div></div></div>
+          ${a.name === 'scanner' ? `<div class="oc-detail-field"><div class="label">Actionable</div><div class="value"><div class="spark-row"><span style="color:#f85149">${_ocSparkCounts.actionable}</span>${sparkSvg(historyData.map(s => s.actionableCount ?? 0), '#f85149')}</div></div></div>` : ''}
           <div class="oc-detail-field"><div class="label">Restarts</div><div class="value">${a.restarts ?? 0}</div></div>
           <div class="oc-detail-field"><div class="label">Avg/Pass</div><div class="value">${_tokAvg > 0 ? fmtTokens(_tokAvg) : '—'}</div></div>
-          <div class="oc-detail-field"><div class="label">Open PRs</div><div class="value"><div class="spark-row"><span style="color:#bc8cff">${_ocSparkCounts.openPrs}</span>${sparkSvg(historyData.map(s => s.openPrCount ?? 0), '#bc8cff')}</div></div></div>
+          ${a.name === 'scanner' ? `<div class="oc-detail-field"><div class="label">Open PRs</div><div class="value"><div class="spark-row"><span style="color:#bc8cff">${_ocSparkCounts.openPrs}</span>${sparkSvg(historyData.map(s => s.openPrCount ?? 0), '#bc8cff')}</div></div></div>` : ''}
           <div class="oc-detail-field"><div class="label">Sessions</div><div class="value">${_tok.sessions ?? '—'}</div></div>
           <div class="oc-detail-field"><div class="label">Messages</div><div class="value">${_tok.messages ?? '—'}</div></div>
-          <div class="oc-detail-field"><div class="label">Mergeable</div><div class="value"><div class="spark-row"><span style="color:#3fb950">${_ocSparkCounts.mergeable}</span>${sparkSvg(historyData.map(s => s.mergeableCount ?? 0), '#3fb950')}</div></div></div>
+          ${a.name === 'scanner' ? `<div class="oc-detail-field"><div class="label">Mergeable</div><div class="value"><div class="spark-row"><span style="color:#3fb950">${_ocSparkCounts.mergeable}</span>${sparkSvg(historyData.map(s => s.mergeableCount ?? 0), '#3fb950')}</div></div></div>` : ''}
         </div>
+        <div class="oc-detail-indicators">${agentIndicators(a.name)}</div>
         <div class="oc-detail-summary-wrap">
           <div class="oc-detail-summary" id="oc-summary-scroll">${a.liveSummary ? esc(a.liveSummary) : '<span style="color:#9ca3af">No activity summary</span>'}</div>
           <button class="oc-summary-follow-btn" id="oc-summary-follow" title="Follow new output" onclick="ocSummaryResumeTail()">⬇</button>
