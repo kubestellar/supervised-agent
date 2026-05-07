@@ -1632,18 +1632,37 @@ app.put('/api/config/governor/health', (req, res) => {
 });
 
 app.post('/api/config/governor/agents', (req, res) => {
-  const { name } = req.body;
+  const { name, copyFrom } = req.body;
   if (!name || !/^[a-z][a-z0-9-]*$/.test(name)) {
     return res.status(400).json({ error: 'Invalid agent name (lowercase alphanumeric + hyphens)' });
   }
   try {
     const envFile = `${ENV_DIR}/${name}.env`;
-    if (!fs.existsSync(envFile)) {
-      const initContent = `# ${name} agent config\nAGENT_LAUNCH_CMD=agent-launch.sh\nAGENT_CLI_PINNED=false\n`;
-      const tmp = `/tmp/hive-env-${process.pid}-${Date.now()}`;
-      fs.writeFileSync(tmp, initContent, { mode: 0o644 });
-      execSync(`sudo mv ${shellQuote(tmp)} ${shellQuote(envFile)}`);
+    if (fs.existsSync(envFile)) {
+      return res.json({ ok: true });
     }
+    const tmp = `/tmp/hive-env-${process.pid}-${Date.now()}`;
+    if (copyFrom && VALID_AGENT_NAME.test(copyFrom)) {
+      const srcEnv = `${ENV_DIR}/${copyFrom}.env`;
+      if (fs.existsSync(srcEnv)) {
+        let content = fs.readFileSync(srcEnv, 'utf8');
+        content = content.replace(/^#.*\n?/, `# ${name} agent config (copied from ${copyFrom})\n`);
+        content = content.replace(/AGENT_DISPLAY_NAME=.*/g, `AGENT_DISPLAY_NAME=${name}`);
+        content = content.replace(/AGENT_SESSION_NAME=.*/g, `AGENT_SESSION_NAME=${name}`);
+        fs.writeFileSync(tmp, content, { mode: 0o644 });
+      } else {
+        fs.writeFileSync(tmp, `# ${name} agent config\nAGENT_LAUNCH_CMD=agent-launch.sh\nAGENT_CLI_PINNED=false\n`, { mode: 0o644 });
+      }
+      const srcPolicy = `${ENV_DIR}/${copyFrom}-CLAUDE.md`;
+      if (fs.existsSync(srcPolicy)) {
+        const policyTmp = `/tmp/hive-policy-${process.pid}-${Date.now()}`;
+        fs.writeFileSync(policyTmp, fs.readFileSync(srcPolicy, 'utf8'), { mode: 0o644 });
+        execSync(`sudo mv ${shellQuote(policyTmp)} ${shellQuote(`${ENV_DIR}/${name}-CLAUDE.md`)}`);
+      }
+    } else {
+      fs.writeFileSync(tmp, `# ${name} agent config\nAGENT_LAUNCH_CMD=agent-launch.sh\nAGENT_CLI_PINNED=false\n`, { mode: 0o644 });
+    }
+    execSync(`sudo mv ${shellQuote(tmp)} ${shellQuote(envFile)}`);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
