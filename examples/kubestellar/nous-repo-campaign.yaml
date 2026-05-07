@@ -1,0 +1,34 @@
+# Nous Repo-Scope Campaign Config
+# Used when scope is "repo" — code experiments via git worktrees.
+# ALWAYS runs in suggest mode (operator must approve code changes).
+
+research_question: >
+  What code changes to kubestellar/console improve page load time,
+  reduce GA4 bounce rate, or improve CI reliability?
+
+target_system:
+  name: "KubeStellar Console"
+  description: "Multi-cluster Kubernetes dashboard with AI-powered operations"
+  repo_path: /home/dev/kubestellar-console
+  observable_metrics:
+    - ga4_bounce_rate
+    - ga4_avg_session_duration
+    - ci_pass_rate
+    - build_time_seconds
+    - ttfi_p95_ms
+  controllable_knobs:
+    - react_component_implementations
+    - caching_strategies
+    - api_handler_patterns
+    - bundle_size_optimizations
+
+review:
+  design_perspectives: [statistical-rigor, causal-sufficiency, confound-risk]
+  findings_perspectives: [statistical-rigor, measurement-validity, confound-risk]
+  max_review_rounds: 3
+
+prompts:
+  methodology_layer: "/opt/nous/prompts/methodology"
+  domain_adapter_layer: null
+
+max_iterations: 1

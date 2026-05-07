@@ -1,0 +1,35 @@
+# Nous Governor-Scope Campaign Config
+# Used when scope is "governor" — experiments on env vars only, no code changes.
+
+research_question: >
+  What cadence and model assignments minimize MTTR while keeping
+  weekly token burn under 150M?
+
+target_system:
+  name: "Hive Governor"
+  description: "Governor managing 8 AI agents for kubestellar/console"
+  repo_path: null
+  observable_metrics:
+    - queue_depth
+    - mttr_avg_minutes
+    - tokens_weekly_billable
+    - kick_effectiveness
+  controllable_knobs:
+    - CADENCE_REVIEWER_QUIET_SEC
+    - CADENCE_REVIEWER_BUSY_SEC
+    - MODEL_QUIET_SCANNER
+    - MODEL_QUIET_REVIEWER
+    - BUSY_THRESHOLD_ISSUES
+    - SURGE_THRESHOLD_ISSUES
+    - TOKEN_BUDGET_SAFETY_PCT
+
+review:
+  design_perspectives: [statistical-rigor, causal-sufficiency]
+  findings_perspectives: [statistical-rigor, measurement-validity]
+  max_review_rounds: 2
+
+prompts:
+  methodology_layer: "/opt/nous/prompts/methodology"
+  domain_adapter_layer: null
+
+max_iterations: 1

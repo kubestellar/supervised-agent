@@ -5,6 +5,7 @@
 campaign:
   name: governor-strategy-v1
   mode: observe  # observe | suggest | evolve
+  scope: governor  # governor | repo | both
 
   research_question: >
     What cadence and model assignments minimize MTTR while keeping
