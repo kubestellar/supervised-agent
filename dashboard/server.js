@@ -61,6 +61,7 @@ const REFRESH_MS = 5000;
 const METRICS_DIR = '/var/run/hive-metrics';
 const HISTORY_DIR = path.join(METRICS_DIR, 'history');
 const AGENT_METRICS_CACHE_FILE = path.join(METRICS_DIR, 'agent-metrics-cache.json');
+const HEALTH_CACHE_FILE = path.join(METRICS_DIR, 'health-cache.json');
 const HISTORY_FILE = path.join(HISTORY_DIR, 'daily.json');
 try { fs.mkdirSync(HISTORY_DIR, { recursive: true }); } catch (_) {}
 const PERSIST_INTERVAL_MS = 15 * 60 * 1000; // 15 min
@@ -93,6 +94,7 @@ let lastGoodBeads = { workers: 0, supervisor: 0 };
 const lastGoodAgentInfo = {};
 let ciPassRate = 0;
 let healthChecks = {};
+try { healthChecks = JSON.parse(fs.readFileSync(HEALTH_CACHE_FILE, 'utf8')); ciPassRate = healthChecks.ci || 0; } catch (_) {}
 let agentMetrics = {};
 try { agentMetrics = JSON.parse(fs.readFileSync(AGENT_METRICS_CACHE_FILE, 'utf8')); } catch (_) {}
 let summariesCache = {};
@@ -158,6 +160,7 @@ function fetchHealthChecks() {
         const d = JSON.parse(stdout.trim());
         ciPassRate = d.ci || 0;
         healthChecks = d;
+        try { fs.writeFileSync(HEALTH_CACHE_FILE, JSON.stringify(d)); } catch (_) {}
       } catch (_) {}
     }
   });
