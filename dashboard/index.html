@@ -32,7 +32,7 @@
     .widget-dl:hover { background: var(--cyan); color: var(--bg); }
 
     /* Layout toggle */
-    .layout-toggle { font-size: 0.7rem; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; background: var(--surface); transition: all 0.2s; margin-right: 8px; font-family: inherit; }
+    .layout-toggle { font-size: 0.7rem; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; background: var(--surface); transition: all 0.2s; margin-left: 12px; margin-right: 8px; font-family: inherit; }
     .layout-toggle:hover { border-color: var(--text); color: var(--text); }
     .layout-toggle.active { border-color: var(--cyan); color: var(--cyan); }
 
@@ -105,6 +105,12 @@
       padding: 0 20px; z-index: 99;
     }
     .oc-topbar-left { font-size: 0.85rem; color: #6b7280; }
+    .oc-topbar-center { display: flex; align-items: center; gap: 6px; }
+    .oc-topbar-center .oc-tb-link {
+      font-size: 0.72rem; color: #6b7280; cursor: pointer; padding: 4px 10px;
+      border-radius: 6px; border: 1px solid transparent; transition: all 0.15s;
+    }
+    .oc-topbar-center .oc-tb-link:hover { background: #f3f4f6; color: #111827; border-color: #e5e7eb; }
     .oc-topbar-right { display: flex; align-items: center; gap: 14px; }
     .oc-health-badge {
       font-size: 0.78rem; font-weight: 600; color: #16a34a;
@@ -1277,14 +1283,7 @@
       <a class="oc-nav-item" data-section="repos-section" onclick="ocNavigate('repos-section')">📦 Repos</a>
       <a class="oc-nav-item" data-section="beads-section" onclick="ocNavigate('beads-section')">🔮 Beads</a>
     </div>
-    <div class="oc-nav-group" style="margin-top:auto">
-      <div class="oc-nav-label">Settings</div>
-      <a class="oc-nav-item" onclick="openConfigDialog('governor')">⚙️ Config</a>
-      <a class="oc-nav-item" data-section="debug-section" onclick="ocNavigate('debug-section')">🔍 Debug</a>
-      <a class="oc-nav-item" data-section="logs-section" onclick="ocNavigate('logs-section')">📋 Logs</a>
-    </div>
     <div class="oc-sidebar-footer">
-      <button class="layout-toggle" onclick="toggleLayout()" title="Switch layout">☰ Classic View</button>
     </div>
   </nav>
 
@@ -1292,6 +1291,12 @@
   <header id="oc-topbar" class="oc-topbar" style="display:none">
     <div class="oc-topbar-left">
       <span id="oc-project-name"></span>
+    </div>
+    <div class="oc-topbar-center">
+      <span class="oc-tb-link" onclick="openConfigDialog('governor')">⚙️ Config</span>
+      <span class="oc-tb-link" onclick="ocNavigate('debug-section')">🔍 Debug</span>
+      <span class="oc-tb-link" onclick="ocNavigate('logs-section')">📋 Logs</span>
+      <button class="layout-toggle" onclick="toggleLayout()" title="Switch layout">☰ Classic View</button>
     </div>
     <div class="oc-topbar-right">
       <span class="oc-health-badge" id="oc-health">● Health OK</span>
@@ -1899,8 +1904,8 @@
             { key: 'weeklyRel', label: 'Weekly' },
           ]},
           { label: 'Deploys', items: [
-            { key: 'vllm', label: 'vLLM-d' },
-            { key: 'pokprod', label: 'PokProd' },
+            { key: 'deploy_vllm_d', label: 'vLLM-d' },
+            { key: 'deploy_pok_prod', label: 'PokProd' },
           ]},
         ];
         const renderItem = d => {
