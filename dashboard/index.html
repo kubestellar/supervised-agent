@@ -224,13 +224,15 @@
     /* Agent detail summary — monospace, respect newlines */
     .oc-detail-summary-wrap { position: relative; margin-bottom: 16px; }
     .oc-detail-summary {
-      color: #374151; line-height: 1.5;
+      color: var(--cyan); line-height: 1.3;
       padding: 14px; background: #f9fafb;
       border-radius: 8px; border: 1px solid #e5e7eb;
-      height: calc(1.5em * 20 + 28px); max-height: none; overflow-y: auto;
+      height: calc(1.3em * 20 + 28px); max-height: none; overflow-y: auto;
       resize: vertical;
       font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
       font-size: 0.65rem;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     .sum-tool {
       display: flex; align-items: center; gap: 6px;
@@ -1604,7 +1606,7 @@
           <div class="oc-detail-field"><div class="label">Mergeable</div><div class="value"><div class="spark-row"><span style="color:#3fb950">${_ocSparkCounts.mergeable}</span>${sparkSvg(historyData.map(s => s.mergeableCount ?? 0), '#3fb950')}</div></div></div>
         </div>
         <div class="oc-detail-summary-wrap">
-          <div class="oc-detail-summary" id="oc-summary-scroll">${a.liveSummary ? ocFormatSummary(a.liveSummary) : '<span style="color:#9ca3af">No activity summary</span>'}</div>
+          <div class="oc-detail-summary" id="oc-summary-scroll">${a.liveSummary ? esc(a.liveSummary) : '<span style="color:#9ca3af">No activity summary</span>'}</div>
           <button class="oc-summary-follow-btn" id="oc-summary-follow" title="Follow new output" onclick="ocSummaryResumeTail()">⬇</button>
         </div>
         <div class="oc-chat-prompt">
