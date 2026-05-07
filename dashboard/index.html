@@ -643,7 +643,7 @@
       position: absolute; top: 0; left: 0; right: 0; bottom: 0;
       font-size: 0.55rem; color: #fff; font-weight: 600; pointer-events: none;
     }
-    .temp-gauge-ticks span { position: absolute; top: 50%; transform: translate(-50%, -50%); text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+    .temp-gauge-ticks span { position: absolute; top: 50%; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
     .temp-gauge-needle {
       position: absolute; top: -4px; width: 4px; height: 32px;
       background: #fff; border-radius: 2px;
@@ -1553,7 +1553,7 @@
           <div class="oc-gov-gauge">
             <div class="temp-gauge-track" style="background:linear-gradient(to right, #238636 0%, #238636 ${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%, #1f6feb ${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%, #1f6feb ${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%, #d29922 ${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%, #d29922 ${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%, #f85149 ${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%, #f85149 100%)">
               <div class="temp-gauge-glow" style="width:100%"></div>
-              <div class="temp-gauge-ticks"><span style="left:2%;transform:translate(0,-50%)">0</span><span style="left:${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%">${OC_THRESH_QUIET}</span><span style="left:${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%">${OC_THRESH_BUSY}</span><span style="left:${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%">${OC_THRESH_SURGE}</span><span style="left:98%;transform:translate(-100%,-50%)">${OC_GAUGE_MAX}</span></div>
+              <div class="temp-gauge-ticks"><span style="left:2%;-webkit-transform:translate(0,-50%);transform:translate(0,-50%)">0</span><span style="left:${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%;-webkit-transform:translate(-50%,-50%);transform:translate(-50%,-50%)">${OC_THRESH_QUIET}</span><span style="left:${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%;-webkit-transform:translate(-50%,-50%);transform:translate(-50%,-50%)">${OC_THRESH_BUSY}</span><span style="left:${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%;-webkit-transform:translate(-50%,-50%);transform:translate(-50%,-50%)">${OC_THRESH_SURGE}</span><span style="left:98%;-webkit-transform:translate(-100%,-50%);transform:translate(-100%,-50%)">${OC_GAUGE_MAX}</span></div>
               <div class="temp-gauge-needle" style="left:${gaugePct}%" data-val="${govActionable}"></div>
             </div>
             <div class="temp-gauge-labels">
@@ -2170,7 +2170,7 @@
           <div class="temp-gauge-label"><span>Issues: ${issueCount}</span><span>max ${maxQ}</span></div>
           <div class="temp-gauge-track" style="background:linear-gradient(to right, #238636 0%, #238636 ${CLASSIC_THRESH_QUIET/maxQ*100}%, #1f6feb ${CLASSIC_THRESH_QUIET/maxQ*100}%, #1f6feb ${CLASSIC_THRESH_BUSY/maxQ*100}%, #d29922 ${CLASSIC_THRESH_BUSY/maxQ*100}%, #d29922 ${CLASSIC_THRESH_SURGE/maxQ*100}%, #f85149 ${CLASSIC_THRESH_SURGE/maxQ*100}%, #f85149 100%)">
             <div class="temp-gauge-glow" style="width:100%"></div>
-            <div class="temp-gauge-ticks"><span>0</span><span>${CLASSIC_THRESH_QUIET}</span><span>${CLASSIC_THRESH_BUSY}</span><span>${CLASSIC_THRESH_SURGE}</span><span>${maxQ}</span></div>
+            <div class="temp-gauge-ticks"><span style="left:2%;-webkit-transform:translate(0,-50%);transform:translate(0,-50%)">0</span><span style="left:${CLASSIC_THRESH_QUIET/maxQ*100}%;-webkit-transform:translate(-50%,-50%);transform:translate(-50%,-50%)">${CLASSIC_THRESH_QUIET}</span><span style="left:${CLASSIC_THRESH_BUSY/maxQ*100}%;-webkit-transform:translate(-50%,-50%);transform:translate(-50%,-50%)">${CLASSIC_THRESH_BUSY}</span><span style="left:${CLASSIC_THRESH_SURGE/maxQ*100}%;-webkit-transform:translate(-50%,-50%);transform:translate(-50%,-50%)">${CLASSIC_THRESH_SURGE}</span><span style="left:98%;-webkit-transform:translate(-100%,-50%);transform:translate(-100%,-50%)">${maxQ}</span></div>
             <div class="temp-gauge-needle" style="left:${pct}%" data-val="${issueCount}"></div>
           </div>
           <div class="temp-gauge-labels">
