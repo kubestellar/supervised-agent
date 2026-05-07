@@ -4,6 +4,7 @@
 set -euo pipefail
 
 NOUS_DIR="${NOUS_DIR:-/opt/nous}"
+NOUS_PYTHON="${NOUS_DIR}/venv/bin/python3"
 NOUS_RUN_DIR="${NOUS_RUN_DIR:-/var/run/nous}"
 CAMPAIGN_PATH="${NOUS_CAMPAIGN_PATH:-/etc/hive/nous-campaign.yaml}"
 HIVE_METRICS_DIR="${HIVE_METRICS_DIR:-/var/run/hive-metrics}"
@@ -150,7 +151,7 @@ echo "[nous-runner] invoking run_campaign.py (auto_approve=$AUTO_APPROVE, timeou
 NOUS_HIVE_MODE="$EFFECTIVE_MODE" \
 NOUS_HIVE_SCOPE="$EFFECTIVE_SCOPE" \
 NOUS_GATE_SCRIPT="$GATE_SCRIPT" \
-python3 "$NOUS_DIR/run_campaign.py" \
+"$NOUS_PYTHON" "$NOUS_DIR/run_campaign.py" \
   --campaign "$CAMPAIGN_CONFIG" \
   --work-dir "$WORK_DIR" \
   --max-iterations 1 \
