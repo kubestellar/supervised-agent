@@ -3629,7 +3629,7 @@ function burnAreaChart() {
         case 'Cadences': return renderAgentCadences(d.cadences || {});
         case 'Pipeline': return renderAgentPipeline(d.pipeline || {});
         case 'Hooks': return renderAgentHooks(d.hooks || {});
-        case 'Restrictions': return renderAgentRestrictions(d.restrictions || []);
+        case 'Restrictions': return renderAgentRestrictions(d.restrictions || {});
         case 'Prompts': return renderAgentPrompts(d.prompt || '');
         default: return '';
       }
@@ -3768,49 +3768,49 @@ function burnAreaChart() {
     }
 
     function renderAgentRestrictions(restrictions) {
-      const sourceColors = { 'gh-wrapper': '#dc2626', policy: '#7c3aed', env: '#2563eb' };
-      const sourceLabels = { 'gh-wrapper': 'gh wrapper', policy: 'CLAUDE.md', env: 'env' };
-      const isObj = restrictions.length > 0 && typeof restrictions[0] === 'object';
-      const detected = isObj ? restrictions.filter(r => r.source !== 'env') : [];
-      const manual = isObj ? restrictions.filter(r => r.source === 'env') : restrictions;
+      const agentRules = (restrictions.agent || []);
+      const globalRules = (restrictions.global || []);
+      const policyRules = (restrictions.policy || []);
 
-      let html = '<p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Enforced restrictions detected from gh wrapper, CLAUDE.md policy, and manual overrides.</p>';
-
-      if (detected.length > 0) {
-        const grouped = {};
-        for (const r of detected) {
-          const src = r.source || 'unknown';
-          if (!grouped[src]) grouped[src] = [];
-          grouped[src].push(r);
+      function renderSection(title, color, rules, opts) {
+        const editable = opts && opts.editable;
+        const icon = opts && opts.icon || '';
+        let h = `<div style="margin-bottom:16px">`;
+        h += `<div style="font-size:0.72rem;font-weight:600;color:${color};margin-bottom:6px;text-transform:uppercase;display:flex;align-items:center;gap:4px">${icon} ${esc(title)}</div>`;
+        if (rules.length === 0 && !editable) {
+          h += `<div style="font-size:0.75rem;color:var(--muted);padding:4px 0">None</div>`;
         }
-        for (const [src, rules] of Object.entries(grouped)) {
-          const color = sourceColors[src] || '#6b7280';
-          const label = sourceLabels[src] || src;
-          html += `<div style="margin-bottom:12px">`;
-          html += `<div style="font-size:0.7rem;font-weight:600;color:${color};margin-bottom:4px;text-transform:uppercase">${esc(label)}</div>`;
-          for (const r of rules) {
-            html += `<div style="font-size:0.78rem;padding:6px 8px;margin-bottom:4px;background:var(--bg);border-left:3px solid ${color};border-radius:0 4px 4px 0">`;
-            html += `<code style="font-size:0.75rem">${esc(r.cmd)}</code>`;
-            if (r.reason) html += `<div style="font-size:0.7rem;color:var(--muted);margin-top:2px">${esc(r.reason)}</div>`;
-            html += '</div>';
+        for (let i = 0; i < rules.length; i++) {
+          const r = rules[i];
+          h += `<div style="font-size:0.78rem;padding:6px 8px;margin-bottom:4px;background:var(--bg);border-left:3px solid ${color};border-radius:0 4px 4px 0;display:flex;align-items:start;gap:8px">`;
+          h += `<div style="flex:1">`;
+          h += `<code style="font-size:0.75rem">${esc(r.pattern || '')}</code>`;
+          if (r.reason) h += `<div style="font-size:0.7rem;color:var(--muted);margin-top:2px">${esc(r.reason)}</div>`;
+          h += '</div>';
+          if (editable) {
+            h += `<label style="font-size:0.7rem;display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap">`;
+            h += `<input type="checkbox" ${r.enabled !== false ? 'checked' : ''} onchange="toggleRestriction(${i}, this.checked)"> on</label>`;
+            h += `<button style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:1rem;padding:0 4px" onclick="removeRestriction(${i})">✕</button>`;
           }
-          html += '</div>';
+          h += '</div>';
         }
+        if (editable) {
+          h += `<div style="display:flex;gap:6px;margin-top:6px">`;
+          h += `<input type="text" id="cfg-restriction-pattern" placeholder="glob pattern, e.g. gh issue list*" style="flex:2;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:0.78rem;background:var(--bg);color:var(--fg)">`;
+          h += `<input type="text" id="cfg-restriction-reason" placeholder="reason (optional)" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:0.78rem;background:var(--bg);color:var(--fg)">`;
+          h += `<button onclick="addRestriction()" style="padding:6px 12px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--fg);cursor:pointer;font-size:0.78rem;white-space:nowrap">+ Add</button>`;
+          h += '</div>';
+        }
+        h += '</div>';
+        return h;
       }
 
-      html += '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">';
-      html += '<div style="font-size:0.7rem;font-weight:600;color:#2563eb;margin-bottom:4px;text-transform:uppercase">Manual overrides</div>';
-      const manualList = manual.map((r, i) => {
-        const text = typeof r === 'object' ? r.cmd : r;
-        return `<div class="config-list-item"><span>${esc(text)}</span><button class="remove-item" onclick="removeListItem('restrictions','list',${i})">✕</button></div>`;
-      }).join('');
-      html += '<div class="config-list">';
-      html += manualList || '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">No manual restrictions</div>';
-      html += `<div class="config-list-add">
-            <input type="text" id="cfg-restriction-input" placeholder="command pattern">
-            <button onclick="addListItem('restrictions','list','cfg-restriction-input')">+ Add</button>
-          </div>`;
-      html += '</div></div>';
+      let html = '<p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Per-agent command restrictions enforced by the gh wrapper. Agent rules are editable; global and policy rules are read-only.</p>';
+      html += renderSection('Agent restrictions', '#2563eb', agentRules, { editable: true, icon: '🔧' });
+      html += '<div style="border-top:1px solid var(--border);padding-top:12px">';
+      html += renderSection('Global (all agents)', '#dc2626', globalRules, { icon: '🌐' });
+      html += renderSection('Policy (CLAUDE.md)', '#7c3aed', policyRules, { icon: '📋' });
+      html += '</div>';
       return html;
     }
 
@@ -4042,15 +4042,38 @@ function burnAreaChart() {
       }
     }
 
+    function addRestriction() {
+      const patternEl = document.getElementById('cfg-restriction-pattern');
+      const reasonEl = document.getElementById('cfg-restriction-reason');
+      const pattern = (patternEl ? patternEl.value.trim() : '');
+      const reason = (reasonEl ? reasonEl.value.trim() : '');
+      if (!pattern) return;
+      if (!_configState.data.restrictions) _configState.data.restrictions = { agent: [], global: [], policy: [] };
+      _configState.data.restrictions.agent.push({ pattern, reason, enabled: true });
+      markDirty('restrictions', 'rules', _configState.data.restrictions.agent);
+      if (patternEl) patternEl.value = '';
+      if (reasonEl) reasonEl.value = '';
+      renderConfigTab(_configState.tab);
+    }
+
+    function removeRestriction(index) {
+      if (!_configState.data.restrictions || !_configState.data.restrictions.agent) return;
+      _configState.data.restrictions.agent.splice(index, 1);
+      markDirty('restrictions', 'rules', _configState.data.restrictions.agent);
+      renderConfigTab(_configState.tab);
+    }
+
+    function toggleRestriction(index, enabled) {
+      if (!_configState.data.restrictions || !_configState.data.restrictions.agent) return;
+      _configState.data.restrictions.agent[index].enabled = enabled;
+      markDirty('restrictions', 'rules', _configState.data.restrictions.agent);
+    }
+
     function addListItem(section, key, inputId) {
       const input = document.getElementById(inputId);
       const val = input.value.trim();
       if (!val) return;
-      if (section === 'restrictions') {
-        if (!_configState.data.restrictions) _configState.data.restrictions = [];
-        _configState.data.restrictions.push(val);
-        markDirty('restrictions', 'list', _configState.data.restrictions);
-      } else if (section === 'hooks') {
+      if (section === 'hooks') {
         if (!_configState.data.hooks) _configState.data.hooks = {};
         if (!_configState.data.hooks[key]) _configState.data.hooks[key] = [];
         _configState.data.hooks[key].push(val);
@@ -4065,10 +4088,7 @@ function burnAreaChart() {
     }
 
     function removeListItem(section, key, index) {
-      if (section === 'restrictions') {
-        _configState.data.restrictions.splice(index, 1);
-        markDirty('restrictions', 'list', _configState.data.restrictions);
-      } else if (section === 'hooks') {
+      if (section === 'hooks') {
         _configState.data.hooks[key].splice(index, 1);
         markDirty('hooks', key, _configState.data.hooks[key]);
       } else if (section === 'labels') {

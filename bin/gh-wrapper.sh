@@ -1,26 +1,65 @@
 #!/bin/bash
-# gh wrapper — enforces agent safety rules and injects App token.
+# gh wrapper — enforces per-agent + global restrictions and injects App token.
 # Installed at /usr/local/bin/gh (ahead of /usr/bin/gh in PATH).
-# Agents must read from /var/run/hive-metrics/actionable.json for listings.
+#
+# Per-agent restrictions live at /etc/hive/restrictions/<agent-id>.json.
+# The wrapper reads HIVE_AGENT_ID to find the right file.
+#
+# Restriction file format:
+#   { "rules": [
+#       { "pattern": "gh issue list*", "reason": "Use actionable.json", "enabled": true },
+#       { "pattern": "gh api repos/*/issues*", "reason": "Enumeration disabled", "enabled": true }
+#   ]}
+#
+# Pattern matching: the full command ("gh issue list --repo foo") is checked
+# against each pattern using bash glob matching. Patterns support * wildcards.
 
 set -euo pipefail
 
 REAL_GH="/usr/bin/gh"
+RESTRICTIONS_DIR="/etc/hive/restrictions"
 
 # Inject GitHub App token for agent gh calls (15k/hr vs PAT's 5k/hr).
-# Always read from the cache file written by gh-app-token.sh — this is
-# refreshed every 55 minutes and is always fresh, unlike HIVE_GITHUB_TOKEN
-# which is set at session launch and can go stale after token expiry (1hr).
-# This per-call injection ensures gh uses the App token without polluting the
-# agent's persistent env (Copilot CLI never calls this wrapper).
 GH_APP_TOKEN_CACHE="/var/run/hive-metrics/gh-app-token.cache"
 if [[ -f "$GH_APP_TOKEN_CACHE" ]]; then
   export GH_TOKEN="$(cat "$GH_APP_TOKEN_CACHE")"
 elif [[ -n "${HIVE_GITHUB_TOKEN:-}" ]]; then
-  # Fallback: session env var if cache file is missing
   export GH_TOKEN="$HIVE_GITHUB_TOKEN"
 fi
 
+# Build the full command string for pattern matching
+FULL_CMD="gh $*"
+
+# Check per-agent restrictions
+AGENT_ID="${HIVE_AGENT_ID:-}"
+if [[ -n "$AGENT_ID" ]]; then
+  RESTRICTION_FILE="${RESTRICTIONS_DIR}/${AGENT_ID}.json"
+  if [[ -f "$RESTRICTION_FILE" ]]; then
+    while IFS='|' read -r pattern reason; do
+      [[ -z "$pattern" ]] && continue
+      # Use bash extglob for pattern matching
+      # shellcheck disable=SC2254
+      case "$FULL_CMD" in
+        $pattern)
+          echo "⛔ BLOCKED: ${reason:-command not allowed for ${AGENT_ID}}" >&2
+          exit 1
+          ;;
+      esac
+    done < <(python3 -c "
+import json, sys
+try:
+    with open('${RESTRICTION_FILE}') as f:
+        data = json.load(f)
+    for r in data.get('rules', []):
+        if r.get('enabled', True):
+            print(r.get('pattern','') + '|' + r.get('reason',''))
+except Exception:
+    pass
+" 2>/dev/null)
+  fi
+fi
+
+# Global defaults — always enforced for all agents regardless of restriction file
 args=("$@")
 subcmd=""
 action=""
@@ -38,14 +77,14 @@ for arg in "${args[@]}"; do
   esac
 done
 
-# Block gh issue list and gh pr list
+# Block gh issue list and gh pr list (global)
 if { [ "$subcmd" = "issue" ] || [ "$subcmd" = "pr" ]; } && [ "$action" = "list" ]; then
   echo "⛔ BLOCKED: gh $subcmd list is disabled for agents." >&2
   echo "Read /var/run/hive-metrics/actionable.json instead." >&2
   exit 1
 fi
 
-# Block gh api calls that list issues or pulls (enumeration endpoints)
+# Block gh api calls that list issues or pulls (global)
 if [ "$subcmd" = "api" ]; then
   for arg in "${args[@]}"; do
     case "$arg" in

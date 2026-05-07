@@ -1258,6 +1258,7 @@ function deriveCli(launchCmd) {
 }
 
 const GH_WRAPPER_PATH = '/usr/local/bin/gh';
+const RESTRICTIONS_DIR = '/etc/hive/restrictions';
 let _ghWrapperRestrictions = null;
 let _ghWrapperMtime = 0;
 
@@ -1267,10 +1268,10 @@ function parseGhWrapperRestrictions() {
     if (_ghWrapperRestrictions && stat.mtimeMs === _ghWrapperMtime) return _ghWrapperRestrictions;
     const src = fs.readFileSync(GH_WRAPPER_PATH, 'utf8');
     const rules = [];
-    if (/BLOCKED.*gh.*issue.*list/i.test(src)) rules.push({ cmd: 'gh issue list', reason: 'Use /var/run/hive-metrics/actionable.json', source: 'gh-wrapper' });
-    if (/BLOCKED.*gh.*pr.*list/i.test(src)) rules.push({ cmd: 'gh pr list', reason: 'Use /var/run/hive-metrics/actionable.json', source: 'gh-wrapper' });
-    if (/BLOCKED.*gh.*api.*issue.*listing/i.test(src)) rules.push({ cmd: 'gh api (issue/PR listing)', reason: 'Use /var/run/hive-metrics/actionable.json', source: 'gh-wrapper' });
-    if (/BLOCKED.*gh.*search/i.test(src)) rules.push({ cmd: 'gh search', reason: 'Enumeration disabled', source: 'gh-wrapper' });
+    if (/BLOCKED.*gh.*issue.*list/i.test(src)) rules.push({ pattern: 'gh issue list*', reason: 'Use /var/run/hive-metrics/actionable.json', source: 'global' });
+    if (/BLOCKED.*gh.*pr.*list/i.test(src)) rules.push({ pattern: 'gh pr list*', reason: 'Use /var/run/hive-metrics/actionable.json', source: 'global' });
+    if (/BLOCKED.*gh.*api.*issue.*listing/i.test(src)) rules.push({ pattern: 'gh api repos/*/issues*', reason: 'Use /var/run/hive-metrics/actionable.json', source: 'global' });
+    if (/BLOCKED.*gh.*search/i.test(src)) rules.push({ pattern: 'gh search*', reason: 'Enumeration disabled', source: 'global' });
     _ghWrapperRestrictions = rules;
     _ghWrapperMtime = stat.mtimeMs;
     return rules;
@@ -1289,19 +1290,34 @@ function parsePolicyRestrictions(agentName) {
       if (/^(NEVER|DO NOT|MUST NOT|SHALL NOT)\b/i.test(trimmed) || /HARD RULE/i.test(trimmed)) {
         const MAX_RULE_LEN = 200;
         const text = trimmed.length > MAX_RULE_LEN ? trimmed.slice(0, MAX_RULE_LEN) + '...' : trimmed;
-        rules.push({ cmd: text, reason: '', source: 'policy' });
+        rules.push({ pattern: text, reason: '', source: 'policy' });
       }
     }
   } catch (_) { /* policy file may not exist */ }
   return rules;
 }
 
-function detectRestrictions(agentName, manualList) {
-  const all = [];
-  for (const m of manualList) all.push({ cmd: m, reason: '', source: 'env' });
-  all.push(...parseGhWrapperRestrictions());
-  all.push(...parsePolicyRestrictions(agentName));
-  return all;
+function readAgentRestrictions(agentId) {
+  try {
+    const filePath = path.join(RESTRICTIONS_DIR, `${agentId}.json`);
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (_) { return { rules: [] }; }
+}
+
+function writeAgentRestrictions(agentId, data) {
+  if (!fs.existsSync(RESTRICTIONS_DIR)) {
+    execSync(`sudo mkdir -p ${shellQuote(RESTRICTIONS_DIR)} && sudo chown dev:dev ${shellQuote(RESTRICTIONS_DIR)}`);
+  }
+  const filePath = path.join(RESTRICTIONS_DIR, `${agentId}.json`);
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n');
+}
+
+function getAgentRestrictions(agentName) {
+  const agentFile = readAgentRestrictions(agentName);
+  const agentRules = (agentFile.rules || []).map((r) => ({ ...r, source: 'agent' }));
+  const globalRules = parseGhWrapperRestrictions();
+  const policyRules = parsePolicyRestrictions(agentName);
+  return { agent: agentRules, global: globalRules, policy: policyRules };
 }
 
 app.get('/api/config/agent/:name', (req, res) => {
@@ -1354,8 +1370,7 @@ app.get('/api/config/agent/:name', (req, res) => {
       postIdle: agentEnv.POST_IDLE_HOOKS ? agentEnv.POST_IDLE_HOOKS.split(',').filter(Boolean) : [],
     };
 
-    const manualRestrictions = agentEnv.AGENT_RESTRICTIONS ? agentEnv.AGENT_RESTRICTIONS.split(',').filter(Boolean) : [];
-    const restrictions = detectRestrictions(name, manualRestrictions);
+    const restrictions = getAgentRestrictions(name);
 
     let prompt = '';
     try {
@@ -1464,10 +1479,9 @@ app.put('/api/config/agent/:name/hooks', (req, res) => {
 app.put('/api/config/agent/:name/restrictions', (req, res) => {
   const { name } = req.params;
   if (!validateAgentName(name, res)) return;
-  const envFile = `${ENV_DIR}/${name}.env`;
   try {
-    const list = req.body.list || [];
-    writeEnvVar(envFile, 'AGENT_RESTRICTIONS', list.join(','));
+    const rules = req.body.rules || [];
+    writeAgentRestrictions(name, { rules });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
