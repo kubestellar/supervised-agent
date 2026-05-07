@@ -697,6 +697,9 @@ const TMUX_SESSION = {
   architect: 'architect',
   outreach: 'outreach',
   supervisor: 'supervisor',
+  strategist: 'strategist',
+  analyst: 'analyst',
+  guardian: 'guardian',
 };
 
 // Control endpoints
