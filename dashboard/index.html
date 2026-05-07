@@ -52,50 +52,54 @@
 
     /* Light sidebar */
     .oc-sidebar {
-      position: fixed; top: 0; left: 0; bottom: 0; width: 200px;
-      background: #ffffff; border-right: 1px solid #e5e7eb;
+      position: fixed; top: 0; left: 0; bottom: 0; width: 232px;
+      background: #ffffff; border-right: 1px solid #e9ecef;
       display: flex; flex-direction: column; padding: 0;
       z-index: 100; overflow-y: auto;
     }
     .oc-sidebar-logo {
       display: flex; align-items: center; gap: 10px;
-      padding: 20px 16px 16px; border-bottom: 1px solid #e5e7eb;
+      padding: 24px 20px 20px; border-bottom: 1px solid #f0f0f0;
     }
     .oc-logo-icon { font-size: 1.6rem; }
     .oc-logo-title { font-size: 0.95rem; font-weight: 800; letter-spacing: 1px; color: #1a1a2e; }
     .oc-logo-sub { font-size: 0.55rem; color: #6b7280; letter-spacing: 0.5px; text-transform: uppercase; }
-    .oc-nav-group { padding: 8px 0; }
+    .oc-nav-group { padding: 12px 0; }
     .oc-nav-label {
-      font-size: 0.6rem; font-weight: 600; color: #9ca3af;
-      text-transform: uppercase; letter-spacing: 0.5px;
-      padding: 8px 16px 4px; user-select: none;
+      font-size: 0.65rem; font-weight: 600; color: #b0b7c3;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      padding: 12px 20px 6px; user-select: none;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .oc-nav-label::after {
+      content: ''; flex: 1; height: 1px; background: #e5e7eb;
     }
     .oc-nav-item {
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 16px; font-size: 0.82rem; color: #374151;
-      cursor: pointer; text-decoration: none; border-radius: 0;
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 20px; font-size: 0.88rem; color: #4b5563;
+      cursor: pointer; text-decoration: none; border-radius: 8px;
       transition: background 0.15s, color 0.15s;
+      margin: 2px 10px;
     }
-    .oc-nav-item:hover { background: #f3f4f6; color: #111827; }
+    .oc-nav-item:hover { background: #f5f5f7; color: #374151; }
     .oc-nav-item.active {
       background: #fef2f2; color: #dc2626; font-weight: 600;
-      border-left: 3px solid #dc2626; padding-left: 13px;
     }
     .oc-sidebar-footer {
-      padding: 12px 16px; border-top: 1px solid #e5e7eb;
+      padding: 16px 20px; border-top: 1px solid #f0f0f0;
       margin-top: auto;
     }
     .oc-sidebar-footer .layout-toggle {
       width: 100%; text-align: center;
-      background: #f9fafb; border: 1px solid #e5e7eb;
-      color: #6b7280; font-size: 0.72rem; padding: 6px;
-      border-radius: 6px; cursor: pointer;
+      background: #f9fafb; border: 1px solid #e9ecef;
+      color: #6b7280; font-size: 0.76rem; padding: 8px;
+      border-radius: 8px; cursor: pointer;
     }
     .oc-sidebar-footer .layout-toggle:hover { background: #f3f4f6; color: #111827; }
 
     /* Light top bar */
     .oc-topbar {
-      position: fixed; top: 0; left: 200px; right: 0; height: 48px;
+      position: fixed; top: 0; left: 232px; right: 0; height: 48px;
       background: #ffffff; border-bottom: 1px solid #e5e7eb;
       display: flex; align-items: center; justify-content: space-between;
       padding: 0 20px; z-index: 99;
@@ -117,7 +121,7 @@
 
     /* Light main content area */
     body.light-mode {
-      padding: 64px 20px 24px 220px; margin: 0;
+      padding: 64px 20px 24px 252px; margin: 0;
       max-width: 100vw; overflow-x: hidden; box-sizing: border-box;
     }
     body.light-mode > .gh-rate-alert { margin-left: 0; }
@@ -202,17 +206,18 @@
 
     /* Sidebar agent tree */
     .oc-tree-toggle {
-      display: flex; align-items: center; gap: 6px;
-      padding: 6px 16px; font-size: 0.72rem; color: #6b7280;
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 20px 6px; font-size: 0.65rem; color: #b0b7c3;
       cursor: pointer; user-select: none;
+      text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600;
     }
-    .oc-tree-toggle:hover { color: #374151; }
-    .oc-tree-arrow { font-size: 0.6rem; transition: transform 0.15s; }
+    .oc-tree-toggle:hover { color: #6b7280; }
+    .oc-tree-arrow { font-size: 0.55rem; transition: transform 0.15s; }
     .oc-tree-toggle.collapsed .oc-tree-arrow { transform: rotate(-90deg); }
-    .oc-tree-children { padding-left: 8px; }
+    .oc-tree-children { padding-left: 4px; }
     .oc-tree-children.collapsed { display: none; }
     .oc-nav-item .oc-agent-dot {
-      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
     }
     .oc-agent-dot.running { background: #16a34a; animation: oc-pulse 1.5s ease-in-out infinite; }
     .oc-agent-dot.idle { background: #16a34a; }
@@ -1254,24 +1259,17 @@
     </div>
     <div class="oc-nav-group">
       <div class="oc-tree-toggle" onclick="ocToggleAgentTree(this)">
-        <span class="oc-tree-arrow">▼</span> <span style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Operations</span>
+        <span class="oc-tree-arrow">▼</span> <span>Agent</span>
       </div>
       <div class="oc-tree-children" id="oc-agent-tree">
         <div id="oc-agent-nav-ops"></div>
-        <a class="oc-nav-item" style="color:#6b7280;font-style:italic" onclick="openConfigDialog('agent')">+ add agent</a>
-      </div>
-    </div>
-    <div class="oc-nav-group">
-      <div class="oc-tree-toggle" onclick="ocToggleAgentTree(this)">
-        <span class="oc-tree-arrow">▼</span> <span style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Strategy</span>
-      </div>
-      <div class="oc-tree-children">
         <div id="oc-agent-nav-strategy"></div>
         <a class="oc-nav-item" data-section="nous-section" onclick="ocNavigate('nous-section')">🧪 Strategy Lab</a>
         <div id="nous-sidebar-config" style="padding:2px 8px 6px 24px;font-size:0.65rem;color:var(--muted);line-height:1.5;display:none">
           <div><span id="nous-sb-scope" style="font-weight:600"></span> · <span id="nous-sb-mode"></span></div>
           <div id="nous-sb-phase" style="opacity:0.8"></div>
         </div>
+        <a class="oc-nav-item" style="color:#6b7280;font-style:italic" onclick="openConfigDialog('agent')">+ add agent</a>
       </div>
     </div>
     <div class="oc-nav-group">
@@ -1282,6 +1280,8 @@
     <div class="oc-nav-group" style="margin-top:auto">
       <div class="oc-nav-label">Settings</div>
       <a class="oc-nav-item" onclick="openConfigDialog('governor')">⚙️ Config</a>
+      <a class="oc-nav-item" data-section="debug-section" onclick="ocNavigate('debug-section')">🔍 Debug</a>
+      <a class="oc-nav-item" data-section="logs-section" onclick="ocNavigate('logs-section')">📋 Logs</a>
     </div>
     <div class="oc-sidebar-footer">
       <button class="layout-toggle" onclick="toggleLayout()" title="Switch layout">☰ Classic View</button>
@@ -1328,6 +1328,24 @@
   <div id="nous-section" style="margin-top: 16px; margin-bottom: 24px;">
     <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 8px;">🧪 Strategy Lab <span id="nous-mode-badge" style="font-size:0.75rem;padding:2px 8px;border-radius:9999px;margin-left:8px"></span></h2>
     <div id="nous-panel"></div>
+  </div>
+
+  <div id="debug-section" style="margin-top: 16px; margin-bottom: 24px;">
+    <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 12px;">🔍 System Diagnostics</h2>
+    <div id="debug-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;"></div>
+  </div>
+
+  <div id="logs-section" style="margin-top: 16px; margin-bottom: 24px;">
+    <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 12px;">📋 Agent Logs</h2>
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+      <select id="logs-agent-select" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.82rem; background: var(--surface); color: var(--text); cursor: pointer;">
+        <option value="all">All Agents</option>
+      </select>
+      <label style="display: flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--muted); cursor: pointer;">
+        <input type="checkbox" id="logs-follow" checked> Follow
+      </label>
+    </div>
+    <div id="logs-output" style="background: #1a1a2e; color: #e2e8f0; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.75rem; line-height: 1.5; padding: 14px; border-radius: 8px; max-height: 500px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;"></div>
   </div>
 
   <div id="oc-gov-strip-outer" class="oc-gov-strip"></div>
@@ -3298,8 +3316,147 @@ function burnAreaChart() {
       renderBeads(data.beads || {});
       ocUpdateSidebarAgents();
       if (_ocSelectedAgent) { ocRenderAgentDetail(); ocUpdateFocusedState(); }
+      renderDebugSection();
       window.scrollTo(0, scrollY);
     }
+
+    // ── Debug section ──
+    const DEBUG_REFRESH_MS = 10000;
+    function renderDebugSection() {
+      const grid = document.getElementById('debug-grid');
+      if (!grid) return;
+      const data = window._lastStatus || {};
+      const health = data.health || {};
+      const agents = data.agents || [];
+      const budget = data.budget || {};
+      const ghRate = data.ghRateLimits || {};
+      const tokens = data.tokens || {};
+
+      const CI_PASS_THRESHOLD = 70;
+      const HEALTH_LABELS = {
+        ci: 'CI Pass Rate', brew: 'Homebrew', helm: 'Helm', nightly: 'Nightly',
+        nightlyCompliance: 'Compliance', nightlyDashboard: 'Dashboard', nightlyGhaw: 'GHAW',
+        nightlyPlaywright: 'Playwright', nightlyRel: 'Release', weekly: 'Weekly',
+        weeklyRel: 'Weekly Rel', hourly: 'Hourly', deploy_vllm_d: 'vLLM-d', deploy_pok_prod: 'POK'
+      };
+
+      const cardStyle = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;';
+      const labelStyle = 'font-size:0.65rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:8px;font-weight:600;';
+      const rowStyle = 'display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:0.8rem;';
+
+      let healthRows = '';
+      for (const [k, v] of Object.entries(health)) {
+        const label = HEALTH_LABELS[k] || k;
+        const ok = k === 'ci' ? v >= CI_PASS_THRESHOLD : (v === true || v === 1);
+        const skip = v === -1;
+        const dot = skip ? '⊘' : ok ? '✓' : '✗';
+        const color = skip ? 'var(--muted)' : ok ? 'var(--green)' : 'var(--red)';
+        const val = k === 'ci' ? `${v}%` : skip ? 'skipped' : ok ? 'ok' : 'fail';
+        healthRows += `<div style="${rowStyle}"><span>${label}</span><span style="color:${color};font-weight:600">${dot} ${val}</span></div>`;
+      }
+
+      let agentRows = '';
+      for (const a of agents) {
+        const stateColor = { running: 'var(--green)', idle: 'var(--green)', paused: 'var(--yellow)', stopped: 'var(--red)', off: 'var(--muted)' }[a.state] || 'var(--muted)';
+        agentRows += `<div style="${rowStyle}"><span>${a.name}</span><span style="color:${stateColor};font-weight:600">${a.state}</span></div>`;
+      }
+
+      const ghCoreUsed = ghRate.core?.used || 0;
+      const ghCoreLimit = ghRate.core?.limit || 5000;
+      const ghCorePct = ghCoreLimit > 0 ? Math.round((ghCoreUsed / ghCoreLimit) * 100) : 0;
+      const ghResetAt = ghRate.core?.reset ? new Date(ghRate.core.reset * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+
+      const totals = tokens.totals || {};
+      const tokenInput = (totals.input || 0).toLocaleString();
+      const tokenOutput = (totals.output || 0).toLocaleString();
+      const tokenCache = (totals.cacheRead || 0).toLocaleString();
+
+      const budgetUsed = budget.used || 0;
+      const budgetLimit = budget.limit || 0;
+      const budgetPct = budgetLimit > 0 ? Math.round((budgetUsed / budgetLimit) * 100) : 0;
+
+      grid.innerHTML = `
+        <div style="${cardStyle}"><div style="${labelStyle}">Health Checks</div>${healthRows || '<div style="color:var(--muted);font-size:0.8rem">No data</div>'}</div>
+        <div style="${cardStyle}"><div style="${labelStyle}">Agent States</div>${agentRows || '<div style="color:var(--muted);font-size:0.8rem">No agents</div>'}</div>
+        <div style="${cardStyle}">
+          <div style="${labelStyle}">GitHub API</div>
+          <div style="${rowStyle}"><span>Core API</span><span style="font-weight:600">${ghCoreUsed} / ${ghCoreLimit} (${ghCorePct}%)</span></div>
+          <div style="${rowStyle}"><span>Resets at</span><span>${ghResetAt}</span></div>
+          <div style="margin-top:6px;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${ghCorePct}%;background:${ghCorePct > 80 ? 'var(--red)' : ghCorePct > 50 ? 'var(--yellow)' : 'var(--green)'};border-radius:3px;transition:width 0.3s"></div>
+          </div>
+        </div>
+        <div style="${cardStyle}">
+          <div style="${labelStyle}">Token Usage</div>
+          <div style="${rowStyle}"><span>Input</span><span style="font-weight:600">${tokenInput}</span></div>
+          <div style="${rowStyle}"><span>Output</span><span style="font-weight:600">${tokenOutput}</span></div>
+          <div style="${rowStyle}"><span>Cache Read</span><span style="font-weight:600">${tokenCache}</span></div>
+          ${budgetLimit > 0 ? `<div style="margin-top:8px;${labelStyle}">Budget</div><div style="${rowStyle}"><span>Used</span><span style="font-weight:600">$${budgetUsed.toFixed(2)} / $${budgetLimit.toFixed(2)} (${budgetPct}%)</span></div>` : ''}
+        </div>
+      `;
+    }
+    setInterval(renderDebugSection, DEBUG_REFRESH_MS);
+
+    // ── Logs section ──
+    const LOGS_REFRESH_MS = 5000;
+    let _logsData = {};
+    async function fetchAgentLogs() {
+      const agents = window._lastAgents || [];
+      const select = document.getElementById('logs-agent-select');
+      if (!select) return;
+
+      const current = select.value;
+      const existingOpts = new Set(Array.from(select.options).map(o => o.value));
+      for (const a of agents) {
+        if (!existingOpts.has(a.name)) {
+          const opt = document.createElement('option');
+          opt.value = a.name;
+          opt.textContent = a.name;
+          select.appendChild(opt);
+        }
+      }
+
+      const toFetch = current === 'all' ? agents.map(a => a.name) : [current];
+      for (const name of toFetch) {
+        try {
+          const res = await fetch(`/api/pane/${name}`);
+          if (res.ok) {
+            const d = await res.json();
+            _logsData[name] = (d.lines || []);
+          }
+        } catch (e) { /* skip */ }
+      }
+      renderLogs();
+    }
+
+    function renderLogs() {
+      const output = document.getElementById('logs-output');
+      if (!output) return;
+      const select = document.getElementById('logs-agent-select');
+      const selected = select ? select.value : 'all';
+      const follow = document.getElementById('logs-follow');
+
+      let lines = [];
+      if (selected === 'all') {
+        for (const [name, data] of Object.entries(_logsData)) {
+          if (data.length > 0) {
+            lines.push(`\x1b[0m── ${name} ──`);
+            lines.push(...data.slice(-15));
+            lines.push('');
+          }
+        }
+      } else {
+        lines = _logsData[selected] || ['(no output)'];
+      }
+
+      output.textContent = lines.join('\n').replace(/\x1b\[[0-9;]*m/g, '');
+      if (follow && follow.checked) {
+        output.scrollTop = output.scrollHeight;
+      }
+    }
+
+    document.getElementById('logs-agent-select')?.addEventListener('change', () => { _logsData = {}; fetchAgentLogs(); });
+    setInterval(fetchAgentLogs, LOGS_REFRESH_MS);
 
     function esc(s) {
       const d = document.createElement('div');
@@ -4351,6 +4508,7 @@ function burnAreaChart() {
     });
 
     connect();
+    setTimeout(fetchAgentLogs, 2000);
   </script>
 </body>
 </html>
