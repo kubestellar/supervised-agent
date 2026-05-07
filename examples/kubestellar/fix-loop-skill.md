@@ -57,7 +57,7 @@ For items marked 'fixing':
 4. Make the code changes
 5. `git add -A && git commit -s -m "emoji description"`
 6. `git push origin fix/{description}`
-7. `unset GITHUB_TOKEN && gh pr create --repo ${PROJECT_ORG}/{repo} ...`
+7. `unset GITHUB_TOKEN && gh pr create --repo ${PROJECT_ORG}/{repo} --label {agent-name} ...` (use your agent label)
 8. `unset GITHUB_TOKEN && gh pr merge {number} --admin --squash`
 9. Cleanup: `git checkout main && git pull && git branch -D fix/{description}`
 10. Close linked issues
@@ -103,7 +103,8 @@ sqlite3 ~/.kubestellar-fix-loop/state.db "UPDATE cycles SET completed_at='$(date
 - **NEVER merge without green CI** (admin merge OK for flaky Playwright)
 - **NEVER send outreach with unvalidated links**
 - **DCO sign all commits**: `git commit -s`
-- **PR titles start with emoji**: ✨ feature | 🐛 bug | 📖 docs | 🌱 other
+- **PR titles start with emoji**: Use the agent-specific prefix from your CLAUDE.md (e.g., 🏗 for architect, 🔍 for scanner). Fallback: ✨ feature | 🐛 bug | 📖 docs | 🌱 other
+- **Agent label**: Add your agent name as a label on every PR and issue (e.g., `--label architect`). Check your CLAUDE.md for the required label.
 - **Track every action in SQLite** — no silent changes
 - **Send ntfy for every close/merge** with updated counts
 - Use sub-agents to parallelize repo scans
