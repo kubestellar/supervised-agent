@@ -1001,6 +1001,21 @@
     .config-toggle-switch.on::before { transform: translateX(16px); }
     .config-toggle-label { font-size: 0.8rem; color: var(--text); }
 
+    .config-stat-row { padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .config-stat-row .config-field-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .config-stat-row .config-field { min-width: 0; }
+    .config-stat-row .config-field label { font-size: 0.65rem; margin-bottom: 2px; }
+    .config-stat-row .config-field input,
+    .config-stat-row .config-field select { padding: 4px 6px; font-size: 0.75rem; }
+    .btn-sm { padding: 2px 6px; font-size: 0.7rem; background: var(--card-bg); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; color: var(--text); }
+    .btn-sm:hover { background: var(--border); }
+    .btn-sm:disabled { opacity: 0.3; cursor: default; }
+    .btn-sm.btn-danger { color: var(--red); border-color: var(--red); }
+    .btn-sm.btn-danger:hover { background: rgba(248,81,73,0.15); }
+    .btn-add { padding: 6px 14px; font-size: 0.8rem; background: var(--card-bg); border: 1px solid var(--blue); border-radius: 4px; cursor: pointer; color: var(--blue); }
+    .btn-add:hover { background: rgba(88,166,255,0.1); }
+    .config-stats-list { max-height: 400px; overflow-y: auto; }
+
     .config-info {
       display: inline-flex; align-items: center; justify-content: center;
       width: 14px; height: 14px; border-radius: 50%;
@@ -1805,10 +1820,94 @@
     const ISSUE_COSTS_REFRESH_MS = 60000;
     setInterval(fetchIssueCosts, ISSUE_COSTS_REFRESH_MS);
 
+    function resolveStatValue(stat, name) {
+      const src = stat.source;
+      const field = stat.field;
+      if (src === 'agentMetrics') {
+        const m = currentAgentMetrics[name] || {};
+        return m[field];
+      }
+      if (src === 'health') {
+        const h = window._healthData || {};
+        return h[field];
+      }
+      if (src === 'tokens') {
+        const t = (window._tokensByAgent || {})[name] || {};
+        return t[field];
+      }
+      if (src === 'status') {
+        const repos = (window._lastStatus || {}).repos || [];
+        if (field === 'actionableCount') return repos.reduce((n, r) => n + (r.actionableIssues || []).length, 0);
+        if (field === 'openPrCount') return repos.reduce((n, r) => n + (r.openPrs || []).length, 0);
+        if (field === 'mergeableCount') return repos.reduce((n, r) => n + (r.openPrs || []).filter(p => p.mergeable).length, 0);
+        return 0;
+      }
+      return undefined;
+    }
+
+    const SPARK_COLORS = { stars: '#e3b341', outreachOpen: '#58a6ff', outreachMerged: '#3fb950', actionable: '#f85149', openPrs: '#bc8cff', mergeable: '#3fb950' };
+    const DEFAULT_SPARK_COLOR = '#58a6ff';
+
+    function renderStatHtml(stat, name) {
+      const v = resolveStatValue(stat, name);
+      const style = stat.style;
+      const label = stat.label || stat.key;
+      const icon = stat.icon ? stat.icon + ' ' : '';
+
+      if (style === 'dot') {
+        const dotCls = v === 1 ? 'ok' : v === 0 ? 'fail' : 'unknown';
+        return `<span class="ind-dot-item"><span class="health-dot ${dotCls}"></span><span class="ind-dlabel">${label}</span></span>`;
+      }
+
+      if (style === 'pct') {
+        const PCT_GOOD = 90;
+        const PCT_WARN = 70;
+        const cls = v >= PCT_GOOD ? 'good' : v >= PCT_WARN ? 'warn' : 'bad';
+        return `<span class="ind-dot-item"><span class="health-ci ${cls}">${v || 0}%</span><span class="ind-dlabel">${label}</span></span>`;
+      }
+
+      if (style === 'pct-bar') {
+        const pct = v || 0;
+        const target = stat.target || 100;
+        const TARGET_WARN_OFFSET = 10;
+        const covCls = pct >= target ? 'ind-ok' : pct >= target - TARGET_WARN_OFFSET ? 'ind-warn' : 'ind-err';
+        const barColor = pct >= target ? 'var(--green)' : pct >= target - TARGET_WARN_OFFSET ? 'var(--yellow)' : 'var(--red)';
+        const MAX_BAR_WIDTH = 120;
+        const BAR_HEIGHT = 6;
+        return `<div class="ind-group"><span class="ind-group-label">${label.toUpperCase()}</span><div class="ind-dots">
+          <span class="ind-dot-item"><span class="ind-num ${covCls}">${pct}%</span><span class="ind-dlabel">current</span></span>
+          <span class="ind-dot-item"><span class="ind-dlabel">goal: ${target}%</span></span>
+          <span class="ind-dot-item" style="flex:1;max-width:${MAX_BAR_WIDTH}px">
+            <div style="background:var(--border);border-radius:3px;height:${BAR_HEIGHT}px;width:100%;position:relative">
+              <div style="background:${barColor};height:100%;border-radius:3px;width:${Math.min(pct / target * 100, 100)}%"></div>
+            </div>
+          </span>
+        </div></div>`;
+      }
+
+      if (style === 'spark') {
+        const trendField = stat.trendField || stat.field;
+        const color = SPARK_COLORS[trendField] || DEFAULT_SPARK_COLOR;
+        const trendSeries = (window._trendData || []).map(s => s[trendField] || 0);
+        const spark = sparkSvg(trendSeries, color);
+        return `<span class="ind-dot-item"><span class="ind-num">${icon}${v || 0}</span><span class="ind-dlabel">${label} ${spark}</span></span>`;
+      }
+
+      // style === 'number' (default)
+      return `<span class="ind-dot-item"><span class="ind-num">${icon}${v || 0}</span><span class="ind-dlabel">${label}</span></span>`;
+    }
+
+    function renderStatsFromConfig(stats, name) {
+      if (!stats || stats.length === 0) return '';
+      const items = stats.map(s => renderStatHtml(s, name));
+      return `<div class="agent-indicators"><div class="ind-group"><div class="ind-dots">${items.join('')}</div></div></div>`;
+    }
+
     function agentIndicators(name) {
       const m = currentAgentMetrics[name];
       if (!m) return '';
 
+      // Scanner always gets its special pair rendering
       if (name === 'scanner') {
         const pairs = m.pairs || [];
         const inProgress = m.inProgress || [];
@@ -1869,96 +1968,11 @@
         return html;
       }
 
-      if (name === 'reviewer') {
-        const h = window._healthData || {};
-        const cov = m.coverage || 0;
-        const covTarget = m.coverageTarget || 91;
-        const covCls = cov >= covTarget ? 'ind-ok' : cov >= covTarget - 10 ? 'ind-warn' : 'ind-err';
-        const covBar = `<div class="agent-indicators"><div class="ind-group"><span class="ind-group-label">COVERAGE</span><div class="ind-dots">
-          <span class="ind-dot-item"><span class="ind-num ${covCls}">${cov}%</span><span class="ind-dlabel">current</span></span>
-          <span class="ind-dot-item"><span class="ind-dlabel">goal: ${covTarget}%</span></span>
-          <span class="ind-dot-item" style="flex:1;max-width:120px">
-            <div style="background:var(--border);border-radius:3px;height:6px;width:100%;position:relative">
-              <div style="background:${cov >= covTarget ? 'var(--green)' : cov >= covTarget - 10 ? 'var(--yellow)' : 'var(--red)'};height:100%;border-radius:3px;width:${Math.min(cov / covTarget * 100, 100)}%"></div>
-            </div>
-          </span>
-        </div></div></div>`;
-        const groups = [
-          { label: 'Artifacts', items: [
-            { key: 'brew', label: 'Brew' },
-            { key: 'helm', label: 'Helm' },
-          ]},
-          { label: 'Tests', items: [
-            { key: 'ci', label: 'CI', type: 'pct' },
-            { key: 'weekly', label: 'Weekly' },
-          ]},
-          { label: 'Nightly', items: [
-            { key: 'nightly', label: 'Tests' },
-            { key: 'nightlyCompliance', label: 'Compliance' },
-            { key: 'nightlyDashboard', label: 'Dashboard' },
-            { key: 'nightlyGhaw', label: 'gh-aw' },
-            { key: 'nightlyPlaywright', label: 'Playwright' },
-          ]},
-          { label: 'Releases', items: [
-            { key: 'nightlyRel', label: 'Nightly' },
-            { key: 'weeklyRel', label: 'Weekly' },
-          ]},
-          { label: 'Deploys', items: [
-            { key: 'deploy_vllm_d', label: 'vLLM-d' },
-            { key: 'deploy_pok_prod', label: 'PokProd' },
-          ]},
-        ];
-        const renderItem = d => {
-          const v = h[d.key];
-          if (d.type === 'pct') {
-            const cls = v >= 90 ? 'good' : v >= 70 ? 'warn' : 'bad';
-            return `<span class="ind-dot-item"><span class="health-ci ${cls}">${v || 0}%</span><span class="ind-dlabel">${d.label}</span></span>`;
-          }
-          const dotCls = v === 1 ? 'ok' : v === 0 ? 'fail' : 'unknown';
-          return `<span class="ind-dot-item"><span class="health-dot ${dotCls}"></span><span class="ind-dlabel">${d.label}</span></span>`;
-        };
-        return `${covBar}<div class="agent-indicators">${groups.map(g =>
-          `<div class="ind-group"><span class="ind-group-label">${g.label}</span><div class="ind-dots">${g.items.map(renderItem).join('')}</div></div>`
-        ).join('')}</div>`;
-      }
-
-      if (name === 'outreach') {
-        const stars = m.stars || 0;
-        const forks = m.forks || 0;
-        const contribs = m.contributors || 0;
-        const adopters = m.adopters || 0;
-        const acmm = m.acmm || 0;
-        const orOpen = m.outreachOpen || 0;
-        const orMerged = m.outreachMerged || 0;
-        const starSpark = sparkSvg((window._trendData || []).map(s => s.stars || 0), '#e3b341');
-        const orOpenSpark = sparkSvg((window._trendData || []).map(s => s.outreachOpen || 0), '#58a6ff');
-        const orMergedSpark = sparkSvg((window._trendData || []).map(s => s.outreachMerged || 0), '#3fb950');
-        return `<div class="agent-indicators">
-          <div class="ind-group"><span class="ind-group-label">GROWTH</span><div class="ind-dots">
-            <span class="ind-dot-item"><span class="ind-num">⭐ ${stars}</span><span class="ind-dlabel">stars ${starSpark}</span></span>
-            <span class="ind-dot-item"><span class="ind-num">🍴 ${forks}</span><span class="ind-dlabel">forks</span></span>
-            <span class="ind-dot-item"><span class="ind-num">👥 ${contribs}</span><span class="ind-dlabel">contributors</span></span>
-          </div></div>
-          <div class="ind-group"><span class="ind-group-label">ADOPTION</span><div class="ind-dots">
-            <span class="ind-dot-item"><span class="ind-num">${adopters}</span><span class="ind-dlabel">adopters</span></span>
-            <span class="ind-dot-item"><span class="ind-num">${acmm}</span><span class="ind-dlabel">ACMM badges</span></span>
-          </div></div>
-          <div class="ind-group"><span class="ind-group-label">OUTREACH PRs</span><div class="ind-dots">
-            <span class="ind-dot-item"><span class="ind-num">${orOpen}</span><span class="ind-dlabel">open ${orOpenSpark}</span></span>
-            <span class="ind-dot-item"><span class="ind-num">${orMerged}</span><span class="ind-dlabel">merged ${orMergedSpark}</span></span>
-          </div></div>
-        </div>`;
-      }
-
-      if (name === 'architect') {
-        const prs = m.prs || 0;
-        const closed = m.closed || 0;
-        return `<div class="agent-indicators">
-          <div class="ind-row">
-            ${prs > 0 ? `<span class="ind-stat"><span class="ind-num">${prs}</span> PRs</span>` : ''}
-            ${closed > 0 ? `<span class="ind-stat"><span class="ind-num">${closed}</span> closed</span>` : ''}
-          </div>
-        </div>`;
+      // Config-driven rendering for all agents
+      const agentObj = ((window._lastStatus || {}).agents || []).find(a => a.name === name);
+      const statsConfig = agentObj ? agentObj.statsConfig : null;
+      if (statsConfig && statsConfig.length > 0) {
+        return renderStatsFromConfig(statsConfig, name);
       }
 
       return '';
@@ -3740,7 +3754,7 @@ function burnAreaChart() {
     // ── Configuration Dialog ──────────────────────────────────────────
     let _configState = { type: null, agent: null, tab: null, data: {}, dirty: {} };
 
-    const AGENT_CONFIG_TABS = ['General', 'Cadences', 'Pipeline', 'Hooks', 'Restrictions', 'Prompts'];
+    const AGENT_CONFIG_TABS = ['General', 'Cadences', 'Pipeline', 'Hooks', 'Restrictions', 'Stats', 'Prompts'];
     const GOVERNOR_CONFIG_TABS = ['Agents', 'Thresholds', 'Labels', 'Repos', 'Budget', 'Notifications', 'Health'];
     const PIPELINE_STAGES = ['resolve-beads', 'track-prs', 'stale-check', 'repo-scan', 'coverage-gate', 'prompt-compose', 'budget-check', 'api-collect', 'final-compose'];
     const RESTART_STRATEGIES = ['immediate', 'backoff', 'none'];
@@ -3811,6 +3825,7 @@ function burnAreaChart() {
         case 'Pipeline': return renderAgentPipeline(d.pipeline || {});
         case 'Hooks': return renderAgentHooks(d.hooks || {});
         case 'Restrictions': return renderAgentRestrictions(d.restrictions || {});
+        case 'Stats': return renderAgentStatsTab(d.stats || []);
         case 'Prompts': return renderAgentPrompts(d.prompt || '');
         default: return '';
       }
@@ -4186,6 +4201,114 @@ function burnAreaChart() {
           <label>Discord Webhook</label>
           <input type="text" value="${esc(n.discordWebhook || '')}" onchange="markDirty('notifications','discordWebhook',this.value)" placeholder="https://discord.com/api/webhooks/...">
         </div>`;
+    }
+
+    // ── Stats tab for per-agent stat config ──
+    let _statSources = null;
+    async function ensureStatSources() {
+      if (_statSources) return _statSources;
+      try {
+        const r = await fetch('/api/config/stat-sources');
+        _statSources = await r.json();
+      } catch (_) {
+        _statSources = { sources: {}, styles: [] };
+      }
+      return _statSources;
+    }
+    ensureStatSources();
+
+    function renderAgentStatsTab(stats) {
+      const sources = (_statSources || {}).sources || {};
+      const styles = (_statSources || {}).styles || ['number', 'dot', 'pct', 'pct-bar', 'spark'];
+      const sourceKeys = Object.keys(sources);
+
+      const rows = (stats || []).map((s, i) => {
+        const fieldOptions = (sources[s.source] || {}).fields || [];
+        return `<div class="config-stat-row" data-idx="${i}">
+          <div class="config-field-row" style="margin-bottom:4px;align-items:center">
+            <div class="config-field" style="flex:0.7"><label>Label</label><input type="text" value="${esc(s.label || '')}" onchange="updateStat(${i},'label',this.value)"></div>
+            <div class="config-field" style="flex:0.8"><label>Source</label>
+              <select onchange="updateStatSource(${i},this.value)">
+                ${sourceKeys.map(k => `<option value="${k}" ${s.source === k ? 'selected' : ''}>${(sources[k] || {}).label || k}</option>`).join('')}
+              </select>
+            </div>
+            <div class="config-field" style="flex:0.8"><label>Field</label>
+              <select id="stat-field-${i}" onchange="updateStat(${i},'field',this.value)">
+                ${fieldOptions.map(f => `<option value="${f}" ${s.field === f ? 'selected' : ''}>${f}</option>`).join('')}
+              </select>
+            </div>
+            <div class="config-field" style="flex:0.6"><label>Style</label>
+              <select onchange="updateStat(${i},'style',this.value)">
+                ${styles.map(st => `<option value="${st}" ${s.style === st ? 'selected' : ''}>${st}</option>`).join('')}
+              </select>
+            </div>
+            <div class="config-field" style="flex:0.4"><label>Icon</label><input type="text" value="${esc(s.icon || '')}" onchange="updateStat(${i},'icon',this.value)" style="width:40px"></div>
+            <div class="config-field" style="flex:0.4"><label>Target</label><input type="number" value="${s.target || ''}" onchange="updateStat(${i},'target',this.value ? Number(this.value) : undefined)" style="width:50px"></div>
+            <div style="display:flex;gap:2px;align-items:flex-end;padding-bottom:2px">
+              <button class="btn-sm" onclick="moveStatUp(${i})" title="Move up" ${i === 0 ? 'disabled' : ''}>▲</button>
+              <button class="btn-sm" onclick="moveStatDown(${i})" title="Move down" ${i === stats.length - 1 ? 'disabled' : ''}>▼</button>
+              <button class="btn-sm btn-danger" onclick="removeStat(${i})" title="Remove">✕</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+
+      return `<div class="config-stats-list">${rows}</div>
+        <button class="btn-add" onclick="addStat()" style="margin-top:8px">+ Add Stat</button>
+        <p style="color:var(--muted);font-size:0.75rem;margin-top:8px">Configure which metrics appear on this agent's card. Changes take effect after saving.</p>`;
+    }
+
+    function updateStat(idx, key, value) {
+      const stats = _configState.data.stats || [];
+      if (!stats[idx]) return;
+      if (value === undefined) { delete stats[idx][key]; } else { stats[idx][key] = value; }
+      markDirty('stats', 'list', stats);
+    }
+
+    function updateStatSource(idx, newSource) {
+      const stats = _configState.data.stats || [];
+      if (!stats[idx]) return;
+      stats[idx].source = newSource;
+      const sources = (_statSources || {}).sources || {};
+      const fields = (sources[newSource] || {}).fields || [];
+      stats[idx].field = fields[0] || '';
+      markDirty('stats', 'list', stats);
+      renderConfigTab('Stats');
+    }
+
+    function moveStatUp(idx) {
+      const stats = _configState.data.stats || [];
+      if (idx <= 0) return;
+      [stats[idx - 1], stats[idx]] = [stats[idx], stats[idx - 1]];
+      markDirty('stats', 'list', stats);
+      renderConfigTab('Stats');
+    }
+
+    function moveStatDown(idx) {
+      const stats = _configState.data.stats || [];
+      if (idx >= stats.length - 1) return;
+      [stats[idx], stats[idx + 1]] = [stats[idx + 1], stats[idx]];
+      markDirty('stats', 'list', stats);
+      renderConfigTab('Stats');
+    }
+
+    function removeStat(idx) {
+      const stats = _configState.data.stats || [];
+      stats.splice(idx, 1);
+      _configState.data.stats = stats;
+      markDirty('stats', 'list', stats);
+      renderConfigTab('Stats');
+    }
+
+    function addStat() {
+      if (!_configState.data.stats) _configState.data.stats = [];
+      const sources = (_statSources || {}).sources || {};
+      const firstSource = Object.keys(sources)[0] || 'agentMetrics';
+      const firstField = ((sources[firstSource] || {}).fields || [])[0] || '';
+      const newKey = 'stat_' + Date.now();
+      _configState.data.stats.push({ key: newKey, label: firstField || 'New Stat', source: firstSource, field: firstField, style: 'number' });
+      markDirty('stats', 'list', _configState.data.stats);
+      renderConfigTab('Stats');
     }
 
     function renderGovHealth(h) {

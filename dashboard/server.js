@@ -414,6 +414,9 @@ function fetchStatus() {
               if (dn) a.displayName = dn;
             }
           } catch (_) {}
+          // Per-agent stats config (from file or defaults)
+          const sf = readAgentStats(a.name);
+          a.statsConfig = sf ? sf.stats : getDefaultStats(a.name);
         }
         // Issue-to-merge time metric
         statusCache.issueToMerge = issueToMergeCache;
@@ -1259,6 +1262,84 @@ function deriveCli(launchCmd) {
 
 const GH_WRAPPER_PATH = '/usr/local/bin/gh';
 const RESTRICTIONS_DIR = '/etc/hive/restrictions';
+const STATS_DIR = '/etc/hive/stats';
+
+// ── Per-agent configurable stats ─────────────────────────────────────────────
+const STAT_SOURCES = {
+  agentMetrics: {
+    label: 'Agent Metrics',
+    fields: ['coverage', 'coverageTarget', 'stars', 'forks', 'contributors', 'adopters', 'acmm', 'outreachOpen', 'outreachMerged', 'prs', 'closed'],
+  },
+  health: {
+    label: 'Health Checks',
+    fields: ['ci', 'brew', 'helm', 'nightly', 'nightlyCompliance', 'nightlyDashboard', 'nightlyGhaw', 'nightlyPlaywright', 'nightlyRel', 'weeklyRel', 'deploy_vllm_d', 'deploy_pok_prod', 'hourly'],
+  },
+  tokens: {
+    label: 'Token Usage',
+    fields: ['input', 'output', 'cacheRead', 'sessions', 'messages', 'avgPerSession'],
+  },
+  status: {
+    label: 'Hive Status',
+    fields: ['actionableCount', 'openPrCount', 'mergeableCount'],
+  },
+};
+
+const STAT_STYLES = ['number', 'dot', 'pct', 'pct-bar', 'spark'];
+
+function getDefaultStats(agentName) {
+  const defaults = {
+    scanner: [
+      { key: 'actionable', label: 'Actionable', source: 'status', field: 'actionableCount', style: 'spark', trendField: 'actionable' },
+      { key: 'openPrs', label: 'Open PRs', source: 'status', field: 'openPrCount', style: 'spark', trendField: 'openPrs' },
+      { key: 'mergeable', label: 'Mergeable', source: 'status', field: 'mergeableCount', style: 'spark', trendField: 'mergeable' },
+    ],
+    reviewer: [
+      { key: 'coverage', label: 'Coverage', source: 'agentMetrics', field: 'coverage', style: 'pct-bar', target: 91 },
+      { key: 'brew', label: 'Brew', source: 'health', field: 'brew', style: 'dot' },
+      { key: 'helm', label: 'Helm', source: 'health', field: 'helm', style: 'dot' },
+      { key: 'ci', label: 'CI', source: 'health', field: 'ci', style: 'pct' },
+      { key: 'weekly', label: 'Weekly', source: 'health', field: 'weekly', style: 'dot' },
+      { key: 'nightly', label: 'Nightly Tests', source: 'health', field: 'nightly', style: 'dot' },
+      { key: 'nightlyCompliance', label: 'Compliance', source: 'health', field: 'nightlyCompliance', style: 'dot' },
+      { key: 'nightlyDashboard', label: 'Dashboard', source: 'health', field: 'nightlyDashboard', style: 'dot' },
+      { key: 'nightlyGhaw', label: 'gh-aw', source: 'health', field: 'nightlyGhaw', style: 'dot' },
+      { key: 'nightlyPlaywright', label: 'Playwright', source: 'health', field: 'nightlyPlaywright', style: 'dot' },
+      { key: 'nightlyRel', label: 'Nightly Rel', source: 'health', field: 'nightlyRel', style: 'dot' },
+      { key: 'weeklyRel', label: 'Weekly Rel', source: 'health', field: 'weeklyRel', style: 'dot' },
+      { key: 'deploy_vllm_d', label: 'vLLM-d', source: 'health', field: 'deploy_vllm_d', style: 'dot' },
+      { key: 'deploy_pok_prod', label: 'PokProd', source: 'health', field: 'deploy_pok_prod', style: 'dot' },
+    ],
+    outreach: [
+      { key: 'stars', label: 'Stars', source: 'agentMetrics', field: 'stars', style: 'spark', trendField: 'stars', icon: '⭐' },
+      { key: 'forks', label: 'Forks', source: 'agentMetrics', field: 'forks', style: 'number', icon: '🍴' },
+      { key: 'contributors', label: 'Contributors', source: 'agentMetrics', field: 'contributors', style: 'number', icon: '👥' },
+      { key: 'adopters', label: 'Adopters', source: 'agentMetrics', field: 'adopters', style: 'number' },
+      { key: 'acmm', label: 'ACMM', source: 'agentMetrics', field: 'acmm', style: 'number' },
+      { key: 'outreachOpen', label: 'Open PRs', source: 'agentMetrics', field: 'outreachOpen', style: 'spark', trendField: 'outreachOpen' },
+      { key: 'outreachMerged', label: 'Merged PRs', source: 'agentMetrics', field: 'outreachMerged', style: 'spark', trendField: 'outreachMerged' },
+    ],
+    architect: [
+      { key: 'prs', label: 'PRs', source: 'agentMetrics', field: 'prs', style: 'number' },
+      { key: 'closed', label: 'Closed', source: 'agentMetrics', field: 'closed', style: 'number' },
+    ],
+  };
+  return defaults[agentName] || [];
+}
+
+function readAgentStats(agentId) {
+  try {
+    const filePath = path.join(STATS_DIR, `${agentId}.json`);
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (_) { return null; }
+}
+
+function writeAgentStats(agentId, data) {
+  if (!fs.existsSync(STATS_DIR)) {
+    execSync(`sudo mkdir -p ${shellQuote(STATS_DIR)} && sudo chown dev:dev ${shellQuote(STATS_DIR)}`);
+  }
+  const filePath = path.join(STATS_DIR, `${agentId}.json`);
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n');
+}
 let _ghWrapperRestrictions = null;
 let _ghWrapperMtime = 0;
 
@@ -1372,6 +1453,9 @@ app.get('/api/config/agent/:name', (req, res) => {
 
     const restrictions = getAgentRestrictions(name);
 
+    const statsFile = readAgentStats(name);
+    const stats = statsFile ? statsFile.stats : getDefaultStats(name);
+
     let prompt = '';
     try {
       const promptFile = path.join(METRICS_DIR, `last_prompt_${name}`);
@@ -1380,7 +1464,7 @@ app.get('/api/config/agent/:name', (req, res) => {
       prompt = `(awaiting next kick — the full expanded prompt will appear here after the governor kicks ${name})`;
     }
 
-    res.json({ general, cadences, models, pipeline, hooks, restrictions, prompt });
+    res.json({ general, cadences, models, pipeline, hooks, restrictions, stats, prompt });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1486,6 +1570,22 @@ app.put('/api/config/agent/:name/restrictions', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+app.put('/api/config/agent/:name/stats', (req, res) => {
+  const { name } = req.params;
+  if (!validateAgentName(name, res)) return;
+  try {
+    const stats = req.body.list || [];
+    writeAgentStats(name, { stats });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/config/stat-sources', (_req, res) => {
+  res.json({ sources: STAT_SOURCES, styles: STAT_STYLES });
 });
 
 app.get('/api/config/agent/:name/prompt', (req, res) => {
