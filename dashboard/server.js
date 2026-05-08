@@ -1816,7 +1816,9 @@ app.put('/api/config/governor/repos', (req, res) => {
     if (!projectConfig.project) projectConfig.project = {};
     projectConfig.project.repos = list;
     const dumpYaml = yaml ? yaml.dump(projectConfig) : JSON.stringify(projectConfig, null, 2);
-    execSync(`echo ${JSON.stringify(dumpYaml)} | sudo tee ${CONFIG_PATH} > /dev/null`);
+    const tmpFile = `/tmp/hive-project-${process.pid}.yaml`;
+    fs.writeFileSync(tmpFile, dumpYaml);
+    execSync(`sudo mv ${tmpFile} ${CONFIG_PATH}`);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
