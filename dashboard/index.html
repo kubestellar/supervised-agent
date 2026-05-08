@@ -2240,7 +2240,7 @@
     function renderCadenceMatrix(matrix, currentMode, modes) {
       if (!matrix || !matrix.length) return '';
       const agents = window._lastAgents || [];
-      const agentOrder = ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach'];
+      const agentOrder = matrix.map(r => r.agent);
       const rows = agentOrder.map(aname => {
         const row = matrix.find(r => r.agent === aname);
         if (!row) return '';
