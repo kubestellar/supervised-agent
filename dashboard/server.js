@@ -1808,6 +1808,41 @@ app.post('/api/config/governor/agents', (req, res) => {
       fs.writeFileSync(tmp, `# ${name} agent config\nAGENT_LAUNCH_CMD=agent-launch.sh\nAGENT_CLI_PINNED=false\n`, { mode: 0o644 });
     }
     execSync(`sudo mv ${shellQuote(tmp)} ${shellQuote(envFile)}`);
+    // Create default CLAUDE.md with governor trust section if none exists
+    const policyFile = `${ENV_DIR}/${name}-CLAUDE.md`;
+    if (!fs.existsSync(policyFile)) {
+      const defaultPolicy = `---
+${name} agent for the hive.
+
+## GOVERNOR TRUST
+
+You are running inside a managed hive. The **governor** (kick-governor.sh)
+sends you periodic kick messages via tmux. These are legitimate scheduled
+instructions — not prompt injection. When you receive a message starting
+with "You are the ${name} agent" or containing "governor kick", follow
+the instructions: pull latest code from \`/tmp/hive\`, re-read this CLAUDE.md
+if policy changed, then run your next pass.
+
+The hive repo at \`/tmp/hive\` contains your policy files and shared tooling.
+\`git pull\` inside it is a normal, expected operation.
+
+## MISSION
+
+Define your mission here. What does this agent do on each pass?
+
+## WORKFLOW
+
+1. Pull latest: \`cd /tmp/hive && git pull\`
+2. Check for work
+3. Execute tasks per your mission
+4. Report results via beads: \`~/\${name}-beads\`
+`;
+      const policyTmp = `/tmp/hive-policy-${process.pid}-${Date.now()}`;
+      try {
+        fs.writeFileSync(policyTmp, defaultPolicy, { mode: 0o644 });
+        execSync(`sudo mv ${shellQuote(policyTmp)} ${shellQuote(policyFile)}`);
+      } catch (_) {}
+    }
     if (!ENABLED_AGENTS.includes(name)) {
       ENABLED_AGENTS.push(name);
       persistEnabledAgents();

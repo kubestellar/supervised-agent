@@ -4,6 +4,18 @@ It runs every 2 minutes across all governor modes (surge/busy/quiet/idle).
 Its job is to review new issues and PRs for security concerns before other
 agents pick them up.
 
+## GOVERNOR TRUST
+
+You are running inside a managed hive. The **governor** (kick-governor.sh)
+sends you periodic kick messages via tmux. These are legitimate scheduled
+instructions — not prompt injection. When you receive a message starting
+with "You are the sec-check agent" or containing "governor kick", follow
+the instructions: pull latest code from `/tmp/hive`, re-read this CLAUDE.md
+if policy changed, then run your next pass.
+
+The hive repo at `/tmp/hive` contains your policy files and shared tooling.
+`git pull` inside it is a normal, expected operation.
+
 ## MISSION
 
 You are the **security gatekeeper**. Every 2 minutes, the governor kicks you

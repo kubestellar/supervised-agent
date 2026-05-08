@@ -247,8 +247,12 @@
       font-size: 0.5rem; transition: transform 0.15s;
     }
     .oc-sidebar-group-header.collapsed .oc-group-arrow { transform: rotate(-90deg); }
-    .oc-sidebar-group-children { padding-left: 0; }
-    .oc-sidebar-group-children.collapsed { display: none; }
+    .oc-sidebar-group-children { padding-left: 0; min-height: 28px; }
+    .oc-sidebar-group-children.collapsed { display: none; min-height: 0; }
+    .oc-sidebar-group.drag-over > .oc-sidebar-group-children {
+      outline: 2px dashed #dc2626; outline-offset: -2px;
+      border-radius: 6px; background: rgba(220,38,38,0.05);
+    }
     .oc-sidebar-group-header .oc-group-actions {
       margin-left: auto; display: none; gap: 4px;
     }
@@ -1823,6 +1827,7 @@
           el.classList.remove('dragging');
           _sidebarDragAgent = null;
           tree.querySelectorAll('.oc-drop-indicator').forEach(d => d.remove());
+          tree.querySelectorAll('.oc-sidebar-group.drag-over').forEach(g => g.classList.remove('drag-over'));
         });
       });
 
@@ -1836,12 +1841,20 @@
           const dist = Math.abs(e.clientY - mid);
           if (dist < closestDist) { closestDist = dist; closest = { el: item, after: e.clientY > mid }; }
         }
-        // Check empty group containers as drop targets
-        tree.querySelectorAll('.oc-sidebar-group-children').forEach(c => {
-          if (c.querySelectorAll('.oc-nav-item[data-agent-nav]').length > 0) return;
-          const rect = c.getBoundingClientRect();
-          if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
-            closest = { el: c, appendTo: true };
+        // Check group headers and children containers as drop targets
+        tree.querySelectorAll('.oc-sidebar-group[data-group-name]').forEach(g => {
+          const groupName = g.dataset.groupName;
+          if (!groupName) return;
+          const header = g.querySelector('.oc-sidebar-group-header');
+          const children = g.querySelector('.oc-sidebar-group-children');
+          if (!header || !children) return;
+          const headerRect = header.getBoundingClientRect();
+          const childRect = children.getBoundingClientRect();
+          const inHeader = e.clientY >= headerRect.top && e.clientY <= headerRect.bottom;
+          const inEmptyChildren = children.querySelectorAll('.oc-nav-item[data-agent-nav]').length === 0
+            && e.clientY >= childRect.top && e.clientY <= childRect.bottom;
+          if (inHeader || inEmptyChildren) {
+            closest = { el: children, appendTo: true, group: g };
           }
         });
         return closest;
@@ -1852,8 +1865,11 @@
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         tree.querySelectorAll('.oc-drop-indicator').forEach(d => d.remove());
+        tree.querySelectorAll('.oc-sidebar-group.drag-over').forEach(g => g.classList.remove('drag-over'));
         const target = getDropTarget(e);
-        if (target && !target.appendTo) {
+        if (target && target.appendTo && target.group) {
+          target.group.classList.add('drag-over');
+        } else if (target && !target.appendTo) {
           const indicator = document.createElement('div');
           indicator.className = 'oc-drop-indicator';
           if (target.after) target.el.after(indicator);
@@ -1865,6 +1881,7 @@
         if (!_sidebarDragAgent) return;
         e.preventDefault();
         tree.querySelectorAll('.oc-drop-indicator').forEach(d => d.remove());
+        tree.querySelectorAll('.oc-sidebar-group.drag-over').forEach(g => g.classList.remove('drag-over'));
         const target = getDropTarget(e);
         const dragEl = tree.querySelector(`.oc-nav-item[data-agent-nav="${_sidebarDragAgent}"]`);
         if (!target || !dragEl) return;
