@@ -3737,6 +3737,12 @@ function burnAreaChart() {
       const ghCoreLimit = ghRate.core?.limit || 5000;
       const ghCorePct = ghCoreLimit > 0 ? Math.round((ghCoreUsed / ghCoreLimit) * 100) : 0;
       const ghResetAt = ghRate.core?.reset ? new Date(ghRate.core.reset * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+      const ghIdentity = ghRate.identity || {};
+      const ghIdentityLabel = ghIdentity.label || 'unknown';
+      const ghIdentityType = ghIdentity.type || 'unknown';
+      const ghIdentityBadge = ghIdentityType === 'app'
+        ? `<span style="display:inline-block;font-size:0.6rem;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:4px;font-weight:500">App</span>`
+        : `<span style="display:inline-block;font-size:0.6rem;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;font-weight:500">Personal</span>`;
 
       const totals = tokens.totals || {};
       const tokenInput = (totals.input || 0).toLocaleString();
@@ -3752,6 +3758,7 @@ function burnAreaChart() {
         <div style="${cardStyle}"><div style="${labelStyle}">Agent States</div>${agentRows || '<div style="color:var(--muted);font-size:0.8rem">No agents</div>'}</div>
         <div style="${cardStyle}">
           <div style="${labelStyle}">GitHub API</div>
+          <div style="${rowStyle}"><span>Identity</span><span>${ghIdentityBadge} ${esc(ghIdentityLabel)}</span></div>
           <div style="${rowStyle}"><span>Core API</span><span style="font-weight:600">${ghCoreUsed} / ${ghCoreLimit} (${ghCorePct}%)</span></div>
           <div style="${rowStyle}"><span>Resets at</span><span>${ghResetAt}</span></div>
           <div style="margin-top:6px;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden">

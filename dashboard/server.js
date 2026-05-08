@@ -187,6 +187,25 @@ setInterval(fetchGhRateLimits, GH_RATE_REFRESH_MS);
 const GH_AUTH_CHECK_MS = 60000;
 let ghAuthOk = true;
 let ghAuthLastChecked = null;
+let ghAuthIdentity = null;
+
+// Detect GH auth identity at startup — App vs personal account
+(function detectGhIdentity() {
+  const appId = process.env.GH_APP_ID
+    || ((projectConfig.github_app || {}).app_id)
+    || '';
+  if (appId) {
+    ghAuthIdentity = { type: 'app', label: `GitHub App (${appId})` };
+    return;
+  }
+  execFile('bash', ['-c', "gh api user --jq '.login' 2>/dev/null || echo ''"], { timeout: 10000 }, (_err, stdout) => {
+    const login = (stdout || '').trim();
+    ghAuthIdentity = login
+      ? { type: 'personal', label: login }
+      : { type: 'unknown', label: 'unknown' };
+  });
+})();
+
 function checkGhAuth() {
   execFile('bash', ['-c', 'gh api rate_limit --jq \'{ limit: .rate.limit, used: .rate.used, remaining: .rate.remaining, reset: .rate.reset }\' 2>&1'], { timeout: 15000 }, (err, stdout, stderr) => {
     const output = (stdout || '') + (stderr || '');
@@ -203,6 +222,9 @@ function checkGhAuth() {
         remaining: parsed.remaining || 0,
         reset: parsed.reset || 0,
       };
+    }
+    if (ghAuthIdentity) {
+      ghRateLimitsCache.identity = ghAuthIdentity;
     }
     if (was && !ghAuthOk) console.error('gh auth DOWN:', output.trim());
     if (!was && ghAuthOk) console.log('gh auth recovered (limit=' + limit + ')');
