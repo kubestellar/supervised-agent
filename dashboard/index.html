@@ -3543,13 +3543,7 @@ function burnAreaChart() {
       if (ocHealth) {
         const h = data.health || {};
         const CI_PASS_THRESHOLD = 70;
-        const HEALTH_LABELS = {
-          ci: 'CI Pass Rate', brew: 'Homebrew', helm: 'Helm', nightly: 'Nightly',
-          nightlyCompliance: 'Nightly Compliance', nightlyDashboard: 'Nightly Dashboard',
-          nightlyGhaw: 'Nightly GHAW', nightlyPlaywright: 'Nightly Playwright',
-          nightlyRel: 'Nightly Release', weekly: 'Weekly', weeklyRel: 'Weekly Release',
-          hourly: 'Hourly', deploy_vllm_d: 'Deploy vLLM-d', deploy_pok_prod: 'Deploy POK Prod'
-        };
+        const HEALTH_LABELS = _buildHealthLabels(data.agents || []);
         const failing = [];
         const passing = [];
         for (const [k, v] of Object.entries(h)) {
@@ -3596,6 +3590,24 @@ function burnAreaChart() {
       window.scrollTo(0, scrollY);
     }
 
+    const HEALTH_LABEL_DEFAULTS = {
+      ci: 'CI Pass Rate', brew: 'Homebrew', helm: 'Helm', nightly: 'Nightly',
+      nightlyCompliance: 'Compliance', nightlyDashboard: 'Dashboard', nightlyGhaw: 'GHAW',
+      nightlyPlaywright: 'Playwright', nightlyRel: 'Release', weekly: 'Weekly',
+      weeklyRel: 'Weekly Rel', hourly: 'Hourly', deploy_vllm_d: 'vLLM-d', deploy_pok_prod: 'POK'
+    };
+    function _buildHealthLabels(agents) {
+      const labels = { ...HEALTH_LABEL_DEFAULTS };
+      for (const a of agents || []) {
+        for (const s of a.statsConfig || []) {
+          if (s.source === 'health' && s.field && s.label) {
+            labels[s.field] = s.label;
+          }
+        }
+      }
+      return labels;
+    }
+
     // ── Debug section ──
     const DEBUG_REFRESH_MS = 10000;
     function renderDebugSection() {
@@ -3609,12 +3621,7 @@ function burnAreaChart() {
       const tokens = data.tokens || {};
 
       const CI_PASS_THRESHOLD = 70;
-      const HEALTH_LABELS = {
-        ci: 'CI Pass Rate', brew: 'Homebrew', helm: 'Helm', nightly: 'Nightly',
-        nightlyCompliance: 'Compliance', nightlyDashboard: 'Dashboard', nightlyGhaw: 'GHAW',
-        nightlyPlaywright: 'Playwright', nightlyRel: 'Release', weekly: 'Weekly',
-        weeklyRel: 'Weekly Rel', hourly: 'Hourly', deploy_vllm_d: 'vLLM-d', deploy_pok_prod: 'POK'
-      };
+      const HEALTH_LABELS = _buildHealthLabels(agents);
 
       const cardStyle = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;';
       const labelStyle = 'font-size:0.65rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:8px;font-weight:600;';
