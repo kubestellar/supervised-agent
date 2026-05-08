@@ -19,13 +19,30 @@ BOOTSTRAP_BYTES = 8192
 STALE_SECONDS = 300
 SUMMARY_MAX_LINES = int(os.environ.get("SUMMARY_MAX_LINES", "100"))
 
-AGENT_TMUX_SESSION = {
-    "supervisor": "supervisor",
-    "scanner": "scanner",
-    "reviewer": "reviewer",
-    "architect": "architect",
-    "outreach": "outreach",
-}
+def _load_enabled_agents():
+    """Build agent→tmux-session map from AGENTS_ENABLED or hive-config.sh."""
+    agents_str = os.environ.get("AGENTS_ENABLED", "")
+    if not agents_str:
+        try:
+            out = subprocess.check_output(
+                ["bash", "-c", "source /usr/local/bin/hive-config.sh 2>/dev/null && echo $AGENTS_ENABLED"],
+                timeout=5, text=True
+            ).strip()
+            if out:
+                agents_str = out
+        except Exception:
+            pass
+    if agents_str:
+        return {a: a for a in agents_str.split()}
+    return {
+        "supervisor": "supervisor",
+        "scanner": "scanner",
+        "reviewer": "reviewer",
+        "architect": "architect",
+        "outreach": "outreach",
+    }
+
+AGENT_TMUX_SESSION = _load_enabled_agents()
 
 PANE_NOISE = re.compile(
     r"^[─━═].*[─━═]$|^❯|^\s*$|^ / commands|^ @ files|^  dev@|^  ⏵|"
@@ -53,6 +70,7 @@ AGENT_PATTERNS = [
     ("reviewer",   ["[agent:reviewer]", "reviewer-beads"]),
     ("outreach",   ["[agent:outreach]", "outreach-beads"]),
     ("scanner",    ["[agent:scanner]", "scanner-beads"]),
+    ("sec-check",  ["[agent:sec-check]", "sec-check-beads", "security gate", "security gatekeeper"]),
 ]
 
 BASH_PATTERNS = [
