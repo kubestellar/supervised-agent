@@ -3735,9 +3735,16 @@ function burnAreaChart() {
     setInterval(fetchAgentLogs, LOGS_REFRESH_MS);
 
     function esc(s) {
-      const d = document.createElement('div');
-      d.textContent = s;
-      return d.innerHTML;
+      if (typeof s !== 'string') return '';
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/`/g, '&#96;')
+        .replace(/\n/g, ' ')
+        .replace(/\r/g, '');
     }
 
     const TOAST_DURATION_MS = 3000;
