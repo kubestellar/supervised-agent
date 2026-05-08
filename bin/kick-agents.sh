@@ -1130,8 +1130,14 @@ case "$TARGET" in
     # supervisor is NOT kicked in "all" — it has its own cadence via governor
     ;;
   *)
-    echo "Usage: $0 [scanner|reviewer|architect|outreach|supervisor|all]" >&2
-    exit 1
+    if policy_changed "$TARGET"; then
+      _GENERIC_POLICY_INSTR="Read your CLAUDE.md."
+    else
+      _GENERIC_POLICY_INSTR="Policy unchanged since last kick — skip CLAUDE.md re-read, continue with standing instructions."
+    fi
+    _GENERIC_MSG="[agent:${TARGET}] [KICK] git pull /tmp/hive. ${_GENERIC_POLICY_INSTR}
+Run your next pass now."
+    apply_model_if_changed "$TARGET" "$TARGET" && kick "$TARGET" "$_GENERIC_MSG" "$TARGET"
     ;;
 esac
 
