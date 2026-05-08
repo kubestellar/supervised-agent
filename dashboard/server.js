@@ -717,7 +717,7 @@ app.get('/api/timeline', (_req, res) => {
 const TMUX_PREVIEW_LINES = 30;
 app.get('/api/pane/:agent', (req, res) => {
   const agent = req.params.agent;
-  const session = TMUX_SESSION[agent];
+  const session = getTmuxSession(agent);
   if (!session) return res.status(400).json({ error: `unknown agent: ${agent}` });
   execFile('tmux', ['capture-pane', '-t', session, '-p', '-S', `-${TMUX_PREVIEW_LINES}`],
     { timeout: 5000 }, (err, stdout) => {
@@ -755,17 +755,11 @@ app.get('/api/widget', (_req, res) => {
   fs.createReadStream(widgetFile).pipe(res);
 });
 
-// Map dashboard agent names to tmux session names
-const TMUX_SESSION = {
-  scanner: 'scanner',
-  reviewer: 'reviewer',
-  architect: 'architect',
-  outreach: 'outreach',
-  supervisor: 'supervisor',
-  strategist: 'strategist',
-  analyst: 'analyst',
-  guardian: 'guardian',
-};
+// Map dashboard agent names to tmux session names — defaults to agent name
+const TMUX_SESSION_OVERRIDES = {};
+function getTmuxSession(agent) {
+  return TMUX_SESSION_OVERRIDES[agent] || agent;
+}
 
 // Control endpoints
 app.post('/api/kick/:agent', (req, res) => {
@@ -776,7 +770,7 @@ app.post('/api/kick/:agent', (req, res) => {
   }
   const extraPrompt = (req.body && req.body.prompt) ? req.body.prompt.trim() : '';
   if (extraPrompt && agent !== 'all') {
-    const session = TMUX_SESSION[agent];
+    const session = getTmuxSession(agent);
     if (!session) {
       return res.status(400).json({ error: `no tmux session for ${agent}` });
     }
@@ -1122,7 +1116,7 @@ app.post('/api/restart/:agent', (req, res) => {
   if (!allowed.includes(agent)) {
     return res.status(400).json({ error: `invalid agent: ${agent}` });
   }
-  const session = TMUX_SESSION[agent];
+  const session = getTmuxSession(agent);
   if (!session) {
     return res.status(400).json({ error: `no tmux session mapped for ${agent}` });
   }
