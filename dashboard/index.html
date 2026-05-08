@@ -232,6 +232,41 @@
     .oc-agent-dot.off { background: #9ca3af; }
     @keyframes oc-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
+    /* Sidebar drag-and-drop */
+    .oc-nav-item[draggable="true"] { cursor: grab; }
+    .oc-nav-item.dragging { opacity: 0.4; }
+    .oc-sidebar-group { position: relative; }
+    .oc-sidebar-group-header {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 20px 4px; font-size: 0.6rem; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600;
+      cursor: pointer; user-select: none;
+    }
+    .oc-sidebar-group-header:hover { color: #6b7280; }
+    .oc-sidebar-group-header .oc-group-arrow {
+      font-size: 0.5rem; transition: transform 0.15s;
+    }
+    .oc-sidebar-group-header.collapsed .oc-group-arrow { transform: rotate(-90deg); }
+    .oc-sidebar-group-children { padding-left: 0; }
+    .oc-sidebar-group-children.collapsed { display: none; }
+    .oc-sidebar-group-header .oc-group-actions {
+      margin-left: auto; display: none; gap: 4px;
+    }
+    .oc-sidebar-group-header:hover .oc-group-actions { display: flex; }
+    .oc-sidebar-group-header .oc-group-actions button {
+      background: none; border: none; font-size: 0.6rem; cursor: pointer;
+      color: #9ca3af; padding: 0 2px;
+    }
+    .oc-sidebar-group-header .oc-group-actions button:hover { color: #374151; }
+    .oc-drop-indicator {
+      height: 2px; background: #dc2626; margin: 0 10px;
+      border-radius: 1px; pointer-events: none;
+    }
+    .oc-drop-indicator-group {
+      border: 2px dashed #dc2626; border-radius: 8px;
+      margin: 2px 10px; padding: 4px; opacity: 0.5;
+    }
+
     /* Agent detail summary — monospace, respect newlines */
     .oc-detail-summary-wrap { position: relative; margin-bottom: 16px; }
     .oc-detail-summary {
@@ -1283,14 +1318,7 @@
         <span class="oc-tree-arrow">▼</span> <span>Agent</span>
       </div>
       <div class="oc-tree-children" id="oc-agent-tree">
-        <div id="oc-agent-nav-ops"></div>
-        <div id="oc-agent-nav-strategy"></div>
-        <a class="oc-nav-item" data-section="nous-section" onclick="ocNavigate('nous-section')">🧪 Strategy Lab</a>
-        <div id="nous-sidebar-config" style="padding:2px 8px 6px 24px;font-size:0.65rem;color:var(--muted);line-height:1.5;display:none">
-          <div><span id="nous-sb-scope" style="font-weight:600"></span> · <span id="nous-sb-mode"></span></div>
-          <div id="nous-sb-phase" style="opacity:0.8"></div>
-        </div>
-        <a class="oc-nav-item" style="color:#6b7280;font-style:italic" onclick="openConfigDialog('agent')">+ add agent</a>
+        <!-- Agent items rendered dynamically by ocUpdateSidebarAgents() -->
       </div>
     </div>
     <div class="oc-nav-group">
@@ -1713,27 +1741,223 @@
       guardian: 'Fast-fail monitor — checks experiment bounds every tick, auto-reverts overlay on any violation',
     };
 
-    function ocUpdateSidebarAgents() {
-      const STRATEGY_AGENTS = ['strategist', 'analyst', 'guardian'];
-      const navOps = document.getElementById('oc-agent-nav-ops');
-      const navStrategy = document.getElementById('oc-agent-nav-strategy');
-      if (!navOps || !navStrategy) return;
-      const agents = window._lastAgents || [];
-      const renderAgent = a => {
-        const isOff = a.offByCadence === true;
-        const isPaused = a.paused === true && !isOff;
-        const isStopped = a.state === 'stopped';
-        const isRunning = a.busy === 'working' && !isPaused && !isOff && !isStopped;
-        const dotCls = isStopped ? 'stopped' : isPaused ? 'paused' : isOff ? 'off' : isRunning ? 'running' : 'idle';
-        const isActive = _ocSelectedAgent === a.name ? ' active' : '';
-        const agentDesc = AGENT_DESCRIPTIONS[a.name] || '';
-        const label = a.displayName || a.name;
-        return `<a class="oc-nav-item${isActive}" data-agent-nav="${a.name}" onclick="ocSelectAgent('${a.name}')" title="${agentDesc}"><span class="oc-agent-dot ${dotCls}"></span> ${label}</a>`;
+    // ── Sidebar layout: drag-and-drop + groups ──────────────────────────────
+    let _sidebarLayout = null;
+    let _sidebarLayoutLoaded = false;
+    let _sidebarDragAgent = null;
+
+    function _loadSidebarLayout() {
+      if (_sidebarLayoutLoaded) return;
+      _sidebarLayoutLoaded = true;
+      fetch('/api/config/sidebar').then(r => r.json()).then(d => {
+        if (d.sidebar && d.sidebar.groups) _sidebarLayout = d.sidebar;
+        ocUpdateSidebarAgents();
+      }).catch(() => {});
+    }
+    _loadSidebarLayout();
+
+    function _saveSidebarLayout(groups) {
+      _sidebarLayout = { groups };
+      fetch('/api/config/sidebar', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groups })
+      }).catch(() => {});
+    }
+
+    function _sidebarRenderAgent(a) {
+      const isOff = a.offByCadence === true;
+      const isPaused = a.paused === true && !isOff;
+      const isStopped = a.state === 'stopped';
+      const isRunning = a.busy === 'working' && !isPaused && !isOff && !isStopped;
+      const dotCls = isStopped ? 'stopped' : isPaused ? 'paused' : isOff ? 'off' : isRunning ? 'running' : 'idle';
+      const isActive = _ocSelectedAgent === a.name ? ' active' : '';
+      const agentDesc = AGENT_DESCRIPTIONS[a.name] || '';
+      const label = a.displayName || a.name;
+      return `<a class="oc-nav-item${isActive}" data-agent-nav="${a.name}" draggable="true" onclick="ocSelectAgent('${a.name}')" title="${agentDesc}"><span class="oc-agent-dot ${dotCls}"></span> ${label}</a>`;
+    }
+
+    function _sidebarBuildGroups(agents) {
+      if (!_sidebarLayout || !_sidebarLayout.groups) {
+        return [{ name: null, agents: agents.map(a => a.name) }];
+      }
+      const groups = _sidebarLayout.groups.map(g => ({ ...g }));
+      const assigned = new Set();
+      groups.forEach(g => (g.agents || []).forEach(n => assigned.add(n)));
+      const unassigned = agents.filter(a => !assigned.has(a.name)).map(a => a.name);
+      if (unassigned.length > 0) {
+        const ungrouped = groups.find(g => g.name === null || g.name === '');
+        if (ungrouped) ungrouped.agents = [...(ungrouped.agents || []), ...unassigned];
+        else groups.push({ name: null, agents: unassigned });
+      }
+      return groups;
+    }
+
+    function _sidebarReadLayout() {
+      const tree = document.getElementById('oc-agent-tree');
+      if (!tree) return null;
+      const groups = [];
+      tree.querySelectorAll('.oc-sidebar-group').forEach(g => {
+        const name = g.dataset.groupName || null;
+        const agentNames = [];
+        const container = g.querySelector('.oc-sidebar-group-children') || g;
+        container.querySelectorAll('.oc-nav-item[data-agent-nav]').forEach(el => {
+          agentNames.push(el.dataset.agentNav);
+        });
+        groups.push({ name: name || null, agents: agentNames });
+      });
+      return groups;
+    }
+
+    function _sidebarAttachDragHandlers() {
+      const tree = document.getElementById('oc-agent-tree');
+      if (!tree) return;
+
+      tree.querySelectorAll('.oc-nav-item[draggable="true"]').forEach(el => {
+        el.addEventListener('dragstart', e => {
+          _sidebarDragAgent = el.dataset.agentNav;
+          el.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', _sidebarDragAgent);
+        });
+        el.addEventListener('dragend', () => {
+          el.classList.remove('dragging');
+          _sidebarDragAgent = null;
+          tree.querySelectorAll('.oc-drop-indicator').forEach(d => d.remove());
+        });
+      });
+
+      const getDropTarget = (e) => {
+        const items = [...tree.querySelectorAll('.oc-nav-item[data-agent-nav]')];
+        let closest = null, closestDist = Infinity;
+        for (const item of items) {
+          if (item.dataset.agentNav === _sidebarDragAgent) continue;
+          const rect = item.getBoundingClientRect();
+          const mid = rect.top + rect.height / 2;
+          const dist = Math.abs(e.clientY - mid);
+          if (dist < closestDist) { closestDist = dist; closest = { el: item, after: e.clientY > mid }; }
+        }
+        // Check empty group containers as drop targets
+        tree.querySelectorAll('.oc-sidebar-group-children').forEach(c => {
+          if (c.querySelectorAll('.oc-nav-item[data-agent-nav]').length > 0) return;
+          const rect = c.getBoundingClientRect();
+          if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+            closest = { el: c, appendTo: true };
+          }
+        });
+        return closest;
       };
-      const opsHtml = agents.filter(a => !STRATEGY_AGENTS.includes(a.name)).map(renderAgent).join('');
-      const stratHtml = agents.filter(a => STRATEGY_AGENTS.includes(a.name)).map(renderAgent).join('');
-      if (navOps.innerHTML !== opsHtml) navOps.innerHTML = opsHtml;
-      if (navStrategy.innerHTML !== stratHtml) navStrategy.innerHTML = stratHtml;
+
+      tree.addEventListener('dragover', e => {
+        if (!_sidebarDragAgent) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        tree.querySelectorAll('.oc-drop-indicator').forEach(d => d.remove());
+        const target = getDropTarget(e);
+        if (target && !target.appendTo) {
+          const indicator = document.createElement('div');
+          indicator.className = 'oc-drop-indicator';
+          if (target.after) target.el.after(indicator);
+          else target.el.before(indicator);
+        }
+      });
+
+      tree.addEventListener('drop', e => {
+        if (!_sidebarDragAgent) return;
+        e.preventDefault();
+        tree.querySelectorAll('.oc-drop-indicator').forEach(d => d.remove());
+        const target = getDropTarget(e);
+        const dragEl = tree.querySelector(`.oc-nav-item[data-agent-nav="${_sidebarDragAgent}"]`);
+        if (!target || !dragEl) return;
+        if (target.appendTo) {
+          target.el.appendChild(dragEl);
+        } else if (target.el !== dragEl) {
+          if (target.after) target.el.after(dragEl);
+          else target.el.before(dragEl);
+        }
+        const groups = _sidebarReadLayout();
+        if (groups) _saveSidebarLayout(groups);
+        _sidebarDragAgent = null;
+      });
+    }
+
+    function ocAddSidebarGroup() {
+      const name = prompt('Group name:');
+      if (!name || !name.trim()) return;
+      const groups = _sidebarReadLayout() || [];
+      groups.push({ name: name.trim(), agents: [] });
+      _saveSidebarLayout(groups);
+      ocUpdateSidebarAgents();
+    }
+
+    function ocRemoveSidebarGroup(groupName) {
+      const groups = _sidebarReadLayout() || [];
+      const group = groups.find(g => g.name === groupName);
+      if (!group) return;
+      const ungrouped = groups.find(g => g.name === null || g.name === '');
+      if (ungrouped) ungrouped.agents = [...ungrouped.agents, ...(group.agents || [])];
+      else groups.push({ name: null, agents: group.agents || [] });
+      const filtered = groups.filter(g => g.name !== groupName);
+      _saveSidebarLayout(filtered);
+      ocUpdateSidebarAgents();
+    }
+
+    function ocRenameSidebarGroup(oldName) {
+      const newName = prompt('Rename group:', oldName);
+      if (!newName || !newName.trim() || newName.trim() === oldName) return;
+      const groups = _sidebarReadLayout() || [];
+      const group = groups.find(g => g.name === oldName);
+      if (group) group.name = newName.trim();
+      _saveSidebarLayout(groups);
+      ocUpdateSidebarAgents();
+    }
+
+    function ocToggleSidebarGroup(header) {
+      header.classList.toggle('collapsed');
+      const children = header.nextElementSibling;
+      if (children) children.classList.toggle('collapsed');
+    }
+
+    function ocUpdateSidebarAgents() {
+      const tree = document.getElementById('oc-agent-tree');
+      if (!tree) return;
+      const agents = window._lastAgents || [];
+      const agentMap = {};
+      agents.forEach(a => { agentMap[a.name] = a; });
+      const groups = _sidebarBuildGroups(agents);
+
+      let html = '';
+      for (const g of groups) {
+        const validAgents = (g.agents || []).filter(n => agentMap[n]);
+        if (g.name) {
+          const esc = g.name.replace(/'/g, "\\'");
+          html += `<div class="oc-sidebar-group" data-group-name="${g.name}">`;
+          html += `<div class="oc-sidebar-group-header" onclick="ocToggleSidebarGroup(this)">`;
+          html += `<span class="oc-group-arrow">▼</span> ${g.name}`;
+          html += `<span class="oc-group-actions" onclick="event.stopPropagation()">`;
+          html += `<button onclick="ocRenameSidebarGroup('${esc}')" title="Rename">✏</button>`;
+          html += `<button onclick="ocRemoveSidebarGroup('${esc}')" title="Remove group">✕</button>`;
+          html += `</span></div>`;
+          html += `<div class="oc-sidebar-group-children">`;
+          html += validAgents.map(n => _sidebarRenderAgent(agentMap[n])).join('');
+          html += `</div></div>`;
+        } else {
+          html += `<div class="oc-sidebar-group" data-group-name="">`;
+          html += validAgents.map(n => _sidebarRenderAgent(agentMap[n])).join('');
+          html += `</div>`;
+        }
+      }
+
+      html += `<a class="oc-nav-item" data-section="nous-section" onclick="ocNavigate('nous-section')">🧪 Strategy Lab</a>`;
+      html += `<div id="nous-sidebar-config" style="padding:2px 8px 6px 24px;font-size:0.65rem;color:var(--muted);line-height:1.5;display:none">`;
+      html += `<div><span id="nous-sb-scope" style="font-weight:600"></span> · <span id="nous-sb-mode"></span></div>`;
+      html += `<div id="nous-sb-phase" style="opacity:0.8"></div></div>`;
+      html += `<div style="display:flex;gap:4px;margin:4px 10px">`;
+      html += `<a class="oc-nav-item" style="color:#6b7280;font-style:italic;flex:1" onclick="openConfigDialog('agent')">+ agent</a>`;
+      html += `<a class="oc-nav-item" style="color:#6b7280;font-style:italic;flex:1" onclick="ocAddSidebarGroup()">+ group</a>`;
+      html += `</div>`;
+
+      tree.innerHTML = html;
+      _sidebarAttachDragHandlers();
     }
 
     applyLayout(getLayout());

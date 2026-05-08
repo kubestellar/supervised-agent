@@ -1859,6 +1859,29 @@ app.put('/api/config/governor/repos', (req, res) => {
   }
 });
 
+// ── Sidebar layout (agent order + groups) ──────────────────────────────────
+app.get('/api/config/sidebar', (_req, res) => {
+  try {
+    const sidebar = (projectConfig.agents || {}).sidebar || null;
+    res.json({ sidebar });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/config/sidebar', (req, res) => {
+  try {
+    const { groups } = req.body;
+    if (!Array.isArray(groups)) return res.status(400).json({ error: 'groups must be an array' });
+    if (!projectConfig.agents) projectConfig.agents = {};
+    projectConfig.agents.sidebar = { groups };
+    persistProjectConfig();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/config/backends', (_req, res) => {
   try {
     const backendsFile = path.join(HIVE_REPO_DIR, 'config', 'backends.conf');
