@@ -27,8 +27,18 @@ const PROJECT_PRIMARY_REPO = (projectConfig.project || {}).primary_repo || '';
 const PROJECT_ORG = (projectConfig.project || {}).org || '';
 const DASHBOARD_TITLE = ((projectConfig.dashboard || {}).title) || (PROJECT_NAME ? PROJECT_NAME + ' Hive' : 'Hive');
 const HIVE_REPO_DIR = process.env.HIVE_REPO_DIR || path.resolve(__dirname, '..');
-const ENABLED_AGENTS = ((projectConfig.agents || {}).enabled || ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach']);
-const ENABLED_AGENTS_PLUS_ALL = [...ENABLED_AGENTS, 'all'];
+let ENABLED_AGENTS = ((projectConfig.agents || {}).enabled || ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach']);
+let ENABLED_AGENTS_PLUS_ALL = [...ENABLED_AGENTS, 'all'];
+
+function persistEnabledAgents() {
+  if (!projectConfig.agents) projectConfig.agents = {};
+  projectConfig.agents.enabled = ENABLED_AGENTS.slice();
+  ENABLED_AGENTS_PLUS_ALL = [...ENABLED_AGENTS, 'all'];
+  const dumpYaml = yaml ? yaml.dump(projectConfig) : JSON.stringify(projectConfig, null, 2);
+  const tmpFile = `/tmp/hive-project-${process.pid}-${Date.now()}.yaml`;
+  fs.writeFileSync(tmpFile, dumpYaml);
+  execSync(`sudo mv ${tmpFile} ${CONFIG_PATH}`);
+}
 
 // ── Centralized backend/model config (JS equivalent of backends.conf) ──────
 const KNOWN_BACKENDS = ['claude', 'copilot', 'gemini', 'codex', 'amazonq', 'goose', 'aider'];
@@ -1788,6 +1798,10 @@ app.post('/api/config/governor/agents', (req, res) => {
       fs.writeFileSync(tmp, `# ${name} agent config\nAGENT_LAUNCH_CMD=agent-launch.sh\nAGENT_CLI_PINNED=false\n`, { mode: 0o644 });
     }
     execSync(`sudo mv ${shellQuote(tmp)} ${shellQuote(envFile)}`);
+    if (!ENABLED_AGENTS.includes(name)) {
+      ENABLED_AGENTS.push(name);
+      persistEnabledAgents();
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1804,6 +1818,11 @@ app.delete('/api/config/governor/agents/:name', (req, res) => {
     if (fs.existsSync(envFile)) {
       execSync(`sudo rm ${shellQuote(envFile)}`);
     }
+    const idx = ENABLED_AGENTS.indexOf(name);
+    if (idx !== -1) {
+      ENABLED_AGENTS.splice(idx, 1);
+      persistEnabledAgents();
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1816,7 +1835,7 @@ app.put('/api/config/governor/repos', (req, res) => {
     if (!projectConfig.project) projectConfig.project = {};
     projectConfig.project.repos = list;
     const dumpYaml = yaml ? yaml.dump(projectConfig) : JSON.stringify(projectConfig, null, 2);
-    const tmpFile = `/tmp/hive-project-${process.pid}.yaml`;
+    const tmpFile = `/tmp/hive-project-${process.pid}-${Date.now()}.yaml`;
     fs.writeFileSync(tmpFile, dumpYaml);
     execSync(`sudo mv ${tmpFile} ${CONFIG_PATH}`);
     res.json({ ok: true });
