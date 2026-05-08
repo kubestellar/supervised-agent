@@ -11,13 +11,14 @@ mkdir -p ~/.hive
 
 STALE_THRESHOLD_SEC=1800  # 30 min
 
-# Map agent name → beads directory
+# Map agent name → beads directory (dynamic from AGENTS_ENABLED)
+if [ -f /usr/local/bin/hive-config.sh ]; then
+  source /usr/local/bin/hive-config.sh 2>/dev/null
+fi
 declare -A BEADS_DIR
-BEADS_DIR[supervisor]="/home/dev/supervisor-beads"
-BEADS_DIR[scanner]="/home/dev/scanner-beads"
-BEADS_DIR[reviewer]="/home/dev/reviewer-beads"
-BEADS_DIR[architect]="/home/dev/architect-beads"
-BEADS_DIR[outreach]="/home/dev/outreach-beads"
+for _sa in ${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}; do
+  BEADS_DIR[$_sa]="/home/dev/${_sa}-beads"
+done
 
 # Read top in-progress bead title for an agent (returns empty if none)
 bead_in_progress() {
@@ -45,7 +46,7 @@ is_stale() {
   echo '  "summaries": {'
 
   first=1
-  for agent in supervisor scanner reviewer architect outreach; do
+  for agent in ${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}; do
     file=~/.hive/${agent}_status.txt
     if [ -f "$file" ]; then
       task=$(grep '^TASK=' "$file" 2>/dev/null | cut -d= -f2- | sed 's/"/'\''/g')

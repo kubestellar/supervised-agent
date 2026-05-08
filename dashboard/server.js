@@ -1812,6 +1812,14 @@ app.post('/api/config/governor/agents', (req, res) => {
       ENABLED_AGENTS.push(name);
       persistEnabledAgents();
     }
+    // Create beads directory for the new agent
+    const beadsDir = path.join(process.env.HOME || '/home/dev', `${name}-beads`);
+    if (!fs.existsSync(beadsDir)) {
+      try {
+        fs.mkdirSync(beadsDir, { recursive: true });
+        execSync(`cd ${shellQuote(beadsDir)} && bd init 2>/dev/null`, { timeout: 5000 });
+      } catch (_) {}
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

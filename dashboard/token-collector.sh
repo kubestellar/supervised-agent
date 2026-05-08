@@ -69,6 +69,8 @@ AGENT_PATTERNS = [
                     "you are the kubestellar outreach"]),
     ("scanner",    ["[agent:scanner]", "scanner-beads", "you are the scanner",
                     "you are the kubestellar scanner"]),
+    ("sec-check",  ["[agent:sec-check]", "sec-check-beads", "you are sec-check",
+                    "security gate", "security gatekeeper"]),
 ]
 
 PROJECT_DIR_AGENTS = {
