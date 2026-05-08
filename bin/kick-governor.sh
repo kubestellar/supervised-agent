@@ -366,8 +366,8 @@ get_cadence() {
   upper_agent=$(echo "$agent" | tr '[:lower:]-' '[:upper:]_')
   upper_mode=$(echo "$mode" | tr '[:lower:]' '[:upper:]')
   local var_name="CADENCE_${upper_agent}_${upper_mode}_SEC"
-  local val="${!var_name}"
-  echo "${val:-0}"
+  local val="${!var_name:-0}"
+  echo "$val"
 }
 
 # ── Model selection ──────────────────────────────────────────────────────────
@@ -382,7 +382,7 @@ get_model_selection() {
   upper_mode=$(echo "$mode" | tr '[:lower:]' '[:upper:]')
   upper_agent=$(echo "$agent" | tr '[:lower:]-' '[:upper:]_')
   local var_name="MODEL_${upper_mode}_${upper_agent}"
-  local selection="${!var_name}"
+  local selection="${!var_name:-}"
   if [[ -z "$selection" ]]; then
     selection="copilot:claude-sonnet-4-6"
   fi
