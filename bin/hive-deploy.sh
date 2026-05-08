@@ -143,13 +143,43 @@ if [ -n "$DISCORD_RESTART_NEEDED" ] && [ -z "$DISCORD_CHANGED" ]; then
     log "WARN: failed to restart hive-discord (drift)"
 fi
 
-# Sync hive-project.yaml to /etc/hive if changed
+# Merge hive-project.yaml: update code-managed keys from the repo while
+# preserving runtime-managed keys (sidebar groups, repo list, enabled agents)
+# that the dashboard writes to /etc/hive/.
 HIVE_PROJECT="${HIVE_PROJECT_CONFIG_SRC:-$HIVE_REPO/examples/kubestellar/hive-project.yaml}"
 HIVE_PROJECT_INSTALLED="/etc/hive/hive-project.yaml"
-if [ -f "$HIVE_PROJECT" ] && ! cmp -s "$HIVE_PROJECT" "$HIVE_PROJECT_INSTALLED" 2>/dev/null; then
-  sudo cp "$HIVE_PROJECT" "$HIVE_PROJECT_INSTALLED" && \
-    SYNCED="$SYNCED hive-project.yaml" || \
-    log "WARN: failed to sync hive-project.yaml"
+if [ -f "$HIVE_PROJECT" ]; then
+  if [ ! -f "$HIVE_PROJECT_INSTALLED" ]; then
+    sudo mkdir -p /etc/hive
+    sudo cp "$HIVE_PROJECT" "$HIVE_PROJECT_INSTALLED" && \
+      SYNCED="$SYNCED hive-project.yaml(seed)" || \
+      log "WARN: failed to seed hive-project.yaml"
+  elif ! cmp -s "$HIVE_PROJECT" "$HIVE_PROJECT_INSTALLED" 2>/dev/null; then
+    # Merge: repo updates code-managed keys, runtime keys preserved
+    MERGED=$(python3 -c "
+import yaml, sys, copy
+RUNTIME_KEYS = {'agents.sidebar', 'agents.enabled', 'project.repos'}
+with open(sys.argv[1]) as f: repo = yaml.safe_load(f) or {}
+with open(sys.argv[2]) as f: installed = yaml.safe_load(f) or {}
+merged = copy.deepcopy(repo)
+for dotkey in RUNTIME_KEYS:
+    parts = dotkey.split('.')
+    src, dst = installed, merged
+    for p in parts[:-1]:
+        src = src.get(p, {}) if isinstance(src, dict) else {}
+        if p not in dst: dst[p] = {}
+        dst = dst[p]
+    leaf = parts[-1]
+    if leaf in src:
+        dst[leaf] = src[leaf]
+print(yaml.dump(merged, default_flow_style=False))
+" "$HIVE_PROJECT" "$HIVE_PROJECT_INSTALLED" 2>/dev/null) && {
+      MERGE_TMP="/tmp/hive-project-merge-$$.yaml"
+      echo "$MERGED" > "$MERGE_TMP"
+      sudo mv "$MERGE_TMP" "$HIVE_PROJECT_INSTALLED"
+      SYNCED="$SYNCED hive-project.yaml(merged)"
+    } || log "WARN: failed to merge hive-project.yaml"
+  fi
 fi
 
 # Sync systemd units if changed
