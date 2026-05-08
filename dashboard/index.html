@@ -4869,6 +4869,8 @@ function burnAreaChart() {
         .then(() => {
           showToast(`Agent "${name}" deleted`, 'success');
           closeConfigDialog();
+          // Remove from cached agents so cards disappear immediately
+          window._lastAgents = (window._lastAgents || []).filter(a => a.name !== name);
           // Remove from sidebar layout
           if (_sidebarLayout && _sidebarLayout.groups) {
             for (const g of _sidebarLayout.groups) {
@@ -4877,6 +4879,7 @@ function burnAreaChart() {
             _saveSidebarLayout(_sidebarLayout.groups);
           }
           ocUpdateSidebarAgents();
+          renderAgents(window._lastAgents);
         })
         .catch(err => showToast(`Failed: ${err.message}`, 'error'));
     }
