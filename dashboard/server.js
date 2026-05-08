@@ -183,17 +183,27 @@ function fetchGhRateLimits() {
 fetchGhRateLimits();
 setInterval(fetchGhRateLimits, GH_RATE_REFRESH_MS);
 
-// GitHub auth health — check every 60s, expose sticky alert when 401
+// GitHub auth health + rate limit — check every 60s
 const GH_AUTH_CHECK_MS = 60000;
 let ghAuthOk = true;
 let ghAuthLastChecked = null;
 function checkGhAuth() {
-  execFile('bash', ['-c', 'gh api rate_limit --jq .rate.limit 2>&1'], { timeout: 15000 }, (err, stdout, stderr) => {
+  execFile('bash', ['-c', 'gh api rate_limit --jq \'{ limit: .rate.limit, used: .rate.used, remaining: .rate.remaining, reset: .rate.reset }\' 2>&1'], { timeout: 15000 }, (err, stdout, stderr) => {
     const output = (stdout || '') + (stderr || '');
     const was = ghAuthOk;
-    const limit = parseInt(stdout.trim(), 10);
+    let parsed = null;
+    try { parsed = JSON.parse(stdout.trim()); } catch (_) {}
+    const limit = parsed ? parsed.limit : parseInt(stdout.trim(), 10);
     ghAuthOk = !err && limit > 0;
     ghAuthLastChecked = new Date().toISOString();
+    if (parsed && ghAuthOk) {
+      ghRateLimitsCache.core = {
+        limit: parsed.limit || 5000,
+        used: parsed.used || 0,
+        remaining: parsed.remaining || 0,
+        reset: parsed.reset || 0,
+      };
+    }
     if (was && !ghAuthOk) console.error('gh auth DOWN:', output.trim());
     if (!was && ghAuthOk) console.log('gh auth recovered (limit=' + limit + ')');
   });
