@@ -30,14 +30,24 @@ const HIVE_REPO_DIR = process.env.HIVE_REPO_DIR || path.resolve(__dirname, '..')
 let ENABLED_AGENTS = ((projectConfig.agents || {}).enabled || ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach']);
 let ENABLED_AGENTS_PLUS_ALL = [...ENABLED_AGENTS, 'all'];
 
-function persistEnabledAgents() {
-  if (!projectConfig.agents) projectConfig.agents = {};
-  projectConfig.agents.enabled = ENABLED_AGENTS.slice();
-  ENABLED_AGENTS_PLUS_ALL = [...ENABLED_AGENTS, 'all'];
+const CONFIG_REPO_SOURCE = process.env.HIVE_PROJECT_CONFIG_SRC
+  || path.join(HIVE_REPO_DIR, 'examples', 'kubestellar', 'hive-project.yaml');
+
+function persistProjectConfig() {
   const dumpYaml = yaml ? yaml.dump(projectConfig) : JSON.stringify(projectConfig, null, 2);
   const tmpFile = `/tmp/hive-project-${process.pid}-${Date.now()}.yaml`;
   fs.writeFileSync(tmpFile, dumpYaml);
   execSync(`sudo mv ${tmpFile} ${CONFIG_PATH}`);
+  if (fs.existsSync(CONFIG_REPO_SOURCE)) {
+    fs.writeFileSync(CONFIG_REPO_SOURCE, dumpYaml);
+  }
+}
+
+function persistEnabledAgents() {
+  if (!projectConfig.agents) projectConfig.agents = {};
+  projectConfig.agents.enabled = ENABLED_AGENTS.slice();
+  ENABLED_AGENTS_PLUS_ALL = [...ENABLED_AGENTS, 'all'];
+  persistProjectConfig();
 }
 
 // ── Centralized backend/model config (JS equivalent of backends.conf) ──────
@@ -1834,10 +1844,7 @@ app.put('/api/config/governor/repos', (req, res) => {
     const list = req.body.list || [];
     if (!projectConfig.project) projectConfig.project = {};
     projectConfig.project.repos = list;
-    const dumpYaml = yaml ? yaml.dump(projectConfig) : JSON.stringify(projectConfig, null, 2);
-    const tmpFile = `/tmp/hive-project-${process.pid}-${Date.now()}.yaml`;
-    fs.writeFileSync(tmpFile, dumpYaml);
-    execSync(`sudo mv ${tmpFile} ${CONFIG_PATH}`);
+    persistProjectConfig();
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
