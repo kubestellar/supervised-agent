@@ -4250,6 +4250,11 @@ function burnAreaChart() {
             <option value="">(from launch command)</option>
             ${KNOWN_MODELS.map(m => `<option value="${m.value}" ${_modelsEqual(g.model, m.value) ? 'selected' : ''}>${m.label}</option>`).join('')}
           </select>
+        </div>
+        <div style="margin-top:24px;padding-top:16px;border-top:1px solid #fecaca">
+          <label style="color:#b91c1c;font-weight:600;font-size:0.75rem;margin-bottom:8px;display:block">Danger Zone</label>
+          <button onclick="deleteAgentFromConfig('${esc(agentName)}')" style="background:#dc2626;color:#fff;border:none;padding:6px 16px;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:600">Delete Agent</button>
+          <span style="color:#9ca3af;font-size:0.65rem;margin-left:8px">Removes agent config, env file, and sidebar entry</span>
         </div>`;
     }
 
@@ -4853,6 +4858,25 @@ function burnAreaChart() {
           _configState.data.agents.push(name);
           input.value = '';
           renderConfigTab('Agents');
+        })
+        .catch(err => showToast(`Failed: ${err.message}`, 'error'));
+    }
+
+    function deleteAgentFromConfig(name) {
+      if (!confirm(`Delete agent "${name}"?\n\nThis will remove its env file, governor config, and sidebar entry. The tmux session (if running) will NOT be killed.`)) return;
+      fetch(`/api/config/governor/agents/${name}`, { method: 'DELETE' })
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+        .then(() => {
+          showToast(`Agent "${name}" deleted`, 'success');
+          closeConfigDialog();
+          // Remove from sidebar layout
+          if (_sidebarLayout && _sidebarLayout.groups) {
+            for (const g of _sidebarLayout.groups) {
+              g.agents = (g.agents || []).filter(a => a !== name);
+            }
+            _saveSidebarLayout(_sidebarLayout.groups);
+          }
+          ocUpdateSidebarAgents();
         })
         .catch(err => showToast(`Failed: ${err.message}`, 'error'));
     }
