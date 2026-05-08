@@ -1135,9 +1135,7 @@ case "$TARGET" in
     else
       _GENERIC_POLICY_INSTR="Policy unchanged — continue with standing instructions."
     fi
-    _GENERIC_MSG="You are the ${TARGET} agent. This is a scheduled governor kick at ${_now_et}. ${_GENERIC_POLICY_INSTR}
-Pull latest changes: cd /tmp/hive && git pull
-Then run your next pass as described in your CLAUDE.md."
+    _GENERIC_MSG="[agent:${TARGET}] [KICK] git pull /tmp/hive. ${_GENERIC_POLICY_INSTR} Run your next pass as described in your CLAUDE.md. Kick time: ${_now_et}."
     apply_model_if_changed "$TARGET" "$TARGET" && kick "$TARGET" "$_GENERIC_MSG" "$TARGET"
     ;;
 esac
