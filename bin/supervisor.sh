@@ -373,7 +373,9 @@ trap 'log "supervisor exiting"; exit 0' TERM INT
 
 # Prevent double-restart race: if systemd respawns supervisor while another
 # instance is still running, the second exits immediately.
-LOCK_FILE="/var/run/hive-supervisor-${SESSION}.lock"
+LOCK_DIR="/var/run/hive"
+[ -d "$LOCK_DIR" ] || sudo mkdir -p "$LOCK_DIR" && sudo chown "$(id -u):$(id -g)" "$LOCK_DIR" 2>/dev/null
+LOCK_FILE="${LOCK_DIR}/supervisor-${SESSION}.lock"
 exec 200>"$LOCK_FILE"
 if ! flock -n 200; then
   log "another supervisor for $SESSION is running; exiting"
