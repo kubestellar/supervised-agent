@@ -242,6 +242,7 @@
       text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600;
       cursor: pointer; user-select: none;
     }
+    .oc-sidebar-group-header { cursor: grab; }
     .oc-sidebar-group-header:hover { color: #6b7280; }
     .oc-sidebar-group-header .oc-group-arrow {
       font-size: 0.5rem; transition: transform 0.15s;
@@ -252,6 +253,10 @@
     .oc-sidebar-group.drag-over > .oc-sidebar-group-children {
       outline: 2px dashed #dc2626; outline-offset: -2px;
       border-radius: 6px; background: rgba(220,38,38,0.05);
+    }
+    .oc-sidebar-group.dragging-group { opacity: 0.4; }
+    .oc-group-drop-indicator {
+      height: 2px; background: #dc2626; border-radius: 1px; margin: 2px 0;
     }
     .oc-sidebar-group-header .oc-group-actions {
       margin-left: auto; display: none; gap: 4px;
@@ -1749,6 +1754,7 @@
     let _sidebarLayout = null;
     let _sidebarLayoutLoaded = false;
     let _sidebarDragAgent = null;
+    let _sidebarDragGroup = null;
 
     function _loadSidebarLayout() {
       if (_sidebarLayoutLoaded) return;
@@ -1796,6 +1802,20 @@
       return groups;
     }
 
+    function _sortAgentsBySidebar(agents) {
+      const groups = _sidebarBuildGroups(agents);
+      const order = [];
+      for (const g of groups) {
+        for (const n of (g.agents || [])) order.push(n);
+      }
+      const agentMap = {};
+      agents.forEach(a => { agentMap[a.name] = a; });
+      const sorted = [];
+      for (const n of order) { if (agentMap[n]) sorted.push(agentMap[n]); }
+      for (const a of agents) { if (!order.includes(a.name)) sorted.push(a); }
+      return { sorted, groups };
+    }
+
     function _sidebarReadLayout() {
       const tree = document.getElementById('oc-agent-tree');
       if (!tree) return null;
@@ -1816,9 +1836,11 @@
       const tree = document.getElementById('oc-agent-tree');
       if (!tree) return;
 
+      // --- Agent-level drag handlers ---
       tree.querySelectorAll('.oc-nav-item[draggable="true"]').forEach(el => {
         el.addEventListener('dragstart', e => {
           _sidebarDragAgent = el.dataset.agentNav;
+          _sidebarDragGroup = null;
           el.classList.add('dragging');
           e.dataTransfer.effectAllowed = 'move';
           e.dataTransfer.setData('text/plain', _sidebarDragAgent);
@@ -1826,12 +1848,36 @@
         el.addEventListener('dragend', () => {
           el.classList.remove('dragging');
           _sidebarDragAgent = null;
-          tree.querySelectorAll('.oc-drop-indicator').forEach(d => d.remove());
-          tree.querySelectorAll('.oc-sidebar-group.drag-over').forEach(g => g.classList.remove('drag-over'));
+          _clearDragIndicators(tree);
         });
       });
 
-      const getDropTarget = (e) => {
+      // --- Group-level drag handlers ---
+      tree.querySelectorAll('.oc-sidebar-group-header[draggable="true"]').forEach(header => {
+        header.addEventListener('dragstart', e => {
+          const group = header.closest('.oc-sidebar-group');
+          if (!group) return;
+          _sidebarDragGroup = group.dataset.groupName;
+          _sidebarDragAgent = null;
+          group.classList.add('dragging-group');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', 'group:' + _sidebarDragGroup);
+          e.stopPropagation();
+        });
+        header.addEventListener('dragend', () => {
+          const group = header.closest('.oc-sidebar-group');
+          if (group) group.classList.remove('dragging-group');
+          _sidebarDragGroup = null;
+          _clearDragIndicators(tree);
+        });
+      });
+
+      function _clearDragIndicators(container) {
+        container.querySelectorAll('.oc-drop-indicator, .oc-group-drop-indicator').forEach(d => d.remove());
+        container.querySelectorAll('.oc-sidebar-group.drag-over').forEach(g => g.classList.remove('drag-over'));
+      }
+
+      const getAgentDropTarget = (e) => {
         const items = [...tree.querySelectorAll('.oc-nav-item[data-agent-nav]')];
         let closest = null, closestDist = Infinity;
         for (const item of items) {
@@ -1841,7 +1887,6 @@
           const dist = Math.abs(e.clientY - mid);
           if (dist < closestDist) { closestDist = dist; closest = { el: item, after: e.clientY > mid }; }
         }
-        // Check group headers and children containers as drop targets
         tree.querySelectorAll('.oc-sidebar-group[data-group-name]').forEach(g => {
           const groupName = g.dataset.groupName;
           if (!groupName) return;
@@ -1860,40 +1905,75 @@
         return closest;
       };
 
+      const getGroupDropTarget = (e) => {
+        const groups = [...tree.querySelectorAll('.oc-sidebar-group[data-group-name]')];
+        let closest = null, closestDist = Infinity;
+        for (const g of groups) {
+          if (g.dataset.groupName === _sidebarDragGroup) continue;
+          const rect = g.getBoundingClientRect();
+          const mid = rect.top + rect.height / 2;
+          const dist = Math.abs(e.clientY - mid);
+          if (dist < closestDist) { closestDist = dist; closest = { el: g, after: e.clientY > mid }; }
+        }
+        return closest;
+      };
+
       tree.addEventListener('dragover', e => {
-        if (!_sidebarDragAgent) return;
+        if (!_sidebarDragAgent && !_sidebarDragGroup) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
-        tree.querySelectorAll('.oc-drop-indicator').forEach(d => d.remove());
-        tree.querySelectorAll('.oc-sidebar-group.drag-over').forEach(g => g.classList.remove('drag-over'));
-        const target = getDropTarget(e);
-        if (target && target.appendTo && target.group) {
-          target.group.classList.add('drag-over');
-        } else if (target && !target.appendTo) {
-          const indicator = document.createElement('div');
-          indicator.className = 'oc-drop-indicator';
-          if (target.after) target.el.after(indicator);
-          else target.el.before(indicator);
+        _clearDragIndicators(tree);
+
+        if (_sidebarDragGroup) {
+          const target = getGroupDropTarget(e);
+          if (target) {
+            const indicator = document.createElement('div');
+            indicator.className = 'oc-group-drop-indicator';
+            if (target.after) target.el.after(indicator);
+            else target.el.before(indicator);
+          }
+        } else if (_sidebarDragAgent) {
+          const target = getAgentDropTarget(e);
+          if (target && target.appendTo && target.group) {
+            target.group.classList.add('drag-over');
+          } else if (target && !target.appendTo) {
+            const indicator = document.createElement('div');
+            indicator.className = 'oc-drop-indicator';
+            if (target.after) target.el.after(indicator);
+            else target.el.before(indicator);
+          }
         }
       });
 
       tree.addEventListener('drop', e => {
-        if (!_sidebarDragAgent) return;
+        if (!_sidebarDragAgent && !_sidebarDragGroup) return;
         e.preventDefault();
-        tree.querySelectorAll('.oc-drop-indicator').forEach(d => d.remove());
-        tree.querySelectorAll('.oc-sidebar-group.drag-over').forEach(g => g.classList.remove('drag-over'));
-        const target = getDropTarget(e);
-        const dragEl = tree.querySelector(`.oc-nav-item[data-agent-nav="${_sidebarDragAgent}"]`);
-        if (!target || !dragEl) return;
-        if (target.appendTo) {
-          target.el.appendChild(dragEl);
-        } else if (target.el !== dragEl) {
-          if (target.after) target.el.after(dragEl);
-          else target.el.before(dragEl);
+        _clearDragIndicators(tree);
+
+        if (_sidebarDragGroup) {
+          const target = getGroupDropTarget(e);
+          const dragEl = tree.querySelector(`.oc-sidebar-group[data-group-name="${_sidebarDragGroup}"]`);
+          if (target && dragEl && target.el !== dragEl) {
+            if (target.after) target.el.after(dragEl);
+            else target.el.before(dragEl);
+          }
+          const groups = _sidebarReadLayout();
+          if (groups) _saveSidebarLayout(groups);
+          _sidebarDragGroup = null;
+        } else if (_sidebarDragAgent) {
+          const target = getAgentDropTarget(e);
+          const dragEl = tree.querySelector(`.oc-nav-item[data-agent-nav="${_sidebarDragAgent}"]`);
+          if (!target || !dragEl) return;
+          if (target.appendTo) {
+            target.el.appendChild(dragEl);
+          } else if (target.el !== dragEl) {
+            if (target.after) target.el.after(dragEl);
+            else target.el.before(dragEl);
+          }
+          const groups = _sidebarReadLayout();
+          if (groups) _saveSidebarLayout(groups);
+          _sidebarDragAgent = null;
         }
-        const groups = _sidebarReadLayout();
-        if (groups) _saveSidebarLayout(groups);
-        _sidebarDragAgent = null;
       });
     }
 
@@ -1948,7 +2028,7 @@
         if (g.name) {
           const esc = g.name.replace(/'/g, "\\'");
           html += `<div class="oc-sidebar-group" data-group-name="${g.name}">`;
-          html += `<div class="oc-sidebar-group-header" onclick="ocToggleSidebarGroup(this)">`;
+          html += `<div class="oc-sidebar-group-header" draggable="true" onclick="ocToggleSidebarGroup(this)">`;
           html += `<span class="oc-group-arrow">▼</span> ${g.name}`;
           html += `<span class="oc-group-actions" onclick="event.stopPropagation()">`;
           html += `<button onclick="ocRenameSidebarGroup('${esc}')" title="Rename">✏</button>`;
@@ -2293,7 +2373,8 @@
       el.querySelectorAll('.kick-prompt').forEach(inp => {
         if (inp.value) savedInputs[inp.id] = inp.value;
       });
-      const cards = agents.map(a => {
+      const { sorted: sortedAgents } = _sortAgentsBySidebar(agents);
+      const cards = sortedAgents.map(a => {
         const needsLogin = a.needsLogin === true;
         const isOff = a.offByCadence === true;
         const isPaused = a.paused === true && !isOff;
@@ -2323,7 +2404,7 @@
               ageBadge = `<span class="summary-age ${ageCls}">${ageStr}</span>`;
             }
           }
-          summaryEl = `<div class="doing">${ageBadge}${esc(a.liveSummary)}</div>`;
+          summaryEl = `<div class="doing">${ageBadge}${escBlock(a.liveSummary)}</div>`;
         }
         const indEl = agentIndicators(a.name);
         return `<div class="agent-card ${cls}" data-agent="${a.name}">
@@ -3638,8 +3719,16 @@ function burnAreaChart() {
         healthRows += `<div style="${rowStyle}"><span>${label}</span><span style="color:${color};font-weight:600">${dot} ${val}</span></div>`;
       }
 
+      const { sorted: sortedForStates, groups: stateGroups } = _sortAgentsBySidebar(agents);
       let agentRows = '';
-      for (const a of agents) {
+      let _stateCurrentGroup = undefined;
+      for (const a of sortedForStates) {
+        const grp = stateGroups.find(g => (g.agents || []).includes(a.name));
+        const grpName = grp ? grp.name : null;
+        if (grpName !== _stateCurrentGroup) {
+          _stateCurrentGroup = grpName;
+          if (grpName) agentRows += `<div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-top:8px;margin-bottom:2px;font-weight:600">${esc(grpName)}</div>`;
+        }
         const stateColor = { running: 'var(--green)', idle: 'var(--green)', paused: 'var(--yellow)', stopped: 'var(--red)', off: 'var(--muted)' }[a.state] || 'var(--muted)';
         agentRows += `<div style="${rowStyle}"><span>${a.name}</span><span style="color:${stateColor};font-weight:600">${a.state}</span></div>`;
       }
@@ -3752,6 +3841,19 @@ function burnAreaChart() {
         .replace(/`/g, '&#96;')
         .replace(/\n/g, ' ')
         .replace(/\r/g, '');
+    }
+    function escBlock(s) {
+      if (typeof s !== 'string') return '';
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/`/g, '&#96;')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '')
+        .replace(/\n/g, '<br>');
     }
 
     const TOAST_DURATION_MS = 3000;
