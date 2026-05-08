@@ -929,13 +929,13 @@ for f in ['$_gov_script', '$_gov_env']:
                 defaults[(agent, mode)] = secs
     except: pass
 
-agents = ['supervisor','scanner','reviewer','architect','outreach']
+agents = '${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}'.split()
 modes = ['surge','busy','quiet','idle']
 rows = []
 for a in agents:
     cells = {}
     for m in modes:
-        s = defaults.get((a, m), -1)
+        s = defaults.get((a.replace('-','_'), m), -1)
         if s == 0: cells[m] = 'off'
         elif s < 60: cells[m] = f'{s}s'
         elif s < 3600: cells[m] = f'{s//60}m'
