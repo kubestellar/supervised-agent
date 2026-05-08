@@ -21,56 +21,62 @@ HIVE_REPO_DIR="${HIVE_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/
 export HIVE_REPO_DIR
 
 _HIVE_CONFIG="${HIVE_PROJECT_CONFIG:-/etc/hive/hive-project.yaml}"
+_HIVE_RUNTIME="${HIVE_RUNTIME_CONFIG:-/etc/hive/hive-runtime.yaml}"
 
-_hive_yq() {
+_hive_yq_file() {
+  local file="$1" path="$2"
   if command -v yq &>/dev/null; then
-    yq -r "$1" "$_HIVE_CONFIG" 2>/dev/null
+    yq -r "$path" "$file" 2>/dev/null
   elif command -v python3 &>/dev/null; then
     python3 -c "
 import yaml, sys, json
-with open('$_HIVE_CONFIG') as f:
+with open('$file') as f:
     d = yaml.safe_load(f)
-# Navigate dotted path
-path = '''$1'''.lstrip('.')
+path = '''$path'''.lstrip('.')
 parts = []
 current = ''
 for ch in path:
     if ch == '.' and not current.endswith('\\\\'):
-        parts.append(current)
-        current = ''
+        parts.append(current); current = ''
     elif ch == '[':
-        if current:
-            parts.append(current)
+        if current: parts.append(current)
         current = ch
     elif ch == ']':
-        current += ch
-        parts.append(current)
-        current = ''
-    else:
-        current += ch
-if current:
-    parts.append(current)
+        current += ch; parts.append(current); current = ''
+    else: current += ch
+if current: parts.append(current)
 val = d
 for p in parts:
-    if p.startswith('[') and p.endswith(']'):
-        val = val[int(p[1:-1])]
-    elif isinstance(val, dict):
-        val = val.get(p)
-    else:
-        val = None
-    if val is None:
-        break
-if isinstance(val, (list, dict)):
-    print(json.dumps(val))
-elif val is None:
-    print('null')
-else:
-    print(val)
+    if p.startswith('[') and p.endswith(']'): val = val[int(p[1:-1])]
+    elif isinstance(val, dict): val = val.get(p)
+    else: val = None
+    if val is None: break
+if isinstance(val, (list, dict)): print(json.dumps(val))
+elif val is None: print('null')
+else: print(val)
 " 2>/dev/null
   else
     echo ""
   fi
 }
+
+_hive_yq() {
+  _hive_yq_file "$_HIVE_CONFIG" "$1"
+}
+
+# Read from runtime config first, fall back to project config
+_hive_runtime_yq() {
+  local val=""
+  if [[ -f "$_HIVE_RUNTIME" ]]; then
+    val=$(_hive_yq_file "$_HIVE_RUNTIME" "$1")
+  fi
+  if [[ "$val" == "null" || -z "$val" || "$val" == "[]" ]]; then
+    _hive_yq "$1"
+  else
+    echo "$val"
+  fi
+}
+
 
 _hive_read() {
   local val
@@ -96,17 +102,34 @@ _hive_read_array() {
   fi
 }
 
+# Runtime-aware array reader: checks hive-runtime.yaml first, falls back to hive-project.yaml
+_hive_read_runtime_array() {
+  local val=""
+  if [[ -f "$_HIVE_RUNTIME" ]]; then
+    val=$(_hive_yq_file "$_HIVE_RUNTIME" "$1")
+  fi
+  if [[ "$val" == "null" || -z "$val" || "$val" == "[]" ]]; then
+    _hive_read_array "$1" "${2:-}"
+  else
+    if command -v python3 &>/dev/null; then
+      python3 -c "import json; print(' '.join(json.loads('''$val''')))" 2>/dev/null || echo "${2:-}"
+    else
+      echo "$val" | tr -d '[]",' | xargs
+    fi
+  fi
+}
+
 if [[ -f "$_HIVE_CONFIG" ]]; then
   # Project
   PROJECT_NAME=$(_hive_read "project.name" "")
   PROJECT_ORG=$(_hive_read "project.org" "")
   PROJECT_PRIMARY_REPO=$(_hive_read "project.primary_repo" "")
-  PROJECT_REPOS=$(_hive_read_array "project.repos" "")
+  PROJECT_REPOS=$(_hive_read_runtime_array "project.repos" "")
   PROJECT_AI_AUTHOR=$(_hive_read "project.ai_author" "")
   PROJECT_WEBSITE=$(_hive_read "project.website" "")
 
   # Agents
-  AGENTS_ENABLED=$(_hive_read_array "agents.enabled" "supervisor scanner reviewer")
+  AGENTS_ENABLED=$(_hive_read_runtime_array "agents.enabled" "supervisor scanner reviewer")
   BEADS_BASE=$(_hive_read "agents.beads_base" "/home/dev")
   AGENTS_WORKDIR=$(_hive_read "agents.workdir" "")
 

@@ -24,28 +24,14 @@ if ! flock -n 200; then
   exit 0
 fi
 
-# Read repos from hive-project.yaml (single source of truth)
-PROJECT_YAML="${HIVE_PROJECT_YAML:-/etc/hive/hive-project.yaml}"
-if [ ! -f "$PROJECT_YAML" ]; then
-  PROJECT_YAML="$(find "$(dirname "$(dirname "$0")")/examples" -name 'hive-project.yaml' -type f 2>/dev/null | head -1)"
-fi
-
-# Source project config for AI author and primary repo
+# Source project config (reads hive-runtime.yaml for repos, falls back to hive-project.yaml)
 # shellcheck source=hive-config.sh
 source "$(dirname "$0")/hive-config.sh" 2>/dev/null || source /usr/local/bin/hive-config.sh 2>/dev/null || true
 
-if [ -f "$PROJECT_YAML" ]; then
-  mapfile -t REPOS < <(python3 -c "
-import yaml, sys
-with open(sys.argv[1]) as f:
-    cfg = yaml.safe_load(f)
-for r in cfg.get('project', {}).get('repos', []):
-    print(r)
-" "$PROJECT_YAML" 2>/dev/null)
-fi
+IFS=' ' read -ra REPOS <<< "${PROJECT_REPOS:-}"
 
 if [ ${#REPOS[@]} -eq 0 ]; then
-  echo "ERROR: no repos found in $PROJECT_YAML" >&2
+  echo "ERROR: no repos found in config" >&2
   exit 1
 fi
 

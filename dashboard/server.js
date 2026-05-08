@@ -8,30 +8,59 @@ const yaml = (() => { try { return require('js-yaml'); } catch (_) { return null
 const app = express();
 app.use(express.json());
 
-// Load project config from hive-project.yaml
+// Load project config from hive-project.yaml (code-managed, synced from repo)
 const CONFIG_PATH = process.env.HIVE_PROJECT_CONFIG || '/etc/hive/hive-project.yaml';
-let projectConfig = {};
-try {
-  const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
-  if (yaml) {
-    projectConfig = yaml.load(raw) || {};
-  } else {
-    const { execSync } = require('child_process');
-    const json = execSync(`python3 -c "import yaml,json,sys; print(json.dumps(yaml.safe_load(sys.stdin)))" < "${CONFIG_PATH}"`, { encoding: 'utf8' });
-    projectConfig = JSON.parse(json);
+// Runtime config — dashboard customizations that survive deploys
+const RUNTIME_CONFIG_PATH = process.env.HIVE_RUNTIME_CONFIG || '/etc/hive/hive-runtime.yaml';
+
+function _loadYaml(filePath) {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    if (yaml) return yaml.load(raw) || {};
+    const json = execSync(
+      `python3 -c "import yaml,json,sys; print(json.dumps(yaml.safe_load(sys.stdin)))" < "${filePath}"`,
+      { encoding: 'utf8' }
+    );
+    return JSON.parse(json);
+  } catch (_) { return {}; }
+}
+
+let projectConfig = _loadYaml(CONFIG_PATH);
+let runtimeConfig = _loadYaml(RUNTIME_CONFIG_PATH);
+
+// Migrate: if runtime file is empty but project config has runtime keys, extract them
+if (!runtimeConfig.agents && !runtimeConfig.project) {
+  const existingSidebar = (projectConfig.agents || {}).sidebar;
+  const existingEnabled = (projectConfig.agents || {}).enabled;
+  const existingRepos = (projectConfig.project || {}).repos;
+  if (existingSidebar || existingEnabled || existingRepos) {
+    runtimeConfig = {};
+    if (existingSidebar) { runtimeConfig.agents = runtimeConfig.agents || {}; runtimeConfig.agents.sidebar = existingSidebar; }
+    if (existingEnabled) { runtimeConfig.agents = runtimeConfig.agents || {}; runtimeConfig.agents.enabled = existingEnabled; }
+    if (existingRepos) { runtimeConfig.project = { repos: existingRepos }; }
+    _persistRuntime();
   }
-} catch (_) { /* no config file — use defaults */ }
+}
 
 const PROJECT_NAME = (projectConfig.project || {}).name || '';
 const PROJECT_PRIMARY_REPO = (projectConfig.project || {}).primary_repo || '';
 const PROJECT_ORG = (projectConfig.project || {}).org || '';
 const DASHBOARD_TITLE = ((projectConfig.dashboard || {}).title) || (PROJECT_NAME ? PROJECT_NAME + ' Hive' : 'Hive');
 const HIVE_REPO_DIR = process.env.HIVE_REPO_DIR || path.resolve(__dirname, '..');
-let ENABLED_AGENTS = ((projectConfig.agents || {}).enabled || ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach']);
+let ENABLED_AGENTS = ((runtimeConfig.agents || {}).enabled
+  || (projectConfig.agents || {}).enabled
+  || ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach']);
 let ENABLED_AGENTS_PLUS_ALL = [...ENABLED_AGENTS, 'all'];
 
 const CONFIG_REPO_SOURCE = process.env.HIVE_PROJECT_CONFIG_SRC
   || path.join(HIVE_REPO_DIR, 'examples', 'kubestellar', 'hive-project.yaml');
+
+function _persistRuntime() {
+  const dumpYaml = yaml ? yaml.dump(runtimeConfig) : JSON.stringify(runtimeConfig, null, 2);
+  const tmpFile = `/tmp/hive-runtime-${process.pid}-${Date.now()}.yaml`;
+  fs.writeFileSync(tmpFile, dumpYaml);
+  execSync(`sudo mv ${tmpFile} ${RUNTIME_CONFIG_PATH}`);
+}
 
 function persistProjectConfig() {
   const dumpYaml = yaml ? yaml.dump(projectConfig) : JSON.stringify(projectConfig, null, 2);
@@ -44,10 +73,10 @@ function persistProjectConfig() {
 }
 
 function persistEnabledAgents() {
-  if (!projectConfig.agents) projectConfig.agents = {};
-  projectConfig.agents.enabled = ENABLED_AGENTS.slice();
+  if (!runtimeConfig.agents) runtimeConfig.agents = {};
+  runtimeConfig.agents.enabled = ENABLED_AGENTS.slice();
   ENABLED_AGENTS_PLUS_ALL = [...ENABLED_AGENTS, 'all'];
-  persistProjectConfig();
+  _persistRuntime();
 }
 
 // ── Centralized backend/model config (JS equivalent of backends.conf) ──────
@@ -1698,7 +1727,7 @@ app.get('/api/config/governor', (_req, res) => {
       pullbackSeconds: parseInt(govEnv.SENSING_PULLBACK_SECONDS || '900', 10),
     };
 
-    const repos = ((projectConfig.project || {}).repos || []).slice();
+    const repos = ((runtimeConfig.project || {}).repos || (projectConfig.project || {}).repos || []).slice();
     res.json({ agents, thresholds, labels, budget, notifications, health, repos, sensing });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1885,9 +1914,9 @@ app.delete('/api/config/governor/agents/:name', (req, res) => {
 app.put('/api/config/governor/repos', (req, res) => {
   try {
     const list = req.body.list || [];
-    if (!projectConfig.project) projectConfig.project = {};
-    projectConfig.project.repos = list;
-    persistProjectConfig();
+    if (!runtimeConfig.project) runtimeConfig.project = {};
+    runtimeConfig.project.repos = list;
+    _persistRuntime();
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1897,7 +1926,8 @@ app.put('/api/config/governor/repos', (req, res) => {
 // ── Sidebar layout (agent order + groups) ──────────────────────────────────
 app.get('/api/config/sidebar', (_req, res) => {
   try {
-    const sidebar = (projectConfig.agents || {}).sidebar || null;
+    const sidebar = (runtimeConfig.agents || {}).sidebar
+      || (projectConfig.agents || {}).sidebar || null;
     res.json({ sidebar });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1908,9 +1938,9 @@ app.put('/api/config/sidebar', (req, res) => {
   try {
     const { groups } = req.body;
     if (!Array.isArray(groups)) return res.status(400).json({ error: 'groups must be an array' });
-    if (!projectConfig.agents) projectConfig.agents = {};
-    projectConfig.agents.sidebar = { groups };
-    persistProjectConfig();
+    if (!runtimeConfig.agents) runtimeConfig.agents = {};
+    runtimeConfig.agents.sidebar = { groups };
+    _persistRuntime();
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

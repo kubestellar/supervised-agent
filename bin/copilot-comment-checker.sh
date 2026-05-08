@@ -14,23 +14,32 @@ LOG="/var/log/kick-agents.log"
 REAL_GH="/usr/bin/gh"
 
 PROJECT_YAML="${HIVE_PROJECT_YAML:-/etc/hive/hive-project.yaml}"
+RUNTIME_YAML="${HIVE_RUNTIME_CONFIG:-/etc/hive/hive-runtime.yaml}"
 if [ ! -f "$PROJECT_YAML" ]; then
   PROJECT_YAML="$(find "$(dirname "$(dirname "$0")")/examples" -name 'hive-project.yaml' -type f 2>/dev/null | head -1)"
 fi
 
 log() { echo "[$(date -Is)] COPILOT-CHECK $*" >> "$LOG"; }
 
-# Read config
+# Read config — repos from runtime config first, classification from project config
 CONFIG=$(python3 -c "
-import yaml, sys, json
+import yaml, sys, json, os
 with open(sys.argv[1]) as f:
-    cfg = yaml.safe_load(f)
+    cfg = yaml.safe_load(f) or {}
+runtime_path = sys.argv[2] if len(sys.argv) > 2 else ''
+repos = cfg.get('project', {}).get('repos', [])
+if runtime_path and os.path.exists(runtime_path):
+    with open(runtime_path) as f:
+        rt = yaml.safe_load(f) or {}
+    rt_repos = rt.get('project', {}).get('repos', [])
+    if rt_repos:
+        repos = rt_repos
 result = {
-    'repos': cfg.get('project', {}).get('repos', []),
+    'repos': repos,
     'copilot': cfg.get('classification', {}).get('copilot_check', {})
 }
 print(json.dumps(result))
-" "$PROJECT_YAML" 2>/dev/null || echo '{"repos":[],"copilot":{}}')
+" "$PROJECT_YAML" "$RUNTIME_YAML" 2>/dev/null || echo '{"repos":[],"copilot":{}}')
 
 REPOS=$(echo "$CONFIG" | python3 -c "import json,sys; [print(r) for r in json.load(sys.stdin)['repos']]" 2>/dev/null)
 # Copilot code review posts as "Copilot"; the fix-agent posts as "copilot-swe-agent[bot]"
