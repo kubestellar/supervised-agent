@@ -1432,7 +1432,7 @@ app.get('/api/config/agent/:name', (req, res) => {
   try {
     const agentEnv = parseEnvFile(`${ENV_DIR}/${name}.env`);
     const govEnv = parseEnvFile(GOVERNOR_ENV_PATH);
-    const upper = name.toUpperCase();
+    const upper = name.toUpperCase().replace(/-/g, '_');
 
     const launchCmd = agentEnv.AGENT_LAUNCH_CMD || '';
     const currentMode = (statusCache && statusCache.governor ? statusCache.governor.mode : 'busy').toUpperCase();
@@ -1521,7 +1521,7 @@ app.put('/api/config/agent/:name/general', (req, res) => {
 app.put('/api/config/agent/:name/cadences', (req, res) => {
   const { name } = req.params;
   if (!validateAgentName(name, res)) return;
-  const upper = name.toUpperCase();
+  const upper = name.toUpperCase().replace(/-/g, '_');
   try {
     const { surge, busy, quiet, idle } = req.body;
     if (surge !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, `CADENCE_${upper}_SURGE_SEC`, String(surge));
@@ -1537,7 +1537,7 @@ app.put('/api/config/agent/:name/cadences', (req, res) => {
 app.put('/api/config/agent/:name/models', (req, res) => {
   const { name } = req.params;
   if (!validateAgentName(name, res)) return;
-  const upper = name.toUpperCase();
+  const upper = name.toUpperCase().replace(/-/g, '_');
   try {
     const { surge, busy, quiet, idle } = req.body;
     if (surge !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, `MODEL_${upper}_SURGE`, surge);
