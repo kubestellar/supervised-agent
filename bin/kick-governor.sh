@@ -362,65 +362,12 @@ determine_mode() {
 
 get_cadence() {
   local agent="$1" mode="$2"
-  case "$agent" in
-    scanner)
-      case "$mode" in
-        surge) echo "$CADENCE_SCANNER_SURGE_SEC" ;;
-        busy)  echo "$CADENCE_SCANNER_BUSY_SEC"  ;;
-        quiet) echo "$CADENCE_SCANNER_QUIET_SEC" ;;
-        idle)  echo "$CADENCE_SCANNER_IDLE_SEC"  ;;
-      esac ;;
-    reviewer)
-      case "$mode" in
-        surge) echo "$CADENCE_REVIEWER_SURGE_SEC" ;;
-        busy)  echo "$CADENCE_REVIEWER_BUSY_SEC"  ;;
-        quiet) echo "$CADENCE_REVIEWER_QUIET_SEC" ;;
-        idle)  echo "$CADENCE_REVIEWER_IDLE_SEC"  ;;
-      esac ;;
-    architect)
-      case "$mode" in
-        surge) echo "$CADENCE_ARCHITECT_SURGE_SEC" ;;
-        busy)  echo "$CADENCE_ARCHITECT_BUSY_SEC"  ;;
-        quiet) echo "$CADENCE_ARCHITECT_QUIET_SEC" ;;
-        idle)  echo "$CADENCE_ARCHITECT_IDLE_SEC"  ;;
-      esac ;;
-    outreach)
-      case "$mode" in
-        surge) echo "$CADENCE_OUTREACH_SURGE_SEC" ;;
-        busy)  echo "$CADENCE_OUTREACH_BUSY_SEC"  ;;
-        quiet) echo "$CADENCE_OUTREACH_QUIET_SEC" ;;
-        idle)  echo "$CADENCE_OUTREACH_IDLE_SEC"  ;;
-      esac ;;
-    supervisor)
-      case "$mode" in
-        surge) echo "$CADENCE_SUPERVISOR_SURGE_SEC" ;;
-        busy)  echo "$CADENCE_SUPERVISOR_BUSY_SEC"  ;;
-        quiet) echo "$CADENCE_SUPERVISOR_QUIET_SEC" ;;
-        idle)  echo "$CADENCE_SUPERVISOR_IDLE_SEC"  ;;
-      esac ;;
-    strategist)
-      case "$mode" in
-        surge) echo "$CADENCE_STRATEGIST_SURGE_SEC" ;;
-        busy)  echo "$CADENCE_STRATEGIST_BUSY_SEC"  ;;
-        quiet) echo "$CADENCE_STRATEGIST_QUIET_SEC" ;;
-        idle)  echo "$CADENCE_STRATEGIST_IDLE_SEC"  ;;
-      esac ;;
-    analyst)
-      case "$mode" in
-        surge) echo "$CADENCE_ANALYST_SURGE_SEC" ;;
-        busy)  echo "$CADENCE_ANALYST_BUSY_SEC"  ;;
-        quiet) echo "$CADENCE_ANALYST_QUIET_SEC" ;;
-        idle)  echo "$CADENCE_ANALYST_IDLE_SEC"  ;;
-      esac ;;
-    guardian)
-      case "$mode" in
-        surge) echo "$CADENCE_GUARDIAN_SURGE_SEC" ;;
-        busy)  echo "$CADENCE_GUARDIAN_BUSY_SEC"  ;;
-        quiet) echo "$CADENCE_GUARDIAN_QUIET_SEC" ;;
-        idle)  echo "$CADENCE_GUARDIAN_IDLE_SEC"  ;;
-      esac ;;
-    *)
-  esac
+  local upper_agent upper_mode
+  upper_agent=$(echo "$agent" | tr '[:lower:]-' '[:upper:]_')
+  upper_mode=$(echo "$mode" | tr '[:lower:]' '[:upper:]')
+  local var_name="CADENCE_${upper_agent}_${upper_mode}_SEC"
+  local val="${!var_name}"
+  echo "${val:-0}"
 }
 
 # ── Model selection ──────────────────────────────────────────────────────────
@@ -433,7 +380,7 @@ get_model_selection() {
   local agent="$1" mode="$2"
   local upper_mode upper_agent
   upper_mode=$(echo "$mode" | tr '[:lower:]' '[:upper:]')
-  upper_agent=$(echo "$agent" | tr '[:lower:]' '[:upper:]')
+  upper_agent=$(echo "$agent" | tr '[:lower:]-' '[:upper:]_')
   local var_name="MODEL_${upper_mode}_${upper_agent}"
   local selection="${!var_name}"
   if [[ -z "$selection" ]]; then
@@ -546,7 +493,7 @@ BUDGETEOF
 
 optimize_model_assignment() {
   local mode="$1"
-  local agents=(scanner reviewer architect outreach supervisor)
+  local agents=($AGENTS_ENABLED)
   local priority_agents=(scanner reviewer)
 
   local projected_pct
@@ -808,7 +755,7 @@ echo "$mode"      > "$STATE_DIR/mode"
 echo "$busy_pct"  > "$STATE_DIR/busyness_pct"
 
 # Write per-agent cadences for hive status to read
-for _agent in scanner reviewer architect outreach supervisor strategist analyst guardian; do
+for _agent in $AGENTS_ENABLED; do
   if _is_agent_paused "$_agent"; then
     echo "paused" > "$STATE_DIR/cadence_${_agent}"
     continue
@@ -828,20 +775,25 @@ done
 # Run model optimizer — writes model state files before agents are kicked
 optimize_model_assignment "$mode"
 
+_cadence_summary=""
+for _ca in $AGENTS_ENABLED; do
+  _cadence_summary="${_cadence_summary}${_ca}=$(secs_to_label "$(get_cadence "$_ca" "$mode")") "
+done
+
 # Report mode transitions
 if [ -n "$prev_mode" ] && [ "$prev_mode" != "$mode" ]; then
   log "MODE CHANGE ${prev_mode} → ${mode} (queue=${queue_depth} threshold=${BUSY_THRESHOLD_ISSUES})"
   ntfy "default" \
     "Governor: ${prev_mode} → ${mode}" \
-    "Queue depth ${queue_depth} (threshold ${BUSY_THRESHOLD_ISSUES}). Cadences: scanner=$(secs_to_label "$(get_cadence scanner "$mode")") reviewer=$(secs_to_label "$(get_cadence reviewer "$mode")") architect=$(secs_to_label "$(get_cadence architect "$mode")") outreach=$(secs_to_label "$(get_cadence outreach "$mode")")" \
+    "Queue depth ${queue_depth} (threshold ${BUSY_THRESHOLD_ISSUES}). Cadences: ${_cadence_summary}" \
     "arrows_counterclockwise"
 fi
 
-log "MODE=${mode} queue=${queue_depth} scanner=$(secs_to_label "$(get_cadence scanner "$mode")") reviewer=$(secs_to_label "$(get_cadence reviewer "$mode")") architect=$(secs_to_label "$(get_cadence architect "$mode")") outreach=$(secs_to_label "$(get_cadence outreach "$mode")")"
+log "MODE=${mode} queue=${queue_depth} ${_cadence_summary}"
 
 # Log model assignments
 budget_pct=$(grep '^PROJECTED_PCT=' "$STATE_DIR/budget_state" 2>/dev/null | cut -d= -f2 || echo "?")
-log "BUDGET projected=${budget_pct}% models: $(for _a in scanner reviewer architect outreach supervisor strategist analyst guardian; do
+log "BUDGET projected=${budget_pct}% models: $(for _a in $AGENTS_ENABLED; do
   _b=$(grep '^BACKEND=' "$STATE_DIR/model_${_a}" 2>/dev/null | cut -d= -f2 || echo "?")
   _m=$(grep '^MODEL=' "$STATE_DIR/model_${_a}" 2>/dev/null | cut -d= -f2 || echo "?")
   printf '%s=%s:%s ' "$_a" "$_b" "$_m"
@@ -877,7 +829,7 @@ fi
 # Clear stuck input on every tick — C-c + C-u to discard, not Enter to execute.
 # If C-c + C-u fails (buffer completely stuck), flag agent for restart.
 BUFFER_STUCK_HEARTBEAT_THRESHOLD=1200  # 20 minutes — skip buffer-stuck flag if status file is fresher
-for _fa in scanner reviewer supervisor architect outreach strategist analyst guardian; do
+for _fa in $AGENTS_ENABLED; do
   _is_agent_paused "$_fa" && continue
   tmux has-session -t "$_fa" 2>/dev/null || continue
   _pane_text=$(tmux capture-pane -t "$_fa" -p 2>/dev/null || true)
@@ -920,7 +872,7 @@ DEFAULT_STALE_THRESHOLD_SEC=1200  # 20 minutes — overridden by per-agent AGENT
 STUCK_COUNT_FILE="$STATE_DIR/stuck_counts"
 touch "$STUCK_COUNT_FILE" 2>/dev/null || true
 
-for _sa in scanner reviewer architect outreach supervisor strategist analyst guardian; do
+for _sa in $AGENTS_ENABLED; do
   _is_agent_paused "$_sa" && continue
   _status_file="$HOME/.hive/${_sa}_status.txt"
   [[ ! -f "$_status_file" ]] && continue
@@ -932,7 +884,7 @@ for _sa in scanner reviewer architect outreach supervisor strategist analyst gua
   [[ "$_sa_status" == "DONE" || "$_sa_status" == "DONE_WITH_CONCERNS" ]] && continue
 
   # Per-agent stale timeout from env file, falling back to default
-  _sa_upper=$(echo "$_sa" | tr '[:lower:]' '[:upper:]')
+  _sa_upper=$(echo "$_sa" | tr '[:lower:]-' '[:upper:]_')
   _sa_env="/etc/hive/${_sa}.env"
   _sa_stale_sec=$(grep "^AGENT_STALE_TIMEOUT_SEC=" "$_sa_env" 2>/dev/null | cut -d= -f2 || true)
   [[ -z "$_sa_stale_sec" ]] && _sa_stale_sec=$(grep "^AGENT_STALE_MAX_SEC=" "$_sa_env" 2>/dev/null | cut -d= -f2 || true)
@@ -964,13 +916,8 @@ for _sa in scanner reviewer architect outreach supervisor strategist analyst gua
   fi
 done
 
-maybe_kick scanner    "$mode"
-maybe_kick reviewer   "$mode"
-maybe_kick architect  "$mode"
-maybe_kick outreach   "$mode"
-maybe_kick supervisor "$mode"
-maybe_kick strategist "$mode"
-maybe_kick analyst    "$mode"
-maybe_kick guardian   "$mode"
+for _mk_agent in $AGENTS_ENABLED; do
+  maybe_kick "$_mk_agent" "$mode"
+done
 
 log "GOVERNOR DONE"
