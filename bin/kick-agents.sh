@@ -1135,7 +1135,13 @@ case "$TARGET" in
     else
       _GENERIC_POLICY_INSTR="Policy unchanged — continue with standing instructions."
     fi
-    _GENERIC_MSG="[agent:${TARGET}] [KICK] git pull /tmp/hive. ${_GENERIC_POLICY_INSTR} Run your next pass as described in your CLAUDE.md. Kick time: ${_now_et}."
+    _AGENT_CLAUDE="/etc/hive/${TARGET}-CLAUDE.md"
+    if [[ -f "$_AGENT_CLAUDE" ]]; then
+      _GENERIC_INSTR="Read ${_AGENT_CLAUDE} for your instructions and run your next pass."
+    else
+      _GENERIC_INSTR="Run your next pass as described in your CLAUDE.md."
+    fi
+    _GENERIC_MSG="[agent:${TARGET}] [KICK] git pull /tmp/hive. ${_GENERIC_POLICY_INSTR} ${_GENERIC_INSTR} Kick time: ${_now_et}."
     apply_model_if_changed "$TARGET" "$TARGET" && kick "$TARGET" "$_GENERIC_MSG" "$TARGET"
     ;;
 esac
