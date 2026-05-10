@@ -1122,6 +1122,10 @@ case "$TARGET" in
   supervisor)
     apply_model_if_changed "supervisor" "supervisor" && kick "supervisor" "$SUPERVISOR_MSG" "supervisor"
     ;;
+  sec-check)
+    SEC_CHECK_MSG="Please run a security review pass now. Your instructions are in /etc/hive/sec-check-CLAUDE.md — read that file first to understand what to check. The current work queue is at /var/run/hive-metrics/actionable.json. Time: ${_now_et}."
+    apply_model_if_changed "sec-check" "sec-check" && kick "sec-check" "$SEC_CHECK_MSG" "sec-check"
+    ;;
   all)
     apply_model_if_changed "scanner" "scanner" && kick "scanner" "$SCANNER_MSG" "scanner"
     apply_model_if_changed "reviewer" "reviewer" && kick "reviewer" "$REVIEWER_MSG" "reviewer"
