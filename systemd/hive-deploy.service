@@ -8,5 +8,10 @@ Type=oneshot
 User=dev
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/usr/local/bin/hive-deploy.sh
+PrivateTmp=yes
+ProtectSystem=strict
+NoNewPrivileges=yes
+ProtectHome=read-only
+ReadWritePaths=/tmp/hive /usr/local/bin
 StandardOutput=journal
 StandardError=journal

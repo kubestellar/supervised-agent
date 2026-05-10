@@ -14,6 +14,13 @@ Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/usr/local/bin/supervisor.sh
 Restart=always
 RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=300
+PrivateTmp=yes
+ProtectSystem=strict
+NoNewPrivileges=yes
+ProtectHome=read-only
+ReadWritePaths=/var/run/hive-metrics /var/run/kick-governor /etc/hive /tmp/hive
 StandardOutput=journal
 StandardError=journal
 

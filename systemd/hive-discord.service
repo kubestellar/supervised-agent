@@ -15,6 +15,12 @@ Environment=NODE_ENV=production
 ExecStart=/usr/bin/node bot.js
 Restart=always
 RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=300
+PrivateTmp=yes
+ProtectSystem=strict
+NoNewPrivileges=yes
+ProtectHome=read-only
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=hive-discord

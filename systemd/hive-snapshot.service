@@ -10,5 +10,10 @@ Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=HIVE_DASHBOARD_URL=http://localhost:3001
 Environment=DOCS_REPO_DIR=/tmp/kubestellar-docs-snapshot
 ExecStart=/tmp/hive/dashboard/publish-snapshot.sh
+PrivateTmp=yes
+ProtectSystem=strict
+NoNewPrivileges=yes
+ProtectHome=read-only
+ReadWritePaths=/tmp/kubestellar-docs-snapshot /tmp/hive
 StandardOutput=journal
 StandardError=journal

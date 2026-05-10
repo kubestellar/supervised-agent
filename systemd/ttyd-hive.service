@@ -5,9 +5,16 @@ After=network.target
 [Service]
 Type=simple
 User=dev
-ExecStart=/usr/bin/ttyd -W -a -p 7681 -t fontSize=14 -t disableLeaveAlert=true /usr/local/bin/ttyd-tmux.sh
+ExecStart=/usr/bin/ttyd -W -p 7681 -i 127.0.0.1 -t fontSize=14 -t disableLeaveAlert=true /usr/local/bin/ttyd-tmux.sh
 Restart=always
 RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=300
+PrivateTmp=yes
+ProtectSystem=strict
+NoNewPrivileges=yes
+ProtectHome=read-only
+ReadWritePaths=/var/run/hive-metrics /tmp/hive
 
 [Install]
 WantedBy=multi-user.target
