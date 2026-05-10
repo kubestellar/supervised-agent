@@ -8,6 +8,7 @@ function loadConfig() {
     botToken: process.env.DISCORD_BOT_TOKEN || '',
     channelPrimary: process.env.DISCORD_CHANNEL_PRIMARY || '',
     channelAlerts: process.env.DISCORD_CHANNEL_ALERTS || '',
+    adminRoleId: process.env.DISCORD_ADMIN_ROLE_ID || '',
     dashboardUrl: process.env.HIVE_DASHBOARD_URL || 'http://localhost:3001',
     metricsDir: process.env.HIVE_METRICS_DIR || '/var/run/hive-metrics',
     postPipelineResults: true,
@@ -26,6 +27,7 @@ function loadConfig() {
         config.channelAlerts = config.channelAlerts || d.channels.alerts || '';
       }
       if (d.command_prefix) config.commandPrefix = d.command_prefix;
+      if (d.admin_role_id) config.adminRoleId = config.adminRoleId || d.admin_role_id;
       if (d.post_pipeline_results === false) config.postPipelineResults = false;
       if (d.post_agent_transitions === false) config.postAgentTransitions = false;
       if (d.post_governor_mode_changes === false) config.postGovernorModeChanges = false;

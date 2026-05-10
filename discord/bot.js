@@ -99,6 +99,8 @@ client.once(Events.ClientReady, (c) => {
   }, STATUS_HEARTBEAT_MS);
 });
 
+const MUTATING_COMMANDS = new Set(['kick', 'pause', 'resume', 'k', 'p', 'r']);
+
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
 
@@ -115,6 +117,18 @@ client.on(Events.MessageCreate, async (message) => {
   if (!content) {
     await message.reply(await router.handle('help', message.author.tag));
     return;
+  }
+
+  // Check admin role for mutating commands (kick/pause/resume)
+  const firstWord = content.trim().split(/\s+/)[0].toLowerCase();
+  const isMutating = MUTATING_COMMANDS.has(firstWord)
+    || (router.validAgents.includes(firstWord) && content.trim().split(/\s+/).length > 1);
+  if (isMutating && config.adminRoleId) {
+    const hasRole = message.member && message.member.roles.cache.has(config.adminRoleId);
+    if (!hasRole) {
+      await message.reply('⛔ You need the admin role to run agent control commands.');
+      return;
+    }
   }
 
   const response = await router.handle(content, message.author.tag);
