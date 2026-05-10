@@ -18,7 +18,7 @@ function _loadYaml(filePath) {
     const raw = fs.readFileSync(filePath, 'utf8');
     if (yaml) return yaml.load(raw) || {};
     const json = execSync(
-      `python3 -c "import yaml,json,sys; print(json.dumps(yaml.safe_load(sys.stdin)))" < "${filePath}"`,
+      `python3 -c "import yaml,json,sys; print(json.dumps(yaml.safe_load(sys.stdin)))" < ${shellQuote(filePath)}`,
       { encoding: 'utf8' }
     );
     return JSON.parse(json);
@@ -59,14 +59,14 @@ function _persistRuntime() {
   const dumpYaml = yaml ? yaml.dump(runtimeConfig) : JSON.stringify(runtimeConfig, null, 2);
   const tmpFile = `/tmp/hive-runtime-${process.pid}-${Date.now()}.yaml`;
   fs.writeFileSync(tmpFile, dumpYaml);
-  execSync(`sudo mv ${tmpFile} ${RUNTIME_CONFIG_PATH}`);
+  execSync(`sudo mv ${shellQuote(tmpFile)} ${shellQuote(RUNTIME_CONFIG_PATH)}`);
 }
 
 function persistProjectConfig() {
   const dumpYaml = yaml ? yaml.dump(projectConfig) : JSON.stringify(projectConfig, null, 2);
   const tmpFile = `/tmp/hive-project-${process.pid}-${Date.now()}.yaml`;
   fs.writeFileSync(tmpFile, dumpYaml);
-  execSync(`sudo mv ${tmpFile} ${CONFIG_PATH}`);
+  execSync(`sudo mv ${shellQuote(tmpFile)} ${shellQuote(CONFIG_PATH)}`);
   if (fs.existsSync(CONFIG_REPO_SOURCE)) {
     fs.writeFileSync(CONFIG_REPO_SOURCE, dumpYaml);
   }
@@ -997,17 +997,17 @@ app.post('/api/pause/:agent', (req, res) => {
   const isWorking = agentStatus?.busy === 'working';
   if (isWorking) {
     try {
-      execSync(`tmux send-keys -t ${agent} Escape`, { timeout: 5000 });
+      execSync(`tmux send-keys -t ${shellQuote(agent)} Escape`, { timeout: 5000 });
     } catch (_) { /* session may not exist */ }
   }
   // Type placeholder text (no Enter) so operator sees status in the tmux pane.
   const PAUSE_TYPE_DELAY_MS = 500;
   setTimeout(() => {
     try {
-      execSync(`tmux send-keys -t ${agent} C-u`, { timeout: 5000 });
+      execSync(`tmux send-keys -t ${shellQuote(agent)} C-u`, { timeout: 5000 });
     } catch (_) { /* ignore */ }
     try {
-      execSync(`tmux send-keys -t ${agent} -l 'agent is paused'`, { timeout: 5000 });
+      execSync(`tmux send-keys -t ${shellQuote(agent)} -l 'agent is paused'`, { timeout: 5000 });
     } catch (_) { /* ignore */ }
     res.json({ ok: true, output: `${agent} paused (interrupted: ${isWorking})` });
   }, PAUSE_TYPE_DELAY_MS);
@@ -1042,7 +1042,7 @@ app.post('/api/resume/:agent', (req, res) => {
   }
   // Clear "agent is paused" placeholder text, then kick.
   try {
-    execSync(`tmux send-keys -t ${agent} C-u`, { timeout: 5000 });
+    execSync(`tmux send-keys -t ${shellQuote(agent)} C-u`, { timeout: 5000 });
   } catch (_) { /* session may not exist */ }
   execFile('/usr/local/bin/kick-agents.sh', [agent], { timeout: 30000 }, (kickErr) => {
     if (kickErr) console.error(`resume kick error for ${agent}:`, kickErr.message);
@@ -1079,7 +1079,7 @@ app.post('/api/pin/:agent{/:dimension}', (req, res) => {
     if (!dimension || dimension === 'both') {
       setEnvFlag(agent, 'AGENT_CLI_PINNED', 'true');
       const lockFile = path.join(GOVERNOR_STATE_DIR, `model_lock_${agent}`);
-      try { const { execSync: es } = require('child_process'); es(`sudo touch ${lockFile}`); } catch (_) {}
+      try { const { execSync: es } = require('child_process'); es(`sudo touch ${shellQuote(lockFile)}`); } catch (_) {}
       // Snapshot current backend to state file
       const pinBothData = (statusCache.agents || []).find(a => a.name === agent);
       if (pinBothData && pinBothData.cli && pinBothData.cli !== '?') {
@@ -1116,7 +1116,7 @@ app.post('/api/unpin/:agent{/:dimension}', (req, res) => {
       removeEnvFlag(agent, 'AGENT_PIN_CLI');
       removeEnvFlag(agent, 'AGENT_PIN_MODEL');
       const lockFile = path.join(GOVERNOR_STATE_DIR, `model_lock_${agent}`);
-      try { const { execSync: es } = require('child_process'); es(`sudo rm -f ${lockFile}`); } catch (_) {}
+      try { const { execSync: es } = require('child_process'); es(`sudo rm -f ${shellQuote(lockFile)}`); } catch (_) {}
       res.json({ ok: true, output: `${agent} unpinned (all)` });
     } else if (dimension === 'cli') {
       removeEnvFlag(agent, 'AGENT_PIN_CLI');
@@ -1168,7 +1168,7 @@ app.post('/api/reset-restarts/:agent', (req, res) => {
   try {
     if (fs.existsSync(restartFile)) {
       const { execSync } = require('child_process');
-      execSync(`sudo truncate -s 0 ${restartFile}`);
+      execSync(`sudo truncate -s 0 ${shellQuote(restartFile)}`);
     }
     if (statusCache && statusCache.agents) {
       const entry = statusCache.agents.find(a => a.name === agent);
@@ -2018,7 +2018,7 @@ function searchBeads(parsed) {
   const results = [];
   for (const agent of BEADS_AGENTS) {
     try {
-      const out = execSync(`cd ${BEADS_BASE}/${agent}-beads && bd list --json 2>/dev/null`, { encoding: 'utf8', timeout: 5000 });
+      const out = execSync(`cd ${shellQuote(BEADS_BASE + '/' + agent + '-beads')} && bd list --json 2>/dev/null`, { encoding: 'utf8', timeout: 5000 });
       const beads = JSON.parse(out);
       for (const b of beads) {
         const text = `${b.title || ''} ${b.notes || ''} ${b.id || ''}`;
