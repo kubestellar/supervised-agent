@@ -19,6 +19,26 @@ fi
 
 cd "$HIVE_REPO"
 
+# Safety: ensure we're on main. An agent running `git checkout <branch>` in
+# /tmp/hive wipes dashboard files and takes the UI offline. The post-checkout
+# hook prevents this going forward, but recover here in case it happens anyway.
+CURRENT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo detached)"
+if [ "$CURRENT_BRANCH" != "main" ]; then
+  log "RECOVERY: checkout was on '$CURRENT_BRANCH' — forcing back to main"
+  git checkout main --force --quiet 2>/dev/null
+  sudo systemctl restart hive-dashboard.service 2>/dev/null || true
+  SYNCED="$SYNCED main-recovery"
+fi
+
+# Install post-checkout hook if missing or outdated
+HOOK_SRC="$HIVE_REPO/githooks/post-checkout"
+HOOK_DST="$HIVE_REPO/.git/hooks/post-checkout"
+if [ -f "$HOOK_SRC" ] && ! cmp -s "$HOOK_SRC" "$HOOK_DST" 2>/dev/null; then
+  cp "$HOOK_SRC" "$HOOK_DST"
+  chmod +x "$HOOK_DST"
+  SYNCED="$SYNCED post-checkout-hook"
+fi
+
 BEFORE=$(git rev-parse HEAD)
 git stash --quiet 2>/dev/null || true
 git pull --rebase origin main --quiet 2>/dev/null || {
@@ -206,6 +226,16 @@ for agent in $HIVE_AGENTS; do
       log "WARN: failed to start $unit"
   fi
 done
+
+# Final safety net: if dashboard files are missing, the checkout is broken.
+# Force a clean checkout of main and restart.
+if [ ! -f "$HIVE_REPO/dashboard/index.html" ] || [ ! -f "$HIVE_REPO/dashboard/server.js" ]; then
+  log "RECOVERY: dashboard files missing — forcing git checkout main"
+  git checkout main --force --quiet 2>/dev/null
+  git reset --hard origin/main --quiet 2>/dev/null
+  sudo systemctl restart hive-dashboard.service 2>/dev/null || true
+  SYNCED="$SYNCED dashboard-file-recovery"
+fi
 
 if [ -n "$SYNCED" ]; then
   log "DEPLOY ${BEFORE:0:7}→${AFTER:0:7} — synced:$SYNCED"
