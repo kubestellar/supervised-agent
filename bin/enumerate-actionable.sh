@@ -306,34 +306,80 @@ COMMENT
 fi
 
 # --- Re-check previously SHA-held issues: if SHA was added, unhold them ---
+# Parallelized: was 2 REST calls per marker (N+1), now 1 GraphQL call per marker in parallel.
+# Also auto-resolves markers for closed issues to stop re-checking them.
+sha_recheck_tmp=$(mktemp)
+sha_recheck_results=$(mktemp)
+trap 'rm -f "$issues_tmp" "$prs_tmp" "$adopters_tmp" "$sha_recheck_tmp" "$sha_recheck_results"' EXIT
+
 for marker_file in "${SHA_HOLD_MARKER}"_*; do
   [ -f "$marker_file" ] || continue
-  # Skip already-resolved markers — no need to re-check
   grep -q "^resolved=" "$marker_file" 2>/dev/null && continue
-  # Extract repo and number from marker filename: sha_hold_posted_org_repo_NUM
   marker_base=$(basename "$marker_file")
   num="${marker_base##*_}"
-  # Reconstruct repo from marker (sha_hold_posted_org_repo_NUM → org/repo)
   mid="${marker_base#sha_hold_posted_}"
   mid="${mid%_${num}}"
   repo="${mid/_//}"
-  # Fetch issue body + reporter login, then only check comments from the reporter
-  issue_json=$(gh_api_retry "repos/${repo}/issues/${num}" --jq '{body: (.body // ""), reporter: .user.login}' || echo '{"body":"","reporter":""}')
-  reporter=$(echo "$issue_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('reporter',''))" 2>/dev/null || echo "")
-  body=$(echo "$issue_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('body',''))" 2>/dev/null || echo "")
-  reporter_comments=$(gh_api_retry "repos/${repo}/issues/${num}/comments" --jq "[.[] | select(.user.login == \"${reporter}\") | .body // \"\"] | join(\"\\n\")" || echo "")
-  has_sha=$(printf '%s\n%s' "$body" "$reporter_comments" | python3 -c "
-import sys, re
-SHA_PATTERN = re.compile(r'[0-9a-f]{7,40}\b')
-print('yes' if SHA_PATTERN.search(sys.stdin.read()) else 'no')
-" 2>/dev/null || echo "no")
-  if [ "$has_sha" = "yes" ]; then
-    gh issue edit "$num" --repo "$repo" --remove-label "hold" --add-label "kind/bug" 2>/dev/null || true
-    # Keep marker file — prevents initial check from re-posting the SHA comment
-    echo "resolved=$(date -Is)" > "$marker_file"
-    log "SHA-UNHOLD: ${repo}#${num} — SHA found in body/comments, removed hold, restored kind/bug"
-  fi
-done
+  echo "${repo}:${num}:${marker_file}"
+done > "$sha_recheck_tmp"
+
+SHA_RECHECK_PARALLELISM=8
+if [ -s "$sha_recheck_tmp" ]; then
+  cat "$sha_recheck_tmp" | xargs -P "$SHA_RECHECK_PARALLELISM" -I {} bash -c '
+    entry="$1"
+    repo="${entry%%:*}"
+    rest="${entry#*:}"
+    num="${rest%%:*}"
+    marker_file="${rest#*:}"
+    owner="${repo%%/*}"
+    name="${repo##*/}"
+    result=$(/usr/bin/gh api graphql -f query="
+      query {
+        repository(owner:\"${owner}\", name:\"${name}\") {
+          issue(number:${num}) {
+            state
+            body
+            author { login }
+            comments(last:20) { nodes { author { login } body } }
+          }
+        }
+      }" 2>/dev/null) || { echo "${repo}:${num}:${marker_file}:skip"; exit 0; }
+    state=$(echo "$result" | python3 -c "
+import json, sys, re
+d = json.load(sys.stdin)
+issue = d.get(\"data\",{}).get(\"repository\",{}).get(\"issue\")
+if not issue:
+    print(\"skip\"); sys.exit()
+if issue.get(\"state\") == \"CLOSED\":
+    print(\"closed\"); sys.exit()
+reporter = (issue.get(\"author\") or {}).get(\"login\",\"\")
+body = issue.get(\"body\",\"\") or \"\"
+comments = issue.get(\"comments\",{}).get(\"nodes\",[])
+reporter_text = body + \" \" + \" \".join(
+    (c.get(\"body\",\"\") or \"\") for c in comments
+    if (c.get(\"author\") or {}).get(\"login\",\"\") == reporter
+)
+SHA_RE = re.compile(r\"[0-9a-f]{7,40}\\b\")
+print(\"has_sha\" if SHA_RE.search(reporter_text) else \"no_sha\")
+" 2>/dev/null || echo "skip")
+    echo "${repo}:${num}:${marker_file}:${state}"
+  ' _ {} >> "$sha_recheck_results"
+fi
+
+while IFS=: read -r repo num marker_file state; do
+  [ -z "$state" ] && continue
+  case "$state" in
+    has_sha)
+      gh issue edit "$num" --repo "$repo" --remove-label "hold" --add-label "kind/bug" 2>/dev/null || true
+      echo "resolved=$(date -Is)" > "$marker_file"
+      log "SHA-UNHOLD: ${repo}#${num} — SHA found in body/comments, removed hold, restored kind/bug"
+      ;;
+    closed)
+      echo "resolved=$(date -Is) closed" > "$marker_file"
+      log "SHA-SKIP: ${repo}#${num} — issue closed, marking resolved"
+      ;;
+  esac
+done < "$sha_recheck_results"
 
 # Build resolved set — issues where SHA was found in reporter comments
 resolved_nums=""
