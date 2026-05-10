@@ -1,0 +1,37 @@
+#!/bin/bash
+# Prevent the main hive worktree from leaving the 'main' branch.
+# Agents MUST use `git worktree add` for feature branches — never
+# `git checkout <branch>` in /tmp/hive itself.
+#
+# This hook only fires in the primary worktree (where the dashboard runs).
+# Worktrees created via `git worktree add` are unaffected.
+
+PREV_HEAD="$1"
+NEW_HEAD="$2"
+BRANCH_FLAG="$3"   # 1 = branch checkout, 0 = file checkout
+
+# Only guard branch checkouts
+[[ "$BRANCH_FLAG" != "1" ]] && exit 0
+
+# Only guard the primary worktree — worktrees have a .git *file*, not dir
+[[ ! -d "$(git rev-parse --git-dir 2>/dev/null)" ]] && exit 0
+
+CURRENT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null)"
+
+if [[ "$CURRENT_BRANCH" != "main" ]]; then
+  echo ""
+  echo "╔══════════════════════════════════════════════════════════════╗"
+  echo "║  BLOCKED: checkout to '$CURRENT_BRANCH' in /tmp/hive        "
+  echo "║                                                              "
+  echo "║  The main hive worktree MUST stay on 'main'.                 "
+  echo "║  The dashboard serves files from this checkout.              "
+  echo "║                                                              "
+  echo "║  Use a worktree instead:                                     "
+  echo "║    git worktree add /tmp/hive-<feature> -b <branch>          "
+  echo "║                                                              "
+  echo "║  Reverting to main now...                                    "
+  echo "╚══════════════════════════════════════════════════════════════╝"
+  echo ""
+  git checkout main --quiet 2>/dev/null
+  exit 1
+fi
