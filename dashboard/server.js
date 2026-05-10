@@ -132,7 +132,16 @@ function reloadIssueToMerge() {
     issueToMergeCache = JSON.parse(fs.readFileSync(ISSUE_TO_MERGE_FILE, 'utf8'));
   } catch (_) { /* file not yet written by collector */ }
 }
-setInterval(reloadIssueToMerge, ISSUE_TO_MERGE_REFRESH_MS);
+
+// Track all intervals for graceful shutdown
+const _intervals = [];
+function trackedInterval(fn, ms) {
+  const id = setInterval(fn, ms);
+  _intervals.push(id);
+  return id;
+}
+
+trackedInterval(reloadIssueToMerge, ISSUE_TO_MERGE_REFRESH_MS);
 
 // Cache for status data
 let statusCache = null;
@@ -157,7 +166,7 @@ let actionableCache = { issues: { items: [] }, prs: { items: [] } };
 let mergeEligibleCache = { merge_eligible: [], not_ready: [] };
 try { actionableCache = JSON.parse(fs.readFileSync(ACTIONABLE_FILE, 'utf8')); } catch (_) {}
 try { mergeEligibleCache = JSON.parse(fs.readFileSync(MERGE_ELIGIBLE_FILE, 'utf8')); } catch (_) {}
-setInterval(() => {
+trackedInterval(() => {
   try { actionableCache = JSON.parse(fs.readFileSync(ACTIONABLE_FILE, 'utf8')); } catch (_) {}
   try { mergeEligibleCache = JSON.parse(fs.readFileSync(MERGE_ELIGIBLE_FILE, 'utf8')); } catch (_) {}
 }, ACTIONABLE_REFRESH_MS);
@@ -181,7 +190,7 @@ function fetchGhRateLimits() {
   } catch (_) { /* file missing or malformed — keep stale cache */ }
 }
 fetchGhRateLimits();
-setInterval(fetchGhRateLimits, GH_RATE_REFRESH_MS);
+trackedInterval(fetchGhRateLimits, GH_RATE_REFRESH_MS);
 
 // GitHub auth health + rate limit — check every 60s
 const GH_AUTH_CHECK_MS = 60000;
@@ -231,7 +240,7 @@ function checkGhAuth() {
   });
 }
 checkGhAuth();
-setInterval(checkGhAuth, GH_AUTH_CHECK_MS);
+trackedInterval(checkGhAuth, GH_AUTH_CHECK_MS);
 
 // Fetch CI pass rate + binary health checks every 60s
 function fetchHealthChecks() {
@@ -247,7 +256,7 @@ function fetchHealthChecks() {
   });
 }
 fetchHealthChecks();
-setInterval(fetchHealthChecks, 300000);  // every 5 min (REST API)
+trackedInterval(fetchHealthChecks, 300000);  // every 5 min (REST API)
 
 // Fetch token usage from JSONL session files every 60s
 let tokenCache = {};
@@ -270,7 +279,7 @@ function fetchTokens() {
 }
 fetchTokens();
 const TOKEN_REFRESH_MS = 60000;
-setInterval(fetchTokens, TOKEN_REFRESH_MS);
+trackedInterval(fetchTokens, TOKEN_REFRESH_MS);
 
 // Fetch per-agent metrics every 5 min — cache to disk so rate-limit failures don't blank indicators
 function fetchAgentMetrics() {
@@ -291,7 +300,7 @@ function fetchAgentMetrics() {
   });
 }
 fetchAgentMetrics();
-setInterval(fetchAgentMetrics, 300000);  // every 5 min (REST API)
+trackedInterval(fetchAgentMetrics, 300000);  // every 5 min (REST API)
 
 // Centralized GitHub API collector — runs once, writes cache read by governor + dashboard
 function fetchGitHubCache() {
@@ -301,7 +310,7 @@ function fetchGitHubCache() {
 }
 fetchGitHubCache();
 const API_COLLECTOR_INTERVAL_MS = 300000;
-setInterval(fetchGitHubCache, API_COLLECTOR_INTERVAL_MS);
+trackedInterval(fetchGitHubCache, API_COLLECTOR_INTERVAL_MS);
 
 // Fetch agent summaries from ~/.hive/<agent>_status.txt on every status refresh cycle
 let _summaryInFlight = false;
@@ -319,7 +328,7 @@ function fetchSummaries() {
   });
 }
 fetchSummaries();
-setInterval(fetchSummaries, REFRESH_MS);
+trackedInterval(fetchSummaries, REFRESH_MS);
 
 // Fetch live agent activity from Claude Code JSONL session files
 let _activityInFlight = false;
@@ -335,7 +344,7 @@ function fetchActivity() {
   });
 }
 fetchActivity();
-setInterval(fetchActivity, REFRESH_MS);
+trackedInterval(fetchActivity, REFRESH_MS);
 
 // Historical data — keep last 12 hours of snapshots (30s intervals = ~1440 points)
 const MAX_HISTORY = 1440;
@@ -395,7 +404,7 @@ function persistSnapshot() {
   } catch (e) { console.error('Failed to persist history:', e.message); }
 }
 // Persist every 15 min
-setInterval(persistSnapshot, PERSIST_INTERVAL_MS);
+trackedInterval(persistSnapshot, PERSIST_INTERVAL_MS);
 // Also persist on startup after first fetch
 setTimeout(persistSnapshot, 10000);
 
@@ -606,7 +615,7 @@ function fetchStatus() {
 }
 
 // Background refresh loop — fast (agents only, no GH API calls)
-setInterval(fetchStatus, REFRESH_MS);
+trackedInterval(fetchStatus, REFRESH_MS);
 fetchStatus();
 
 // Repo data — read from centralized api-collector cache (no additional GH API calls)
@@ -641,7 +650,7 @@ function fetchRepoStatus() {
     }
   } catch (_) {}
 }
-setInterval(fetchRepoStatus, REPO_REFRESH_MS);
+trackedInterval(fetchRepoStatus, REPO_REFRESH_MS);
 fetchRepoStatus();
 
 // Serve static files
@@ -668,7 +677,7 @@ function refreshGitVersion() {
   });
 }
 refreshGitVersion();
-setInterval(refreshGitVersion, GIT_VERSION_REFRESH_MS);
+trackedInterval(refreshGitVersion, GIT_VERSION_REFRESH_MS);
 
 app.get('/api/version', (_req, res) => res.json(gitVersionCache));
 
@@ -2524,6 +2533,15 @@ app.get('/api/nous/gate-response', (req, res) => {
     res.json({ decision });
   };
 });
+
+// Graceful shutdown — clear all intervals to prevent memory leaks on restart
+function shutdown(signal) {
+  console.log(`${signal} received, clearing ${_intervals.length} intervals...`);
+  _intervals.forEach(clearInterval);
+  process.exit(0);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 app.listen(PORT, () => {
   console.log(`🐝 Hive Dashboard running at http://localhost:${PORT}`);
