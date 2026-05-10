@@ -8,6 +8,46 @@ const yaml = (() => { try { return require('js-yaml'); } catch (_) { return null
 const app = express();
 app.use(express.json());
 
+// --- Auth middleware: require X-API-Key for all mutating endpoints ---
+const DASHBOARD_API_KEY = (() => {
+  try {
+    const envContent = fs.readFileSync('/etc/hive/dashboard.env', 'utf8');
+    const match = envContent.match(/^DASHBOARD_API_KEY=(.+)$/m);
+    return match ? match[1].trim().replace(/^["']|["']$/g, '') : '';
+  } catch (_) { return ''; }
+})();
+
+function requireAuth(req, res, next) {
+  if (!DASHBOARD_API_KEY) return next(); // no key configured = open (dev mode)
+  const provided = req.headers['x-api-key'] || '';
+  if (provided === DASHBOARD_API_KEY) return next();
+  return res.status(401).json({ error: 'unauthorized: invalid or missing X-API-Key' });
+}
+
+// Apply auth to all POST/PUT/DELETE/PATCH routes
+app.use((req, res, next) => {
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+    return requireAuth(req, res, next);
+  }
+  next();
+});
+
+// Agent name validation — moved early so all route handlers can use it
+const VALID_AGENT_NAME = /^[a-z][a-z0-9_-]{0,30}$/;
+const VALID_ENV_KEY = /^[A-Z_][A-Z0-9_]{0,60}$/;
+
+function validateAgentName(name, res) {
+  if (!VALID_AGENT_NAME.test(name)) {
+    res.status(400).json({ error: 'invalid agent name: ' + name });
+    return false;
+  }
+  return true;
+}
+
+function shellQuote(s) {
+  return "'" + s.replace(/'/g, "'\\''" ) + "'";
+}
+
 // Load project config from hive-project.yaml (code-managed, synced from repo)
 const CONFIG_PATH = process.env.HIVE_PROJECT_CONFIG || '/etc/hive/hive-project.yaml';
 // Runtime config — dashboard customizations that survive deploys
@@ -17,9 +57,9 @@ function _loadYaml(filePath) {
   try {
     const raw = fs.readFileSync(filePath, 'utf8');
     if (yaml) return yaml.load(raw) || {};
-    const json = execSync(
-      `python3 -c "import yaml,json,sys; print(json.dumps(yaml.safe_load(sys.stdin)))" < "${filePath}"`,
-      { encoding: 'utf8' }
+    const json = require('child_process').execFileSync(
+      'python3', ['-c', 'import yaml,json,sys; print(json.dumps(yaml.safe_load(sys.stdin)))'],
+      { encoding: 'utf8', input: raw }
     );
     return JSON.parse(json);
   } catch (_) { return {}; }
@@ -59,14 +99,14 @@ function _persistRuntime() {
   const dumpYaml = yaml ? yaml.dump(runtimeConfig) : JSON.stringify(runtimeConfig, null, 2);
   const tmpFile = `/tmp/hive-runtime-${process.pid}-${Date.now()}.yaml`;
   fs.writeFileSync(tmpFile, dumpYaml);
-  execSync(`sudo mv ${tmpFile} ${RUNTIME_CONFIG_PATH}`);
+  require('child_process').execFileSync('sudo', ['mv', tmpFile, RUNTIME_CONFIG_PATH]);
 }
 
 function persistProjectConfig() {
   const dumpYaml = yaml ? yaml.dump(projectConfig) : JSON.stringify(projectConfig, null, 2);
   const tmpFile = `/tmp/hive-project-${process.pid}-${Date.now()}.yaml`;
   fs.writeFileSync(tmpFile, dumpYaml);
-  execSync(`sudo mv ${tmpFile} ${CONFIG_PATH}`);
+  require('child_process').execFileSync('sudo', ['mv', tmpFile, CONFIG_PATH]);
   if (fs.existsSync(CONFIG_REPO_SOURCE)) {
     fs.writeFileSync(CONFIG_REPO_SOURCE, dumpYaml);
   }
@@ -764,6 +804,7 @@ app.get('/api/events', (req, res) => {
   send();
   const interval = setInterval(send, REFRESH_MS);
   req.on('close', () => clearInterval(interval));
+  res.on('error', () => clearInterval(interval));
 });
 
 // Widget download — serves the JSX file directly
@@ -786,6 +827,9 @@ function getTmuxSession(agent) {
 // Control endpoints
 app.post('/api/kick/:agent', (req, res) => {
   const agent = req.params.agent;
+  if (!VALID_AGENT_NAME.test(agent)) {
+    return res.status(400).json({ error: `invalid agent name: ${agent}` });
+  }
   const allowed = ENABLED_AGENTS_PLUS_ALL;
   if (!allowed.includes(agent)) {
     return res.status(400).json({ error: `invalid agent: ${agent}` });
@@ -988,17 +1032,17 @@ app.post('/api/pause/:agent', (req, res) => {
   const isWorking = agentStatus?.busy === 'working';
   if (isWorking) {
     try {
-      execSync(`tmux send-keys -t ${agent} Escape`, { timeout: 5000 });
+      require('child_process').execFileSync('tmux', ['send-keys', '-t', agent, 'Escape'], { timeout: 5000 });
     } catch (_) { /* session may not exist */ }
   }
   // Type placeholder text (no Enter) so operator sees status in the tmux pane.
   const PAUSE_TYPE_DELAY_MS = 500;
   setTimeout(() => {
     try {
-      execSync(`tmux send-keys -t ${agent} C-u`, { timeout: 5000 });
+      require('child_process').execFileSync('tmux', ['send-keys', '-t', agent, 'C-u'], { timeout: 5000 });
     } catch (_) { /* ignore */ }
     try {
-      execSync(`tmux send-keys -t ${agent} -l 'agent is paused'`, { timeout: 5000 });
+      require('child_process').execFileSync('tmux', ['send-keys', '-t', agent, '-l', 'agent is paused'], { timeout: 5000 });
     } catch (_) { /* ignore */ }
     res.json({ ok: true, output: `${agent} paused (interrupted: ${isWorking})` });
   }, PAUSE_TYPE_DELAY_MS);
@@ -1033,7 +1077,7 @@ app.post('/api/resume/:agent', (req, res) => {
   }
   // Clear "agent is paused" placeholder text, then kick.
   try {
-    execSync(`tmux send-keys -t ${agent} C-u`, { timeout: 5000 });
+    require('child_process').execFileSync('tmux', ['send-keys', '-t', agent, 'C-u'], { timeout: 5000 });
   } catch (_) { /* session may not exist */ }
   execFile('/usr/local/bin/kick-agents.sh', [agent], { timeout: 30000 }, (kickErr) => {
     if (kickErr) console.error(`resume kick error for ${agent}:`, kickErr.message);
@@ -1070,7 +1114,7 @@ app.post('/api/pin/:agent{/:dimension}', (req, res) => {
     if (!dimension || dimension === 'both') {
       setEnvFlag(agent, 'AGENT_CLI_PINNED', 'true');
       const lockFile = path.join(GOVERNOR_STATE_DIR, `model_lock_${agent}`);
-      try { const { execSync: es } = require('child_process'); es(`sudo touch ${lockFile}`); } catch (_) {}
+      try { require('child_process').execFileSync('sudo', ['touch', lockFile]); } catch (_) {}
       // Snapshot current backend to state file
       const pinBothData = (statusCache.agents || []).find(a => a.name === agent);
       if (pinBothData && pinBothData.cli && pinBothData.cli !== '?') {
@@ -1107,7 +1151,7 @@ app.post('/api/unpin/:agent{/:dimension}', (req, res) => {
       removeEnvFlag(agent, 'AGENT_PIN_CLI');
       removeEnvFlag(agent, 'AGENT_PIN_MODEL');
       const lockFile = path.join(GOVERNOR_STATE_DIR, `model_lock_${agent}`);
-      try { const { execSync: es } = require('child_process'); es(`sudo rm -f ${lockFile}`); } catch (_) {}
+      try { require('child_process').execFileSync('sudo', ['rm', '-f', lockFile]); } catch (_) {}
       res.json({ ok: true, output: `${agent} unpinned (all)` });
     } else if (dimension === 'cli') {
       removeEnvFlag(agent, 'AGENT_PIN_CLI');
@@ -1158,8 +1202,7 @@ app.post('/api/reset-restarts/:agent', (req, res) => {
   const restartFile = path.join(GOVERNOR_STATE_DIR, `restarts_${agent}`);
   try {
     if (fs.existsSync(restartFile)) {
-      const { execSync } = require('child_process');
-      execSync(`sudo truncate -s 0 ${restartFile}`);
+      require('child_process').execFileSync('sudo', ['truncate', '-s', '0', restartFile]);
     }
     if (statusCache && statusCache.agents) {
       const entry = statusCache.agents.find(a => a.name === agent);
@@ -1274,24 +1317,10 @@ app.get('/api/summaries', (req, res) => {
   });
 });
 
-// ── Configuration Dialog API ──────────────���──────────────────────────────────
+// ── Configuration Dialog API ─────────────────────────────────────────────
 const GOVERNOR_ENV_PATH = '/etc/hive/governor.env';
 
-// Security: validate agent names and env keys to prevent injection
-const VALID_AGENT_NAME = /^[a-z][a-z0-9_-]{0,30}$/;
-const VALID_ENV_KEY = /^[A-Z_][A-Z0-9_]{0,60}$/;
-
-function validateAgentName(name, res) {
-  if (!VALID_AGENT_NAME.test(name) || !ENABLED_AGENTS.includes(name)) {
-    res.status(400).json({ error: 'invalid or unknown agent: ' + name });
-    return false;
-  }
-  return true;
-}
-
-function shellQuote(s) {
-  return "'" + s.replace(/'/g, "'\\''" ) + "'";
-}
+// VALID_AGENT_NAME, VALID_ENV_KEY, validateAgentName, shellQuote — defined at top of file
 
 function parseEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return {};
@@ -2009,7 +2038,10 @@ function searchBeads(parsed) {
   const results = [];
   for (const agent of BEADS_AGENTS) {
     try {
-      const out = execSync(`cd ${BEADS_BASE}/${agent}-beads && bd list --json 2>/dev/null`, { encoding: 'utf8', timeout: 5000 });
+      const out = require('child_process').execFileSync('bd', ['list', '--json'], {
+        encoding: 'utf8', timeout: 5000,
+        cwd: path.join(BEADS_BASE, `${agent}-beads`),
+      });
       const beads = JSON.parse(out);
       for (const b of beads) {
         const text = `${b.title || ''} ${b.notes || ''} ${b.id || ''}`;
@@ -2173,18 +2205,32 @@ app.post('/api/chat', async (req, res) => {
 
     const aiAnswer = await new Promise((resolve) => {
       const proc = spawn('copilot', ['-p', prompt], {
-        timeout: COPILOT_TIMEOUT_MS,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
       let out = '';
       let err = '';
+      let resolved = false;
+      const killTimer = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          try { proc.kill('SIGTERM'); } catch (_) {}
+          resolve(null);
+        }
+      }, COPILOT_TIMEOUT_MS);
       proc.stdout.on('data', (d) => { out += d.toString(); });
       proc.stderr.on('data', (d) => { err += d.toString(); });
       proc.on('close', (code) => {
-        const text = out.trim() || err.trim();
-        resolve(code === 0 && text ? text : null);
+        clearTimeout(killTimer);
+        if (!resolved) {
+          resolved = true;
+          const text = out.trim() || err.trim();
+          resolve(code === 0 && text ? text : null);
+        }
       });
-      proc.on('error', () => resolve(null));
+      proc.on('error', () => {
+        clearTimeout(killTimer);
+        if (!resolved) { resolved = true; resolve(null); }
+      });
       proc.stdin.end();
     });
 
