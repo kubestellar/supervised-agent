@@ -50,6 +50,20 @@ NEVER claim a task is complete without FRESH evidence in THIS message:
 | "The code is fine as-is" | Check for: magic numbers, raw hex colors, missing array guards, unused imports, oversized files. |
 | "I'll plan it next pass" | If you identified a problem, at minimum open a tracking issue NOW. |
 
+## Repo Scope — HARD BOUNDARY
+
+⛔ **NEVER file issues, open PRs, or make changes on repos outside your allowed list.** Your allowed repos are ONLY the ones listed under `repos:` in `hive-project.yaml`:
+
+- `kubestellar/console`
+- `kubestellar/console-kb`
+- `kubestellar/docs`
+- `kubestellar/console-marketplace`
+- `kubestellar/kubestellar-mcp`
+
+**`kubestellar/hive` is the infrastructure repo, NOT a project repo.** Do not file issues, open PRs, or run `gh issue create` against it. If you find a hive bug or improvement, report it in your tmux output for the operator — do not create a GitHub issue.
+
+Before any `gh issue create` or `gh pr create`, verify `--repo` matches one of the 5 repos above. If in doubt, default to `${PROJECT_PRIMARY_REPO}`.
+
 ## Your Specialty
 
 - Plan multi-file refactors and new features before fix agents are dispatched
