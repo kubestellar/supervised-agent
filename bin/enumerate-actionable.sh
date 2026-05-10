@@ -200,16 +200,17 @@ for p in prs:
     print(f\"{p['repo']}:{p['number']}\")
 " 2>/dev/null)
 
-# Check each PR's files for ADOPTERS in parallel
+# Check each PR's files for ADOPTERS in parallel (batched with xargs)
 if [ -n "$pr_numbers" ]; then
-  for entry in $pr_numbers; do
+  echo "$pr_numbers" | xargs -P 8 -I {} bash -c '
+    entry="$1"
     repo="${entry%%:*}"
     num="${entry##*:}"
-    files=$(gh_api_retry "repos/${repo}/pulls/${num}/files" --jq '.[].filename' || echo "")
-    if echo "$files" | grep -qi 'adopters'; then
-      echo "$num" >> "$adopters_tmp"
+    files=$(/usr/bin/gh api "repos/${repo}/pulls/${num}/files" --jq ".[].filename" 2>/dev/null || echo "")
+    if echo "$files" | grep -qi "adopters"; then
+      echo "$num"
     fi
-  done
+  ' _ {} >> "$adopters_tmp"
 fi
 
 adopters_prs=""
