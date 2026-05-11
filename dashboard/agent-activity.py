@@ -44,6 +44,28 @@ def _load_enabled_agents():
 
 AGENT_TMUX_SESSION = _load_enabled_agents()
 
+SECRET_RE = re.compile(
+    r"(?i)"
+    # GitHub tokens (classic PATs, fine-grained, app tokens, OAuth)
+    r"ghp_[A-Za-z0-9]{36}"
+    r"|github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}"
+    r"|ghs_[A-Za-z0-9]{36}"
+    r"|gho_[A-Za-z0-9]{36}"
+    r"|ghr_[A-Za-z0-9]{36}"
+    # Generic Bearer/token/password/secret/key patterns
+    r"|(?:bearer|token|password|secret|api[_-]?key|auth)\s*[:=]\s*\S+"
+    # AWS keys
+    r"|AKIA[A-Z0-9]{16}"
+    # Base64-ish long secrets (40+ chars of base64 after common prefixes)
+    r"|(?:key|secret|token|password|credential)[\s=:]+[A-Za-z0-9+/]{40,}={0,2}"
+)
+
+
+def redact_secrets(text):
+    """Replace secret-like patterns with [REDACTED]."""
+    return SECRET_RE.sub("[REDACTED]", text)
+
+
 PANE_NOISE = re.compile(
     r"^[─━═].*[─━═]$|^❯|^\s*$|^ / commands|^ @ files|^  dev@|^  ⏵|"
     r"Claude (?:Opus|Sonnet|Haiku)|bypass permissions|shift\+tab|"
@@ -300,6 +322,7 @@ def summarize_entries(entries):
     lines = []
     seen = set()
     for l in texts + tools:
+        l = redact_secrets(l)
         if l not in seen:
             lines.append(l)
             seen.add(l)
@@ -345,7 +368,7 @@ def scrape_tmux(session):
         if l not in unique:
             unique.append(l)
     result = unique[-SUMMARY_MAX_LINES:] if unique else []
-    return ("\n".join(result), is_working) if result else None
+    return ("\n".join(redact_secrets(l) for l in result), is_working) if result else None
 
 
 def merge_summaries(tmux_text, jsonl_text, prev_text=""):
