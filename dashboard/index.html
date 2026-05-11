@@ -2572,6 +2572,7 @@
       const holdItems = holdData.items || [];
       const HOLD_COLOR = '#d29922';
       const holdTooltip = holdItems.length > 0 ? holdItems.map(h => `${h.type === 'pr' ? 'PR' : 'Issue'} ${h.repo}#${h.number}: ${h.title}`).join('\n') : 'No items on hold';
+      const holdSpark = sparkSvg(getHistorySeries('govHold'), HOLD_COLOR);
 
       el.innerHTML = `
         <div class="gov-title">Governor <button class="config-gear" onclick="openConfigDialog('governor')" title="Configure Governor">⚙️</button></div>
@@ -2581,7 +2582,7 @@
           <div class="gov-stat"><div class="label">actionable issues</div><div class="spark-row"><span class="val">${issueCount}</span>${issuesSpark}</div></div>
           <div class="gov-stat"><div class="label">PRs</div><div class="spark-row"><span class="val">${gov.prs}</span>${prsSpark}</div></div>
           <div class="gov-stat" title="${itmTitle}"><div class="label">MTTR</div><div class="spark-row"><span class="val" style="color:${FIX_TIME_SPARK_COLOR}">${formatFixTime(itmMedian)}</span>${itmSpark}</div></div>
-          <div class="gov-stat" title="${holdTooltip}"><div class="label">on hold</div><div class="val" style="color:${HOLD_COLOR}">${holdTotal}</div></div>
+          <div class="gov-stat" title="${holdTooltip}"><div class="label">on hold</div><div class="spark-row"><span class="val" style="color:${HOLD_COLOR}">${holdTotal}</span>${holdSpark}</div></div>
           <div class="gov-stat"><div class="label">next run</div><div class="val">${gov.nextKick || '—'}</div></div>
         </div>
         <div class="temp-gauge">
