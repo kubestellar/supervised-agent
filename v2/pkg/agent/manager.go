@@ -208,7 +208,7 @@ func (m *Manager) watchProcess(name string, cmd *exec.Cmd, ctx context.Context) 
 
 	m.mu.Lock()
 	agent, ok := m.agents[name]
-	if ok {
+	if ok && agent.State == StateRunning {
 		if err != nil {
 			agent.State = StateFailed
 			m.logger.Warn("agent process exited with error", "name", name, "error", err)
