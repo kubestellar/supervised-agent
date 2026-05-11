@@ -1434,7 +1434,16 @@
 
   <aside id="hive-info-sidebar">
     <h3>What is Hive?</h3>
-    <p>Hive is a system where AI agents autonomously maintain open source software. Nine agents &mdash; scanner, reviewer, architect, and others &mdash; triage issues, write fixes, review PRs, and merge code on KubeStellar&rsquo;s repos. No human writes the code. The governor controls how fast they work based on queue depth. This dashboard shows it all happening live.</p>
+    <p>Hive is an open source system where AI agents autonomously maintain software repos. It&rsquo;s configurable for any GitHub repository. A governor controls agent pace based on queue depth. This dashboard shows it running live on KubeStellar.</p>
+    <h4 style="font-size:0.82rem;color:#f0f6fc;margin:14px 0 6px 0;">Agents</h4>
+    <ul style="list-style:none;padding:0;margin:0 0 14px 0;font-size:0.78rem;color:#8b949e;line-height:1.6;">
+      <li><strong style="color:#c9d1d9;">Scanner</strong> &mdash; triages issues, dispatches fixes, merges PRs</li>
+      <li><strong style="color:#c9d1d9;">Reviewer</strong> &mdash; post-merge quality checks, CI health, GA4 monitoring</li>
+      <li><strong style="color:#c9d1d9;">Architect</strong> &mdash; cross-cutting RFCs, refactors, new features</li>
+      <li><strong style="color:#c9d1d9;">Outreach</strong> &mdash; ADOPTERS outreach, community engagement</li>
+      <li><strong style="color:#c9d1d9;">Sec-Check</strong> &mdash; security gate on PRs, contributor vetting</li>
+      <li><strong style="color:#c9d1d9;">Supervisor</strong> &mdash; monitors all agents, detects stalls, reports status</li>
+    </ul>
     <ul class="sidebar-links">
       <li><a href="https://arxiv.org/abs/2504.07459" target="_blank" rel="noopener">&#128196; ACMM Paper</a></li>
       <li><a href="https://console.kubestellar.io" target="_blank" rel="noopener">&#128421; Console Live Demo</a></li>
