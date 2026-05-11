@@ -1286,13 +1286,11 @@
       color: #58a6ff; text-decoration: none; display: flex; align-items: center; gap: 6px;
     }
     #hive-info-sidebar .sidebar-links a:hover { text-decoration: underline; }
-    body.has-info-sidebar #main-content,
-    body.has-info-sidebar .container { margin-right: 220px; }
+    body.has-info-sidebar { margin-right: 220px; }
     body.has-info-sidebar #oc-topbar { right: 220px; }
     @media (max-width: 1200px) {
       #hive-info-sidebar { display: none; }
-      body.has-info-sidebar #main-content,
-      body.has-info-sidebar .container { margin-right: 0; }
+      body.has-info-sidebar { margin-right: 0; }
       body.has-info-sidebar #oc-topbar { right: 0; }
     }
   </style>
@@ -1439,7 +1437,7 @@
     <p>Hive is a system where AI agents autonomously maintain open source software. Nine agents &mdash; scanner, reviewer, architect, and others &mdash; triage issues, write fixes, review PRs, and merge code on KubeStellar&rsquo;s repos. No human writes the code. The governor controls how fast they work based on queue depth. This dashboard shows it all happening live.</p>
     <ul class="sidebar-links">
       <li><a href="https://arxiv.org/abs/2504.07459" target="_blank" rel="noopener">&#128196; ACMM Paper</a></li>
-      <li><a href="https://console.kubestellar.io" target="_blank" rel="noopener">&#128421; Live Demo</a></li>
+      <li><a href="https://console.kubestellar.io" target="_blank" rel="noopener">&#128421; Console Live Demo</a></li>
       <li><a href="https://github.com/kubestellar/hive" target="_blank" rel="noopener">&#128230; Source Code</a></li>
       <li><a href="https://kubestellar.io/en/acmm-leaderboard" target="_blank" rel="noopener">&#128202; ACMM Leaderboard</a></li>
       <li><a href="https://kubestellar.io/en/leaderboard" target="_blank" rel="noopener">&#127942; Contributor Leaderboard</a></li>
