@@ -16,10 +16,17 @@ function _maskSecret(val) {
 const app = express();
 app.use(express.json());
 
-// Auth middleware — protect mutating endpoints with Bearer token
+// Auth middleware — protect mutating endpoints with Bearer token.
+// Fail-closed: if no token is configured, all protected requests are
+// rejected unless --no-auth or HIVE_NO_AUTH=1 is set (local dev only).
 const DASHBOARD_TOKEN = process.env.HIVE_DASHBOARD_TOKEN || '';
+const AUTH_DISABLED = process.argv.includes('--no-auth') || process.env.HIVE_NO_AUTH === '1';
+if (!DASHBOARD_TOKEN && !AUTH_DISABLED) {
+  console.warn('[security] HIVE_DASHBOARD_TOKEN is not set and --no-auth was not passed. All mutating requests will be rejected. Set HIVE_DASHBOARD_TOKEN or pass --no-auth for local development.');
+}
 function requireAuth(req, res, next) {
-  if (!DASHBOARD_TOKEN) return next(); // no token configured — skip (local dev)
+  if (AUTH_DISABLED) return next();
+  if (!DASHBOARD_TOKEN) return res.status(503).json({ error: 'Authentication not configured' });
   const authHeader = req.headers.authorization || '';
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
   if (!match) return res.status(401).json({ error: 'Unauthorized' });
