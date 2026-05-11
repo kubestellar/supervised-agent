@@ -5,6 +5,13 @@ const fs = require('fs');
 
 const yaml = (() => { try { return require('js-yaml'); } catch (_) { return null; } })();
 
+/** Mask a secret value — show only whether it's configured and last 4 chars */
+function _maskSecret(val) {
+  if (!val) return '';
+  if (val.length <= 8) return '••••••••';
+  return '••••••••' + val.slice(-4);
+}
+
 const app = express();
 app.use(express.json());
 
@@ -1751,10 +1758,15 @@ app.get('/api/config/governor', (_req, res) => {
     };
 
     const agentBaseEnv = parseEnvFile(`${ENV_DIR}/agent.env`);
+    const rawNtfyServer = govEnv.NTFY_SERVER || agentBaseEnv.NTFY_SERVER || '';
+    const rawNtfyTopic = govEnv.NTFY_TOPIC || agentBaseEnv.NTFY_TOPIC || '';
+    const rawDiscordWebhook = govEnv.DISCORD_WEBHOOK || agentBaseEnv.DISCORD_WEBHOOK || '';
     const notifications = {
-      ntfyServer: govEnv.NTFY_SERVER || agentBaseEnv.NTFY_SERVER || '',
-      ntfyTopic: govEnv.NTFY_TOPIC || agentBaseEnv.NTFY_TOPIC || '',
-      discordWebhook: govEnv.DISCORD_WEBHOOK || agentBaseEnv.DISCORD_WEBHOOK || '',
+      ntfyServer: _maskSecret(rawNtfyServer),
+      ntfyTopic: _maskSecret(rawNtfyTopic),
+      discordWebhook: _maskSecret(rawDiscordWebhook),
+      hasNtfy: !!rawNtfyServer,
+      hasDiscord: !!rawDiscordWebhook,
     };
 
     const health = {
