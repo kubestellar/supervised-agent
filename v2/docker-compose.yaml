@@ -1,0 +1,23 @@
+services:
+  hive:
+    build:
+      context: ..
+      dockerfile: v2/Dockerfile
+    container_name: hive
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./hive.yaml:/etc/hive/hive.yaml:ro
+      - hive-data:/data
+      - ./secrets:/secrets:ro
+    environment:
+      - HIVE_GITHUB_TOKEN=${HIVE_GITHUB_TOKEN}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  hive-data:

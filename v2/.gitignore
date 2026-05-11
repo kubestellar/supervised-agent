@@ -1,0 +1,4 @@
+hive
+*.exe
+hive.yaml
+secrets/

@@ -1,0 +1,111 @@
+# Hive v2 Configuration
+# All values support ${ENV_VAR} interpolation for secrets.
+# Copy this file to hive.yaml and customize for your setup.
+
+project:
+  org: your-org                          # GitHub organization
+  repos:                                 # Repositories to manage
+    - repo-one
+    - repo-two
+  ai_author: your-bot-user               # GitHub username for AI commits
+  primary_repo: repo-one                 # Main repo for priority routing
+
+# Agent CLAUDE.md policies from a git config repo (optional)
+policies:
+  repo: https://github.com/your-org/hive-config
+  path: agents/                           # Subdirectory within repo containing .md files
+  local_dir: /data/policies               # Where to clone locally
+  poll_interval: 5m                       # How often to git pull for changes
+
+# Agent definitions — each agent runs as a child process
+agents:
+  scanner:
+    enabled: true
+    backend: claude                       # claude | copilot | gemini | goose
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/scanner
+  reviewer:
+    enabled: true
+    backend: claude
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/reviewer
+  architect:
+    enabled: false                        # Disabled by default — enable for design work
+    backend: claude
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/architect
+  supervisor:
+    enabled: true
+    backend: claude
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/supervisor
+  outreach:
+    enabled: false
+    backend: claude
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/outreach
+  sec-check:
+    enabled: false
+    backend: claude
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/sec-check
+
+# Governor — adaptive scheduler that adjusts agent cadences based on queue depth
+governor:
+  eval_interval_s: 300                    # Seconds between governor evaluations
+  modes:
+    surge:
+      threshold: 20                       # Queue depth >= 20 triggers SURGE
+      scanner: 15m
+      reviewer: pause                     # "pause" means don't kick this agent
+      architect: pause
+    busy:
+      threshold: 10
+      scanner: 15m
+      reviewer: 1h
+      architect: pause
+    quiet:
+      threshold: 2
+      scanner: 15m
+      reviewer: 45m
+      architect: pause
+    idle:
+      threshold: 0
+      scanner: 15m
+      reviewer: 15m
+      architect: 30m
+
+# GitHub authentication — use ONE of these methods
+github:
+  # Option 1: Personal access token (simplest)
+  token: ${HIVE_GITHUB_TOKEN}
+
+  # Option 2: GitHub App (recommended for production)
+  # app_id: 12345
+  # installation_id: 67890
+  # key_file: /secrets/gh-app-key.pem
+
+# Notifications — configure one or more channels
+notifications:
+  ntfy:
+    server: https://ntfy.sh
+    topic: my-hive-alerts
+  # slack:
+  #   webhook: ${SLACK_WEBHOOK_URL}
+  # discord:
+  #   webhook: ${DISCORD_WEBHOOK_URL}
+
+# Discord bot (optional) — responds to !hive commands
+# discord:
+#   bot_token: ${DISCORD_BOT_TOKEN}
+#   channel_id: "1234567890"
+
+# Dashboard — embedded web UI with SSE live updates
+dashboard:
+  port: 3001
+  snapshot_dir: /data/snapshots
+
+# Data directories — all persistent state
+data:
+  metrics_dir: /data/metrics
+  logs_dir: /data/logs
