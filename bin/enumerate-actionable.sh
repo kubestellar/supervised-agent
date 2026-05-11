@@ -408,16 +408,63 @@ for i in d.get('missing_sha', []):
 print(json.dumps(kept))
 " "$resolved_nums" 2>/dev/null || echo "[]")
 
+# --- Count hold-labeled items (before they were filtered out) ---
+hold_issues=$(cat "$issues_tmp" | python3 -c "
+import json, sys
+raw = sys.stdin.read()
+arrays = []
+decoder = json.JSONDecoder()
+pos = 0
+while pos < len(raw):
+    raw_stripped = raw[pos:].lstrip()
+    if not raw_stripped:
+        break
+    pos = len(raw) - len(raw_stripped)
+    try:
+        obj, end = decoder.raw_decode(raw, pos)
+        arrays.extend(obj if isinstance(obj, list) else [obj])
+        pos = end
+    except json.JSONDecodeError:
+        break
+HOLD_SUBSTRINGS = ['hold']
+held = [i for i in arrays if any(any(h in l.lower() for h in HOLD_SUBSTRINGS) for l in i.get('labels', []))]
+print(json.dumps(held))
+" 2>/dev/null || echo "[]")
+
+hold_prs=$(cat "$prs_tmp" | python3 -c "
+import json, sys
+raw = sys.stdin.read()
+arrays = []
+decoder = json.JSONDecoder()
+pos = 0
+while pos < len(raw):
+    raw_stripped = raw[pos:].lstrip()
+    if not raw_stripped:
+        break
+    pos = len(raw) - len(raw_stripped)
+    try:
+        obj, end = decoder.raw_decode(raw, pos)
+        arrays.extend(obj if isinstance(obj, list) else [obj])
+        pos = end
+    except json.JSONDecodeError:
+        break
+HOLD_SUBSTRINGS = ['hold']
+held = [p for p in arrays if any(any(h in l.lower() for h in HOLD_SUBSTRINGS) for l in p.get('labels', []))]
+print(json.dumps(held))
+" 2>/dev/null || echo "[]")
+
 # --- Build final output ---
 issue_count=$(echo "$all_issues" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
 pr_count=$(echo "$all_prs" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
 
-printf '%s\n%s\n' "$all_issues" "$all_prs" | python3 -c "
+printf '%s\n%s\n%s\n%s\n' "$all_issues" "$all_prs" "$hold_issues" "$hold_prs" | python3 -c "
 import json, os, sys
 from datetime import datetime, timezone
 
 issues = json.loads(sys.stdin.readline())
 prs = json.loads(sys.stdin.readline())
+held_issues = json.loads(sys.stdin.readline())
+held_prs = json.loads(sys.stdin.readline())
 primary_repo = sys.argv[1] if len(sys.argv) > 1 else os.environ.get('PROJECT_PRIMARY_REPO', '')
 
 now = datetime.now(timezone.utc)
@@ -438,6 +485,9 @@ for i in issues:
 SLA_MINUTES = 30
 sla_violations = [i for i in issues if i.get('age_minutes', 0) > SLA_MINUTES and i.get('repo') == primary_repo]
 
+held_items = [{'number': i.get('number'), 'repo': i.get('repo'), 'title': i.get('title'), 'type': 'issue'} for i in held_issues] + \
+             [{'number': p.get('number'), 'repo': p.get('repo'), 'title': p.get('title'), 'type': 'pr'} for p in held_prs]
+
 result = {
     'generated_at': now.isoformat(),
     'issues': {
@@ -448,6 +498,12 @@ result = {
     'prs': {
         'count': len(prs),
         'items': prs
+    },
+    'hold': {
+        'issues': len(held_issues),
+        'prs': len(held_prs),
+        'total': len(held_issues) + len(held_prs),
+        'items': held_items
     },
     'exclusions': {
         'labels': ['hold', 'on-hold', 'hold/review', 'do-not-merge', 'auto-qa-tuning-report', 'LFX*'],

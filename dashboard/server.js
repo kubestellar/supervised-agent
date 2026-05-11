@@ -511,6 +511,14 @@ function fetchStatus() {
           const sf = readAgentStats(a.name);
           a.statsConfig = sf ? sf.stats : getDefaultStats(a.name);
         }
+        // Hold-labeled items (excluded from actionable but tracked for dashboard)
+        const holdData = actionableCache.hold || {};
+        statusCache.hold = {
+          issues: holdData.issues || 0,
+          prs: holdData.prs || 0,
+          total: holdData.total || 0,
+          items: holdData.items || [],
+        };
         // Issue-to-merge time metric
         statusCache.issueToMerge = issueToMergeCache;
         // GitHub API rate limit alerts

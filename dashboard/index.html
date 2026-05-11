@@ -1270,6 +1270,31 @@
     .nous-btn:hover { opacity: 0.85; }
     .nous-experiment-live { background: #f0fdf4; border: 1px solid #16a34a; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
     .nous-experiment-live h4 { margin: 0 0 6px 0; font-size: 0.82rem; color: #166534; }
+
+    /* Right info sidebar */
+    #hive-info-sidebar {
+      position: fixed; right: 0; top: 0; width: 220px; height: 100vh;
+      background: var(--card-bg, #161b22); border-left: 1px solid var(--border, #30363d);
+      padding: 20px 16px; box-sizing: border-box; z-index: 100;
+      overflow-y: auto; font-size: 0.82rem; color: var(--fg, #c9d1d9);
+    }
+    #hive-info-sidebar h3 { font-size: 0.95rem; margin: 0 0 10px 0; color: #f0f6fc; }
+    #hive-info-sidebar p { line-height: 1.5; margin: 0 0 16px 0; color: var(--muted, #8b949e); }
+    #hive-info-sidebar .sidebar-links { list-style: none; padding: 0; margin: 0; }
+    #hive-info-sidebar .sidebar-links li { margin-bottom: 10px; }
+    #hive-info-sidebar .sidebar-links a {
+      color: #58a6ff; text-decoration: none; display: flex; align-items: center; gap: 6px;
+    }
+    #hive-info-sidebar .sidebar-links a:hover { text-decoration: underline; }
+    body.has-info-sidebar #main-content,
+    body.has-info-sidebar .container { margin-right: 220px; }
+    body.has-info-sidebar #oc-topbar { right: 220px; }
+    @media (max-width: 1200px) {
+      #hive-info-sidebar { display: none; }
+      body.has-info-sidebar #main-content,
+      body.has-info-sidebar .container { margin-right: 0; }
+      body.has-info-sidebar #oc-topbar { right: 0; }
+    }
   </style>
 </head>
 <body>
@@ -1409,6 +1434,18 @@
   <div id="oc-agent-detail" class="oc-agent-detail"></div>
   <div class="agents" id="agents"></div>
 
+  <aside id="hive-info-sidebar">
+    <h3>What is Hive?</h3>
+    <p>Hive is a system where AI agents autonomously maintain open source software. Nine agents &mdash; scanner, reviewer, architect, and others &mdash; triage issues, write fixes, review PRs, and merge code on KubeStellar&rsquo;s repos. No human writes the code. The governor controls how fast they work based on queue depth. This dashboard shows it all happening live.</p>
+    <ul class="sidebar-links">
+      <li><a href="https://arxiv.org/abs/2504.07459" target="_blank" rel="noopener">&#128196; ACMM Paper</a></li>
+      <li><a href="https://console.kubestellar.io" target="_blank" rel="noopener">&#128421; Live Demo</a></li>
+      <li><a href="https://github.com/kubestellar/hive" target="_blank" rel="noopener">&#128230; Source Code</a></li>
+      <li><a href="https://kubestellar.io/en/acmm-leaderboard" target="_blank" rel="noopener">&#128202; ACMM Leaderboard</a></li>
+      <li><a href="https://kubestellar.io/en/leaderboard" target="_blank" rel="noopener">&#127942; Contributor Leaderboard</a></li>
+    </ul>
+  </aside>
+
   <script>
     // ── Layout mode (Classic / Light) ──
     const LAYOUT_KEY = 'hive-layout-mode';
@@ -1422,6 +1459,7 @@
     function setLayout(mode) { localStorage.setItem(LAYOUT_KEY, mode); }
     function applyLayout(mode) {
       document.body.classList.toggle('light-mode', mode === 'light');
+      document.body.classList.add('has-info-sidebar');
       const btn = document.getElementById('layout-toggle');
       if (btn) {
         btn.textContent = LAYOUT_LABELS[mode] || LAYOUT_LABELS.classic;
@@ -1627,6 +1665,7 @@
           <div class="gov-metric"><span class="gm-label">actionable</span><span class="gm-val">${govActionable}</span></div>
           <div class="gov-metric"><span class="gm-label">PRs</span><span class="gm-val">${govPrs}</span></div>
           <div class="gov-metric"><span class="gm-label">MTTR</span><span class="gm-val" style="color:${MTTR_COLOR}">${formatFixTime(itmMedian)}</span></div>
+          <div class="gov-metric" title="${(window._lastStatus?.hold?.items || []).map(h => (h.type === 'pr' ? 'PR' : 'Issue') + ' ' + h.repo + '#' + h.number + ': ' + h.title).join('\n') || 'No items on hold'}"><span class="gm-label">on hold</span><span class="gm-val" style="color:#d29922">${window._lastStatus?.hold?.total || 0}</span></div>
           <div class="oc-gov-gauge">
             <div class="temp-gauge-track" style="background:linear-gradient(to right, #238636 0%, #238636 ${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%, #1f6feb ${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%, #1f6feb ${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%, #d29922 ${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%, #d29922 ${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%, #f85149 ${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%, #f85149 100%)">
               <div class="temp-gauge-glow" style="width:100%"></div>
@@ -2521,6 +2560,12 @@
       const itmSpark = sparkSvg(itmHistory, FIX_TIME_SPARK_COLOR);
       const itmTitle = itmCount > 0 ? `MTTR (Mean Time to Resolution) — median: ${formatFixTime(itmMedian)} | avg: ${formatFixTime(itmAvg)} | p90: ${formatFixTime(itm.p90_minutes)} | fastest: ${formatFixTime(itm.fastest_minutes)} | slowest: ${formatFixTime(itm.slowest_minutes)} | ${itmCount} fixes in last 30d` : 'MTTR — no data yet';
 
+      const holdData = data.hold || {};
+      const holdTotal = holdData.total || 0;
+      const holdItems = holdData.items || [];
+      const HOLD_COLOR = '#d29922';
+      const holdTooltip = holdItems.length > 0 ? holdItems.map(h => `${h.type === 'pr' ? 'PR' : 'Issue'} ${h.repo}#${h.number}: ${h.title}`).join('\n') : 'No items on hold';
+
       el.innerHTML = `
         <div class="gov-title">Governor <button class="config-gear" onclick="openConfigDialog('governor')" title="Configure Governor">⚙️</button></div>
         <div class="gov-grid">
@@ -2529,6 +2574,7 @@
           <div class="gov-stat"><div class="label">actionable issues</div><div class="spark-row"><span class="val">${issueCount}</span>${issuesSpark}</div></div>
           <div class="gov-stat"><div class="label">PRs</div><div class="spark-row"><span class="val">${gov.prs}</span>${prsSpark}</div></div>
           <div class="gov-stat" title="${itmTitle}"><div class="label">MTTR</div><div class="spark-row"><span class="val" style="color:${FIX_TIME_SPARK_COLOR}">${formatFixTime(itmMedian)}</span>${itmSpark}</div></div>
+          <div class="gov-stat" title="${holdTooltip}"><div class="label">on hold</div><div class="val" style="color:${HOLD_COLOR}">${holdTotal}</div></div>
           <div class="gov-stat"><div class="label">next run</div><div class="val">${gov.nextKick || '—'}</div></div>
         </div>
         <div class="temp-gauge">
