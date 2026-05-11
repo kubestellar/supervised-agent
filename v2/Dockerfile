@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /src
 COPY v2/ .
 RUN CGO_ENABLED=0 go build -o /hive ./cmd/hive
