@@ -663,8 +663,11 @@ function fetchRepoStatus() {
 trackedInterval(fetchRepoStatus, REPO_REFRESH_MS);
 fetchRepoStatus();
 
-// Serve static files
-app.use(express.static(__dirname));
+// Serve only the dashboard SPA and widget assets — never expose server code or scripts
+app.use('/ubersicht', express.static(path.join(__dirname, 'ubersicht'), { dotfiles: 'deny' }));
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // Git version — cached, refreshed every 5 min
 let gitVersionCache = { hash: '?', short: '?', behind: 0, dirty: false, ts: 0 };
