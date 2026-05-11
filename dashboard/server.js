@@ -2,11 +2,31 @@ const express = require('express');
 const { execFile, execSync, spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const yaml = (() => { try { return require('js-yaml'); } catch (_) { return null; } })();
 
 const app = express();
 app.use(express.json());
+
+// Auth middleware — protect mutating endpoints with Bearer token
+const DASHBOARD_TOKEN = process.env.HIVE_DASHBOARD_TOKEN || '';
+function requireAuth(req, res, next) {
+  if (!DASHBOARD_TOKEN) return next(); // no token configured — skip (local dev)
+  const authHeader = req.headers.authorization || '';
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match) return res.status(401).json({ error: 'Unauthorized' });
+  const supplied = Buffer.from(match[1]);
+  const expected = Buffer.from(DASHBOARD_TOKEN);
+  if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+app.use((req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return requireAuth(req, res, next);
+  next();
+});
 
 // Load project config from hive-project.yaml (code-managed, synced from repo)
 const CONFIG_PATH = process.env.HIVE_PROJECT_CONFIG || '/etc/hive/hive-project.yaml';

@@ -1702,14 +1702,14 @@
       detail.innerHTML = `
         <div class="oc-agent-detail-header">
           <span class="status-dot ${dotCls}"></span>
-          <span class="agent-name-big">${a.displayName || a.name}</span>
+          <span class="agent-name-big">${esc(a.displayName || a.name)}</span>
           <span style="font-size:0.78rem;color:#6b7280;margin-left:auto">${stateLabel}</span>
         </div>
         <div class="oc-detail-actions">
-          <button class="btn-toggle ${isPaused ? 'paused' : isOff ? 'off' : 'running'}" onclick="toggleAgent('${a.name}', ${isPaused})">${isPaused ? '▶ resume' : isOff ? '▶ start' : '⏸ pause'}</button>
+          <button class="btn-toggle ${isPaused ? 'paused' : isOff ? 'off' : 'running'}" data-action="toggleAgent" data-agent="${esc(a.name)}" data-paused="${isPaused}">${isPaused ? '▶ resume' : isOff ? '▶ start' : '⏸ pause'}</button>
           <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link">▶ terminal</a>
-          <button class="restart-btn" onclick="restartAgent('${a.name}')">↻ restart</button>
-          <button class="config-gear" onclick="openConfigDialog('agent','${a.name}')" style="font-size:1rem;opacity:0.7">⚙️</button>
+          <button class="restart-btn" data-action="restartAgent" data-agent="${esc(a.name)}">↻ restart</button>
+          <button class="config-gear" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" style="font-size:1rem;opacity:0.7">⚙️</button>
         </div>
         <div class="oc-detail-fields">
           <div class="oc-detail-field"><div class="label">CLI</div><div class="value">${a.cli || '—'}</div></div>
@@ -1732,8 +1732,8 @@
           <button class="oc-summary-follow-btn" id="oc-summary-follow" title="Follow new output" onclick="ocSummaryResumeTail()">⬇</button>
         </div>
         <div class="oc-chat-prompt">
-          <input type="text" class="oc-chat-input" id="${kickId}" placeholder="Send a message to ${a.name}..." value="${prevVal.replace(/"/g, '&quot;')}" onkeydown="if(event.key==='Enter'){ocSendKick('${a.name}')}" />
-          <button class="oc-chat-send" onclick="ocSendKick('${a.name}')">Send</button>
+          <input type="text" class="oc-chat-input" id="${kickId}" placeholder="Send a message to ${esc(a.name)}..." value="${prevVal.replace(/"/g, '&quot;')}" data-enter-action="ocSendKick" data-agent="${esc(a.name)}" />
+          <button class="oc-chat-send" data-action="ocSendKick" data-agent="${esc(a.name)}">Send</button>
         </div>
       `;
 
@@ -1829,7 +1829,7 @@
       const isActive = _ocSelectedAgent === a.name ? ' active' : '';
       const agentDesc = AGENT_DESCRIPTIONS[a.name] || '';
       const label = a.displayName || a.name;
-      return `<a class="oc-nav-item${isActive}" data-agent-nav="${a.name}" draggable="true" onclick="ocSelectAgent('${a.name}')" title="${agentDesc}"><span class="oc-agent-dot ${dotCls}"></span> ${label}</a>`;
+      return `<a class="oc-nav-item${isActive}" data-agent-nav="${esc(a.name)}" draggable="true" data-action="ocSelectAgent" data-agent="${esc(a.name)}" title="${esc(agentDesc)}"><span class="oc-agent-dot ${dotCls}"></span> ${esc(label)}</a>`;
     }
 
     function _sidebarBuildGroups(agents) {
@@ -2074,11 +2074,11 @@
         if (g.name) {
           const esc = g.name.replace(/'/g, "\\'");
           html += `<div class="oc-sidebar-group" data-group-name="${g.name}">`;
-          html += `<div class="oc-sidebar-group-header" draggable="true" onclick="ocToggleSidebarGroup(this)">`;
+          html += `<div class="oc-sidebar-group-header" draggable="true" data-action="ocToggleSidebarGroup">`;
           html += `<span class="oc-group-arrow">▼</span> ${g.name}`;
           html += `<span class="oc-group-actions" onclick="event.stopPropagation()">`;
-          html += `<button onclick="ocRenameSidebarGroup('${esc}')" title="Rename">✏</button>`;
-          html += `<button onclick="ocRemoveSidebarGroup('${esc}')" title="Remove group">✕</button>`;
+          html += `<button data-action="ocRenameSidebarGroup" data-group="${esc}" title="Rename">✏</button>`;
+          html += `<button data-action="ocRemoveSidebarGroup" data-group="${esc}" title="Remove group">✕</button>`;
           html += `</span></div>`;
           html += `<div class="oc-sidebar-group-children">`;
           html += validAgents.map(n => _sidebarRenderAgent(agentMap[n])).join('');
@@ -2435,8 +2435,8 @@
         const dotCls = a.state === 'stopped' ? 'stopped' : 'running';
         const canToggle = a.name !== 'supervisor';
         const toggleBtn = canToggle ? (isOff
-          ? `<button class="btn-toggle off" onclick="openConfigDialog('agent','${a.name}')" title="Agent is off in this mode — click to configure cadences">⚙ off</button>`
-          : `<button class="btn-toggle ${isPaused ? 'paused' : 'running'}" onclick="toggleAgent('${a.name}', ${isPaused})">${isPaused ? '▶ resume' : '⏸ pause'}</button>`) : '';
+          ? `<button class="btn-toggle off" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Agent is off in this mode — click to configure cadences">⚙ off</button>`
+          : `<button class="btn-toggle ${isPaused ? 'paused' : 'running'}" data-action="toggleAgent" data-agent="${esc(a.name)}" data-paused="${isPaused}">${isPaused ? '▶ resume' : '⏸ pause'}</button>`) : '';
         // liveSummary is pushed via SSE every 5s — no separate fetch needed
         let summaryEl = '';
         if (a.liveSummary) {
@@ -2453,16 +2453,16 @@
           summaryEl = `<div class="doing">${ageBadge}${escBlock(a.liveSummary)}</div>`;
         }
         const indEl = agentIndicators(a.name);
-        return `<div class="agent-card ${cls}" data-agent="${a.name}">
+        return `<div class="agent-card ${cls}" data-agent="${esc(a.name)}">
           <span class="working-indicator"></span>
-          <div class="agent-name"><span class="dot ${dotCls}"></span>${a.displayName || a.name} ${toggleBtn} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a> <button class="restart-btn" onclick="restartAgent('${a.name}')" title="Kill tmux session — supervisor will respawn with fresh context">↻ restart</button> <button class="config-gear" onclick="openConfigDialog('agent','${a.name}')" title="Configure ${a.name}">⚙️</button></div>
-          <div class="agent-field"><span class="label">cli</span><span class="value">${cliChip(a.cli, a.pinnedBoth || a.pinnedCli, a.name)}${(a.pinnedBoth || a.pinnedCli) ? '' : ` <button class="pin-toggle" onclick="togglePin('${a.name}', 'cli', false)" title="Pin CLI — lock current backend">📌</button>`}</span></div>
-          <div class="agent-field"><span class="label">model</span><span class="value">${modelChip(a.model, a.govReason, a.pinnedBoth || a.pinnedModel, a.name)}${(a.pinnedBoth || a.pinnedModel) ? '' : ` <button class="pin-toggle" onclick="togglePin('${a.name}', 'model', false)" title="Pin model — lock current model">📌</button>`}</span></div>
+          <div class="agent-name"><span class="dot ${dotCls}"></span>${esc(a.displayName || a.name)} ${toggleBtn} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a> <button class="restart-btn" data-action="restartAgent" data-agent="${esc(a.name)}" title="Kill tmux session — supervisor will respawn with fresh context">↻ restart</button> <button class="config-gear" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Configure ${esc(a.name)}">⚙️</button></div>
+          <div class="agent-field"><span class="label">cli</span><span class="value">${cliChip(a.cli, a.pinnedBoth || a.pinnedCli, a.name)}${(a.pinnedBoth || a.pinnedCli) ? '' : ` <button class="pin-toggle" data-action="togglePin" data-agent="${esc(a.name)}" data-pin-type="cli" data-unpin="false" title="Pin CLI — lock current backend">📌</button>`}</span></div>
+          <div class="agent-field"><span class="label">model</span><span class="value">${modelChip(a.model, a.govReason, a.pinnedBoth || a.pinnedModel, a.name)}${(a.pinnedBoth || a.pinnedModel) ? '' : ` <button class="pin-toggle" data-action="togglePin" data-agent="${esc(a.name)}" data-pin-type="model" data-unpin="false" title="Pin model — lock current model">📌</button>`}</span></div>
           <div class="agent-field"><span class="label">interval</span><span class="value">${isPaused ? 'paused' : isOff ? 'off' : a.cadence}</span></div>
           <div class="agent-field"><span class="label">last run</span><span class="value">${a.lastKick || '—'}</span></div>
           <div class="agent-field"><span class="label">next run</span><span class="value">${isPaused ? 'paused' : isOff ? 'off' : (a.nextKick || '—')}</span></div>
           ${agentTokenRow(a.name, a.cadence)}
-          <div class="agent-field"><span class="label">restarts</span><span class="value${(a.restarts || 0) > 5 ? ' restart-high' : (a.restarts || 0) > 0 ? ' restart-warn' : ''}">${a.restarts || 0}<span class="restart-label">24h</span>${(a.restarts || 0) > 0 ? `<button class="restart-reset" onclick="resetRestarts('${a.name}')" title="Reset restart counter">✕</button>` : ''}<span class="restart-spark">${restartSparkSvg(a.name)}</span></span></div>
+          <div class="agent-field"><span class="label">restarts</span><span class="value${(a.restarts || 0) > 5 ? ' restart-high' : (a.restarts || 0) > 0 ? ' restart-warn' : ''}">${a.restarts || 0}<span class="restart-label">24h</span>${(a.restarts || 0) > 0 ? `<button class="restart-reset" data-action="resetRestarts" data-agent="${esc(a.name)}" title="Reset restart counter">✕</button>` : ''}<span class="restart-spark">${restartSparkSvg(a.name)}</span></span></div>
           <div class="agent-state ${isPaused ? 'paused' : isOff ? 'off' : a.busy}">${isPaused ? 'paused' : isOff ? 'off' : a.busy}${(() => {
             if (a.structuredStatus === 'BLOCKED') return '<span class="status-badge blocked" title="' + esc(a.statusEvidence) + '">blocked</span>';
             if (a.structuredStatus === 'NEEDS_CONTEXT') return '<span class="status-badge needs-context" title="' + esc(a.statusEvidence) + '">needs context</span>';
@@ -2474,14 +2474,14 @@
           ${needsLogin ? '<div class="login-warning">⚠ NOT LOGGED IN — run /login</div>' : ''}
           ${summaryEl}${indEl}
           <div class="agent-actions">
-            <input type="text" class="kick-prompt" id="kick-prompt-${a.name}" placeholder="custom prompt (optional)" onkeydown="if(event.key==='Enter'){kick('${a.name}')}" />
-            <button class="btn" onclick="kick('${a.name}')" title="Send custom prompt to agent">send</button>
-            <button class="btn" onclick="document.getElementById('kick-prompt-${a.name}').value='';kick('${a.name}')">kick</button>
-            <select class="btn backend-select" onchange="switchCli('${a.name}', this.value); this.selectedIndex=0">
+            <input type="text" class="kick-prompt" id="kick-prompt-${esc(a.name)}" placeholder="custom prompt (optional)" data-enter-action="kick" data-agent="${esc(a.name)}" />
+            <button class="btn" data-action="kick" data-agent="${esc(a.name)}" title="Send custom prompt to agent">send</button>
+            <button class="btn" data-action="kickEmpty" data-agent="${esc(a.name)}">kick</button>
+            <select class="btn backend-select" data-change-action="switchCli" data-agent="${esc(a.name)}">
               <option value="" disabled selected>cli ▾</option>
               ${KNOWN_BACKENDS.map(b => `<option value="${b}" ${a.cli === b ? 'disabled' : ''}>${b}</option>`).join('')}
             </select>
-            <select class="btn backend-select" onchange="switchModel('${a.name}', this.value); this.selectedIndex=0">
+            <select class="btn backend-select" data-change-action="switchModel" data-agent="${esc(a.name)}">
               <option value="" disabled selected>model ▾</option>
               ${KNOWN_MODELS.map(m => `<option value="${m.value}">${m.label}</option>`).join('')}
             </select>
@@ -2802,7 +2802,7 @@
       const tier = FREE_BACKENDS.includes(cli) ? 'free' : 'paid';
       const pin = pinned ? ' \u{1F4CC}' : '';
       const pinTitle = pinned ? ' (pinned — click to unpin)' : '';
-      const click = pinned && agent ? ` onclick="togglePin('${agent}', 'cli', true)" style="cursor:pointer"` : '';
+      const click = pinned && agent ? ` data-action="togglePin" data-agent="${esc(agent)}" data-pin-type="cli" data-unpin="true" style="cursor:pointer"` : '';
       return `<span class="model-chip ${tier}" title="cli: ${cli}${pinTitle}"${click}>${cli}${pin}</span>`;
     }
 
@@ -2823,7 +2823,7 @@
       const overrideTitle = isBudgetOverride ? ` (${reason})` : '';
       const pin = pinned ? ' \u{1F4CC}' : '';
       const pinTitle = pinned ? ' (pinned — click to unpin)' : '';
-      const click = pinned && agent ? ` onclick="togglePin('${agent}', 'model', true)" style="cursor:pointer"` : '';
+      const click = pinned && agent ? ` data-action="togglePin" data-agent="${esc(agent)}" data-pin-type="model" data-unpin="true" style="cursor:pointer"` : '';
       return `<span class="model-chip ${chipCls}" title="${model}${overrideTitle}${pinTitle}"${click}>${shortModel}${overrideIcon}${pin}</span>`;
     }
 
@@ -3393,7 +3393,7 @@ function burnAreaChart() {
           suggest: 'Experiments require your approval',
           evolve: 'Fully autonomous experimentation',
         };
-        html += `<button class="nous-mode-btn${active}" title="${titles[m]}" onclick="nousSetMode('${m}')">${m.charAt(0).toUpperCase() + m.slice(1)}</button>`;
+        html += `<button class="nous-mode-btn${active}" title="${titles[m]}" data-action="nousSetMode" data-mode="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</button>`;
       }
       html += '</div>';
 
@@ -3406,7 +3406,7 @@ function burnAreaChart() {
       };
       for (const sc of ['governor', 'repo', 'both']) {
         const active = sc === scope ? ' active-suggest' : '';
-        html += `<button class="nous-mode-btn${active}" title="${scopeTitles[sc]}" onclick="nousSetScope('${sc}')" style="${sc === scope ? 'background:#7c3aed;color:white' : ''}">${sc.charAt(0).toUpperCase() + sc.slice(1)}</button>`;
+        html += `<button class="nous-mode-btn${active}" title="${scopeTitles[sc]}" data-action="nousSetScope" data-scope="${sc}" style="${sc === scope ? 'background:#7c3aed;color:white' : ''}">${sc.charAt(0).toUpperCase() + sc.slice(1)}</button>`;
       }
       html += '</div>';
 
@@ -3784,7 +3784,7 @@ function burnAreaChart() {
           if (grpName) agentRows += `<div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-top:8px;margin-bottom:2px;font-weight:600">${esc(grpName)}</div>`;
         }
         const stateColor = { running: 'var(--green)', idle: 'var(--green)', paused: 'var(--yellow)', stopped: 'var(--red)', off: 'var(--muted)' }[a.state] || 'var(--muted)';
-        agentRows += `<div style="${rowStyle}"><span>${a.name}</span><span style="color:${stateColor};font-weight:600">${a.state}</span></div>`;
+        agentRows += `<div style="${rowStyle}"><span>${esc(a.name)}</span><span style="color:${stateColor};font-weight:600">${a.state}</span></div>`;
       }
 
       const ghCoreUsed = ghRate.core?.used || 0;
@@ -3917,6 +3917,63 @@ function burnAreaChart() {
         .replace(/\n/g, '<br>');
     }
 
+    // ── Event delegation for actions with user-controlled data ──
+    // Eliminates XSS via inline onclick="func('${unsafeValue}')" injection.
+    // All agent/group names are read from data-* attributes (HTML-decoded by the browser).
+    document.addEventListener('click', (e) => {
+      const el = e.target.closest('[data-action]');
+      if (!el) return;
+      const action = el.dataset.action;
+      const agent = el.dataset.agent || '';
+      switch (action) {
+        case 'toggleAgent': toggleAgent(agent, el.dataset.paused === 'true'); break;
+        case 'restartAgent': restartAgent(agent); break;
+        case 'openConfigDialog': { const ct = el.dataset.configType || 'agent'; if (el.classList.contains('agent-link')) { closeConfigDialog(); setTimeout(() => openConfigDialog(ct, agent), 100); } else { openConfigDialog(ct, agent); } } break;
+        case 'ocSendKick': ocSendKick(agent); break;
+        case 'ocSelectAgent': ocSelectAgent(agent); break;
+        case 'kick': kick(agent); break;
+        case 'kickEmpty': { const inp = document.getElementById('kick-prompt-' + agent); if (inp) inp.value = ''; kick(agent); } break;
+        case 'togglePin': togglePin(agent, el.dataset.pinType, el.dataset.unpin === 'true'); break;
+        case 'resetRestarts': resetRestarts(agent); break;
+        case 'deleteAgentFromConfig': deleteAgentFromConfig(agent); break;
+        case 'ocRenameSidebarGroup': ocRenameSidebarGroup(el.dataset.group); break;
+        case 'ocRemoveSidebarGroup': ocRemoveSidebarGroup(el.dataset.group); break;
+        case 'ocToggleSidebarGroup': ocToggleSidebarGroup(el); break;
+        case 'switchConfigTab': switchConfigTab(el.dataset.tab); break;
+        case 'nousSetMode': nousSetMode(el.dataset.mode); break;
+        case 'nousSetScope': nousSetScope(el.dataset.scope); break;
+        case 'toggleConfigSwitch': toggleConfigSwitch(el, el.dataset.section, el.dataset.key); break;
+        case 'removeListItem': removeListItem(el.dataset.section, el.dataset.key, parseInt(el.dataset.index, 10)); break;
+        case 'toggleRestriction': { const cb = el.querySelector('input[type=checkbox]') || el; toggleRestriction(parseInt(el.dataset.index, 10), cb.checked); } break;
+        case 'removeRestriction': removeRestriction(parseInt(el.dataset.index, 10)); break;
+        case 'removeAgent': removeAgent(agent); break;
+        default: break;
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const el = e.target.closest('[data-enter-action]');
+      if (!el) return;
+      const action = el.dataset.enterAction;
+      const agent = el.dataset.agent || '';
+      switch (action) {
+        case 'ocSendKick': ocSendKick(agent); break;
+        case 'kick': kick(agent); break;
+        default: break;
+      }
+    });
+    document.addEventListener('change', (e) => {
+      const el = e.target.closest('[data-change-action]');
+      if (!el) return;
+      const action = el.dataset.changeAction;
+      const agent = el.dataset.agent || '';
+      switch (action) {
+        case 'switchCli': switchCli(agent, el.value); el.selectedIndex = 0; break;
+        case 'switchModel': switchModel(agent, el.value); el.selectedIndex = 0; break;
+        default: break;
+      }
+    });
+
     const TOAST_DURATION_MS = 3000;
     const TOAST_PROGRESS_MAX_MS = 60000;
     function showToast(msg, type = 'info', persistent = false) {
@@ -3985,7 +4042,7 @@ function burnAreaChart() {
           if (lbl === 'interval' || lbl === 'next run') val.textContent = nowPaused ? 'paused' : '—';
         }
         const btn = card.querySelector('.btn-toggle');
-        if (btn) { btn.className = `btn-toggle ${nowPaused ? 'paused' : 'running'}`; btn.textContent = nowPaused ? '▶ resume' : '⏸ pause'; btn.setAttribute('onclick', `toggleAgent('${agent}', ${nowPaused})`); }
+        if (btn) { btn.className = `btn-toggle ${nowPaused ? 'paused' : 'running'}`; btn.textContent = nowPaused ? '▶ resume' : '⏸ pause'; btn.dataset.action = 'toggleAgent'; btn.dataset.agent = agent; btn.dataset.paused = String(nowPaused); }
         break;
       }
       dismissToast(toast, `${agent} ${action}d`, 'success');
@@ -4005,7 +4062,7 @@ function burnAreaChart() {
       const res = await fetch(`/api/reset-restarts/${agent}`, { method: 'POST' });
       const data = await res.json();
       if (!data.ok) { dismissToast(toast, `Reset failed: ${data.error || 'unknown'}`, 'error'); return; }
-      const btn = document.querySelector(`.restart-reset[onclick="resetRestarts('${agent}')"]`);
+      const btn = document.querySelector(`.restart-reset[data-agent="${agent}"]`);
       if (btn) {
         const el = btn.closest('.value');
         if (el) { el.className = 'value'; el.innerHTML = '0<span class="restart-label">24h</span><span class="restart-spark"></span>'; }
@@ -4189,7 +4246,7 @@ function burnAreaChart() {
       const tabs = type === 'governor' ? GOVERNOR_CONFIG_TABS : AGENT_CONFIG_TABS;
       const tabsEl = document.getElementById('config-tabs');
       tabsEl.innerHTML = tabs.map((t, i) =>
-        `<div class="config-tab${i === 0 ? ' active' : ''}" data-tab="${t}" onclick="switchConfigTab('${t}')">${t}</div>`
+        `<div class="config-tab${i === 0 ? ' active' : ''}" data-tab="${t}" data-action="switchConfigTab">${t}</div>`
       ).join('');
       loadConfigData(type, agentName).then(() => {
         switchConfigTab(tabs[0]);
@@ -4277,7 +4334,7 @@ function burnAreaChart() {
           <input type="text" id="cfg-launch-cmd" value="${esc(g.launchCmd || '')}" onchange="markDirty('general','launchCmd',this.value)">
         </div>
         <div class="config-toggle">
-          <div class="config-toggle-switch ${g.cliPinned ? 'on' : ''}" id="cfg-cli-pinned" onclick="toggleConfigSwitch(this,'general','cliPinned')"></div>
+          <div class="config-toggle-switch ${g.cliPinned ? 'on' : ''}" id="cfg-cli-pinned" data-action="toggleConfigSwitch" data-section="general" data-key="cliPinned"></div>
           <span class="config-toggle-label">CLI Pinned</span>
         </div>
         <div class="config-field">
@@ -4307,7 +4364,7 @@ function burnAreaChart() {
         </div>
         <div style="margin-top:24px;padding-top:16px;border-top:1px solid #fecaca">
           <label style="color:#b91c1c;font-weight:600;font-size:0.75rem;margin-bottom:8px;display:block">Danger Zone</label>
-          <button onclick="deleteAgentFromConfig('${esc(agentName)}')" style="background:#dc2626;color:#fff;border:none;padding:6px 16px;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:600">Delete Agent</button>
+          <button data-action="deleteAgentFromConfig" data-agent="${esc(agentName)}" style="background:#dc2626;color:#fff;border:none;padding:6px 16px;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:600">Delete Agent</button>
           <span style="color:#9ca3af;font-size:0.65rem;margin-left:8px">Removes agent config, env file, and sidebar entry</span>
         </div>`;
     }
@@ -4355,7 +4412,7 @@ function burnAreaChart() {
         <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Pre-kick pipeline stages. Disable stages to skip them for this agent.</p>
         ${PIPELINE_STAGES.map(stage => `
           <div class="config-toggle">
-            <div class="config-toggle-switch ${p[stage] !== false ? 'on' : ''}" onclick="toggleConfigSwitch(this,'pipeline','${stage}')"></div>
+            <div class="config-toggle-switch ${p[stage] !== false ? 'on' : ''}" data-action="toggleConfigSwitch" data-section="pipeline" data-key="${stage}"></div>
             <span class="config-toggle-label">${stage}</span>
           </div>
         `).join('')}`;
@@ -4363,10 +4420,10 @@ function burnAreaChart() {
 
     function renderAgentHooks(h) {
       const preList = (h.preKick || []).map((s, i) =>
-        `<div class="config-list-item"><span>${esc(s)}</span><button class="remove-item" onclick="removeListItem('hooks','preKick',${i})">✕</button></div>`
+        `<div class="config-list-item"><span>${esc(s)}</span><button class="remove-item" data-action="removeListItem" data-section="hooks" data-key="preKick" data-index="${i}">✕</button></div>`
       ).join('');
       const postList = (h.postIdle || []).map((s, i) =>
-        `<div class="config-list-item"><span>${esc(s)}</span><button class="remove-item" onclick="removeListItem('hooks','postIdle',${i})">✕</button></div>`
+        `<div class="config-list-item"><span>${esc(s)}</span><button class="remove-item" data-action="removeListItem" data-section="hooks" data-key="postIdle" data-index="${i}">✕</button></div>`
       ).join('');
       return `
         <div class="config-list">
@@ -4410,7 +4467,7 @@ function burnAreaChart() {
           if (editable) {
             h += `<label style="font-size:0.7rem;display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap">`;
             h += `<input type="checkbox" ${r.enabled !== false ? 'checked' : ''} onchange="toggleRestriction(${i}, this.checked)"> on</label>`;
-            h += `<button style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:1rem;padding:0 4px" onclick="removeRestriction(${i})">✕</button>`;
+            h += `<button style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:1rem;padding:0 4px" data-action="removeRestriction" data-index="${i}">✕</button>`;
           }
           h += '</div>';
         }
@@ -4445,7 +4502,7 @@ function burnAreaChart() {
     // ── Governor Tab Renderers ──
     function renderGovAgents(agents) {
       const list = agents.map(a =>
-        `<li><span class="agent-link" onclick="closeConfigDialog();setTimeout(()=>openConfigDialog('agent','${a}'),100)">${a}</span><button class="remove-agent" onclick="removeAgent('${a}')">✕</button></li>`
+        `<li><span class="agent-link" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a)}">${esc(a)}</span><button class="remove-agent" data-action="removeAgent" data-agent="${esc(a)}">✕</button></li>`
       ).join('');
       return `
         <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Managed agents. Click name to configure.</p>
@@ -4454,7 +4511,7 @@ function burnAreaChart() {
           <input type="text" id="cfg-new-agent" placeholder="agent name">
           <select id="cfg-copy-from" style="margin-left:6px;font-size:0.75rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px">
             <option value="">blank</option>
-            ${agents.map(a => '<option value="' + a + '">copy ' + a + '</option>').join('')}
+            ${agents.map(a => '<option value="' + esc(a) + '">copy ' + esc(a) + '</option>').join('')}
           </select>
           <button onclick="addAgent()">+ Add Agent</button>
         </div>`;
@@ -4742,7 +4799,7 @@ function burnAreaChart() {
           <div class="config-field"><label>Restart Cooldown (sec)</label><input type="number" value="${h.restartCooldown || 60}" onchange="markDirty('health','restartCooldown',this.value)"></div>
         </div>
         <div class="config-toggle">
-          <div class="config-toggle-switch ${h.modelLock ? 'on' : ''}" onclick="toggleConfigSwitch(this,'health','modelLock')"></div>
+          <div class="config-toggle-switch ${h.modelLock ? 'on' : ''}" data-action="toggleConfigSwitch" data-section="health" data-key="modelLock"></div>
           <span class="config-toggle-label">Model Lock (prevent automatic model changes)</span>
         </div>`;
     }
