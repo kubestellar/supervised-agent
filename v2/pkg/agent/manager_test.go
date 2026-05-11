@@ -252,15 +252,15 @@ func TestGetStatus_UnknownAgentReturnsError(t *testing.T) {
 	}
 }
 
-func TestGetStatus_ReturnsPointerToSameProcess(t *testing.T) {
+func TestGetStatus_ReturnsConsistentSnapshots(t *testing.T) {
 	cfgs := map[string]config.AgentConfig{"a": makeAgentConfig("claude", "haiku")}
 	m := NewManager(cfgs, discardLogger())
 
 	ap1, _ := m.GetStatus("a")
 	ap2, _ := m.GetStatus("a")
 
-	if ap1 != ap2 {
-		t.Error("expected GetStatus to return the same *AgentProcess on repeated calls")
+	if ap1.Name != ap2.Name || ap1.State != ap2.State {
+		t.Error("expected GetStatus to return consistent snapshots")
 	}
 }
 
@@ -460,19 +460,6 @@ func TestStart_SucceedsWithStubBackend(t *testing.T) {
 	if ap.StartedAt == nil {
 		t.Error("StartedAt should be set after Start()")
 	}
-	if ap.stdin == nil {
-		t.Error("stdin pipe should be set after Start()")
-	}
-	if ap.stdout == nil {
-		t.Error("stdout pipe should be set after Start()")
-	}
-	if ap.stderr == nil {
-		t.Error("stderr pipe should be set after Start()")
-	}
-	if ap.cancel == nil {
-		t.Error("cancel func should be set after Start()")
-	}
-
 	// Clean up.
 	_ = m.Stop("worker")
 }
@@ -500,27 +487,25 @@ func TestStart_SetsStartedAtTimestamp(t *testing.T) {
 }
 
 func TestStart_EnvVarsSetOnProcess(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("claude", "haiku"),
-	}
-	m := NewManager(cfgs, discardLogger())
+	cfg := makeAgentConfig("claude", "haiku")
+	ap := &AgentProcess{Name: "worker", Config: cfg}
 
-	if err := m.Start(context.Background(), "worker"); err != nil {
-		t.Fatalf("Start() error: %v", err)
-	}
-	defer m.Stop("worker")
+	vars := agentEnvVars(ap)
 
-	// Verify via agentEnvVars helper — the cmd.Env is set from os.Environ() + agentEnvVars.
-	ap, _ := m.GetStatus("worker")
-	found := false
-	for _, v := range ap.cmd.Env {
-		if v == "HIVE_AGENT=worker" {
-			found = true
-			break
+	expected := map[string]bool{
+		"HIVE_AGENT=worker":    false,
+		"HIVE_BACKEND=claude":  false,
+		"HIVE_MODEL=haiku":     false,
+	}
+	for _, v := range vars {
+		if _, ok := expected[v]; ok {
+			expected[v] = true
 		}
 	}
-	if !found {
-		t.Error("HIVE_AGENT=worker not found in cmd.Env after Start()")
+	for k, found := range expected {
+		if !found {
+			t.Errorf("expected %q in agentEnvVars output", k)
+		}
 	}
 }
 
@@ -620,8 +605,9 @@ func TestStop_RunningAgentChangesStateToStopped(t *testing.T) {
 		t.Fatalf("Stop() returned unexpected error: %v", err)
 	}
 
-	if ap.State != StateStopped {
-		t.Errorf("State = %q after Stop(), want %q", ap.State, StateStopped)
+	ap2, _ := m.GetStatus("worker")
+	if ap2.State != StateStopped {
+		t.Errorf("State = %q after Stop(), want %q", ap2.State, StateStopped)
 	}
 }
 

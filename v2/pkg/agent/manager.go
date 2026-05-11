@@ -176,7 +176,8 @@ func (m *Manager) GetStatus(name string) (*AgentProcess, error) {
 	if !ok {
 		return nil, fmt.Errorf("agent %s not found", name)
 	}
-	return agent, nil
+	snap := agent.snapshot()
+	return &snap, nil
 }
 
 func (m *Manager) AllStatuses() map[string]*AgentProcess {
@@ -185,9 +186,21 @@ func (m *Manager) AllStatuses() map[string]*AgentProcess {
 
 	result := make(map[string]*AgentProcess, len(m.agents))
 	for k, v := range m.agents {
-		result[k] = v
+		snap := v.snapshot()
+		result[k] = &snap
 	}
 	return result
+}
+
+func (a *AgentProcess) snapshot() AgentProcess {
+	return AgentProcess{
+		Name:      a.Name,
+		Config:    a.Config,
+		State:     a.State,
+		PID:       a.PID,
+		StartedAt: a.StartedAt,
+		LastKick:  a.LastKick,
+	}
 }
 
 func (m *Manager) watchProcess(name string, cmd *exec.Cmd, ctx context.Context) {
