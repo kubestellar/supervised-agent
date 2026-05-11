@@ -1673,11 +1673,11 @@
         const gaugePct = Math.min(govActionable / OC_GAUGE_MAX * 100, 100);
         govOuter.innerHTML = `
           <div class="gov-metric"><span class="gm-label">timer</span><span class="gm-val" style="color:#16a34a">${gov.active !== false ? '● active' : '○ off'}</span></div>
-          <div class="gov-metric"><span class="gm-label">mode</span><span class="gm-val ${govModeClass}">${gov.mode || '—'}</span></div>
+          <div class="gov-metric"><span class="gm-label">mode</span><span class="gm-val ${govModeClass}">${esc(gov.mode || '—')}</span></div>
           <div class="gov-metric"><span class="gm-label">actionable</span><span class="gm-val">${govActionable}</span></div>
           <div class="gov-metric"><span class="gm-label">PRs</span><span class="gm-val">${govPrs}</span></div>
           <div class="gov-metric"><span class="gm-label">MTTR</span><span class="gm-val" style="color:${MTTR_COLOR}">${formatFixTime(itmMedian)}</span></div>
-          <div class="gov-metric" title="${(window._lastStatus?.hold?.items || []).map(h => (h.type === 'pr' ? 'PR' : 'Issue') + ' ' + h.repo + '#' + h.number + ': ' + h.title).join('\n') || 'No items on hold'}"><span class="gm-label">on hold</span><span class="gm-val" style="color:#d29922">${window._lastStatus?.hold?.total || 0}</span></div>
+          <div class="gov-metric" title="${esc((window._lastStatus?.hold?.items || []).map(h => (h.type === 'pr' ? 'PR' : 'Issue') + ' ' + h.repo + '#' + h.number + ': ' + h.title).join('\n') || 'No items on hold')}"><span class="gm-label">on hold</span><span class="gm-val" style="color:#d29922">${window._lastStatus?.hold?.total || 0}</span></div>
           <div class="oc-gov-gauge">
             <div class="temp-gauge-track" style="background:linear-gradient(to right, #238636 0%, #238636 ${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%, #1f6feb ${OC_THRESH_QUIET/OC_GAUGE_MAX*100}%, #1f6feb ${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%, #d29922 ${OC_THRESH_BUSY/OC_GAUGE_MAX*100}%, #d29922 ${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%, #f85149 ${OC_THRESH_SURGE/OC_GAUGE_MAX*100}%, #f85149 100%)">
               <div class="temp-gauge-glow" style="width:100%"></div>
@@ -1717,11 +1717,11 @@
           <button class="config-gear" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" style="font-size:1rem;opacity:0.7">⚙️</button>
         </div>
         <div class="oc-detail-fields">
-          <div class="oc-detail-field"><div class="label">CLI</div><div class="value">${a.cli || '—'}</div></div>
-          <div class="oc-detail-field"><div class="label">Model</div><div class="value">${a.model || '—'}</div></div>
-          <div class="oc-detail-field"><div class="label">Interval</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : (a.cadence || '—')}</div></div>
-          <div class="oc-detail-field"><div class="label">Last Run</div><div class="value">${a.lastKick || '—'}</div></div>
-          <div class="oc-detail-field"><div class="label">Next Run</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : (a.nextKick || '—')}</div></div>
+          <div class="oc-detail-field"><div class="label">CLI</div><div class="value">${esc(a.cli || '—')}</div></div>
+          <div class="oc-detail-field"><div class="label">Model</div><div class="value">${esc(a.model || '—')}</div></div>
+          <div class="oc-detail-field"><div class="label">Interval</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : esc(a.cadence || '—')}</div></div>
+          <div class="oc-detail-field"><div class="label">Last Run</div><div class="value">${esc(a.lastKick || '—')}</div></div>
+          <div class="oc-detail-field"><div class="label">Next Run</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : esc(a.nextKick || '—')}</div></div>
           <div class="oc-detail-field"><div class="label">Tokens (24h)</div><div class="value">${_tokTotal > 0 ? fmtTokens(_tokTotal) : (_tok.sessions > 0 ? _tok.sessions + ' sess' : '—')}</div></div>
           ${a.name === 'scanner' ? `<div class="oc-detail-field"><div class="label">Actionable</div><div class="value"><div class="spark-row"><span style="color:#f85149">${_ocSparkCounts.actionable}</span>${sparkSvg(historyData.map(s => s.actionableCount ?? 0), '#f85149')}</div></div></div>` : ''}
           <div class="oc-detail-field"><div class="label">Restarts</div><div class="value">${a.restarts ?? 0}</div></div>
@@ -3496,13 +3496,13 @@ function burnAreaChart() {
       if (dryRuns.length > 0) {
         html += `<h3 style="margin-top:12px">${mode === 'observe' ? 'Would Have Tested' : 'Recent Proposals'}</h3>`;
         for (const dr of dryRuns) {
-          const paramKeys = dr.params ? Object.entries(dr.params).map(([k,v]) => `<code style="font-size:0.7rem;background:var(--bg);padding:1px 4px;border-radius:3px">${k}=${v}</code>`).join(' ') : '';
+          const paramKeys = dr.params ? Object.entries(dr.params).map(([k,v]) => `<code style="font-size:0.7rem;background:var(--bg);padding:1px 4px;border-radius:3px">${escapeHtml(String(k))}=${escapeHtml(String(v))}</code>`).join(' ') : '';
           html += `<div style="font-size:0.75rem;padding:6px 0;border-bottom:1px solid var(--border)">`;
-          html += `<div><strong>${dr.id || '?'}</strong></div>`;
-          html += `<div style="color:var(--muted);margin-top:2px">${dr.hypothesis || 'no description'}</div>`;
+          html += `<div><strong>${escapeHtml(dr.id || '?')}</strong></div>`;
+          html += `<div style="color:var(--muted);margin-top:2px">${escapeHtml(dr.hypothesis || 'no description')}</div>`;
           if (paramKeys) html += `<div style="margin-top:4px">${paramKeys}</div>`;
           if (dr.predicted) {
-            const preds = Object.entries(dr.predicted).map(([k,v]) => `${k.replace(/_/g,' ')}: ${v > 0 ? '+' : ''}${v}%`).join(', ');
+            const preds = Object.entries(dr.predicted).map(([k,v]) => `${escapeHtml(k.replace(/_/g,' '))}: ${v > 0 ? '+' : ''}${v}%`).join(', ');
             html += `<div style="font-size:0.7rem;color:#7c3aed;margin-top:2px">Predicted: ${preds}</div>`;
           }
           html += '</div>';
