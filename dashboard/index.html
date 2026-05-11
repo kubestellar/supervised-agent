@@ -1454,6 +1454,11 @@
   </aside>
 
   <script>
+    /** Escape HTML special characters to prevent XSS in innerHTML sinks */
+    function escapeHtml(str) {
+      if (typeof str !== 'string') return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
     // ── Layout mode (Classic / Light) ──
     const LAYOUT_KEY = 'hive-layout-mode';
     const LAYOUT_MODES = ['classic', 'light'];
@@ -2072,10 +2077,10 @@
       for (const g of groups) {
         const validAgents = (g.agents || []).filter(n => agentMap[n]);
         if (g.name) {
-          const esc = g.name.replace(/'/g, "\\'");
-          html += `<div class="oc-sidebar-group" data-group-name="${g.name}">`;
+          const esc = escapeHtml(g.name);
+          html += `<div class="oc-sidebar-group" data-group-name="${esc}">`;
           html += `<div class="oc-sidebar-group-header" draggable="true" data-action="ocToggleSidebarGroup">`;
-          html += `<span class="oc-group-arrow">▼</span> ${g.name}`;
+          html += `<span class="oc-group-arrow">▼</span> ${esc}`;
           html += `<span class="oc-group-actions" onclick="event.stopPropagation()">`;
           html += `<button data-action="ocRenameSidebarGroup" data-group="${esc}" title="Rename">✏</button>`;
           html += `<button data-action="ocRemoveSidebarGroup" data-group="${esc}" title="Remove group">✕</button>`;
@@ -2218,8 +2223,8 @@
     function renderStatHtml(stat, name) {
       const v = resolveStatValue(stat, name);
       const style = stat.style;
-      const label = stat.label || stat.key;
-      const icon = stat.icon ? stat.icon + ' ' : '';
+      const label = escapeHtml(stat.label || stat.key);
+      const icon = stat.icon ? escapeHtml(stat.icon) + ' ' : '';
 
       if (style === 'dot') {
         const dotCls = v === 1 ? 'ok' : v === 0 ? 'fail' : 'unknown';
@@ -2571,19 +2576,19 @@
       const holdTotal = holdData.total || 0;
       const holdItems = holdData.items || [];
       const HOLD_COLOR = '#d29922';
-      const holdTooltip = holdItems.length > 0 ? holdItems.map(h => `${h.type === 'pr' ? 'PR' : 'Issue'} ${h.repo}#${h.number}: ${h.title}`).join('\n') : 'No items on hold';
+      const holdTooltip = holdItems.length > 0 ? escapeHtml(holdItems.map(h => `${h.type === 'pr' ? 'PR' : 'Issue'} ${h.repo}#${h.number}: ${h.title}`).join('\n')) : 'No items on hold';
       const holdSpark = sparkSvg(getHistorySeries('govHold'), HOLD_COLOR);
 
       el.innerHTML = `
         <div class="gov-title">Governor <button class="config-gear" onclick="openConfigDialog('governor')" title="Configure Governor">⚙️</button></div>
         <div class="gov-grid">
           <div class="gov-stat"><div class="label">timer</div><div class="val ${cls}">${gov.active ? '● active' : '⚠ DEAD'}</div></div>
-          <div class="gov-stat"><div class="label">mode</div><div class="val" style="color:${modeColor}">${gov.mode}</div></div>
+          <div class="gov-stat"><div class="label">mode</div><div class="val" style="color:${modeColor}">${escapeHtml(gov.mode)}</div></div>
           <div class="gov-stat"><div class="label">actionable issues</div><div class="spark-row"><span class="val">${issueCount}</span>${issuesSpark}</div></div>
           <div class="gov-stat"><div class="label">PRs</div><div class="spark-row"><span class="val">${gov.prs}</span>${prsSpark}</div></div>
           <div class="gov-stat" title="${itmTitle}"><div class="label">MTTR</div><div class="spark-row"><span class="val" style="color:${FIX_TIME_SPARK_COLOR}">${formatFixTime(itmMedian)}</span>${itmSpark}</div></div>
           <div class="gov-stat" title="${holdTooltip}"><div class="label">on hold</div><div class="spark-row"><span class="val" style="color:${HOLD_COLOR}">${holdTotal}</span>${holdSpark}</div></div>
-          <div class="gov-stat"><div class="label">next run</div><div class="val">${gov.nextKick || '—'}</div></div>
+          <div class="gov-stat"><div class="label">next run</div><div class="val">${escapeHtml(gov.nextKick || '—')}</div></div>
         </div>
         <div class="temp-gauge">
           <div class="temp-gauge-label"><span>Issues: ${issueCount}</span><span>max ${maxQ}</span></div>
@@ -3509,7 +3514,7 @@ function burnAreaChart() {
       if (s.activeExperiment) {
         const exp = s.activeExperiment;
         html += '<div class="nous-experiment-live">';
-        html += `<h4>Active Experiment: ${exp.id}</h4>`;
+        html += `<h4>Active Experiment: ${escapeHtml(exp.id)}</h4>`;
         html += `<div class="nous-progress"><div class="nous-progress-fill" style="width:${exp.progressPct}%;background:#16a34a"></div></div>`;
         html += `<div style="font-size:0.72rem;color:var(--muted)">${exp.progressPct}% complete — ${Math.round((exp.ttlSec - exp.elapsed) / 60)}min remaining</div>`;
         html += '<div style="display:flex;gap:16px;margin-top:8px;font-size:0.75rem">';
@@ -3524,17 +3529,17 @@ function burnAreaChart() {
       if (s.pending && mode === 'suggest') {
         const p = s.pending;
         html += '<div class="nous-pending-card">';
-        html += `<h4>Pending Proposal: ${p.id || 'experiment'}</h4>`;
-        html += `<div style="font-size:0.78rem;margin-bottom:8px">${p.hypothesis || 'No hypothesis description'}</div>`;
+        html += `<h4>Pending Proposal: ${escapeHtml(p.id || 'experiment')}</h4>`;
+        html += `<div style="font-size:0.78rem;margin-bottom:8px">${escapeHtml(p.hypothesis || 'No hypothesis description')}</div>`;
         if (p.params) {
           html += '<table class="nous-pending-params"><tbody>';
           for (const [k, v] of Object.entries(p.params)) {
-            html += `<tr><td style="color:var(--muted)">${k}</td><td><strong>${v}</strong></td></tr>`;
+            html += `<tr><td style="color:var(--muted)">${escapeHtml(k)}</td><td><strong>${escapeHtml(String(v))}</strong></td></tr>`;
           }
           html += '</tbody></table>';
         }
         if (p.predicted) {
-          html += `<div style="font-size:0.72rem;color:#92400e">Predicted: ${JSON.stringify(p.predicted)}</div>`;
+          html += `<div style="font-size:0.72rem;color:#92400e">Predicted: ${escapeHtml(JSON.stringify(p.predicted))}</div>`;
         }
         html += '<div style="margin-top:10px">';
         html += '<button class="nous-btn nous-btn-approve" onclick="nousApprove()">Apply</button>';
@@ -3552,7 +3557,7 @@ function burnAreaChart() {
           const barColor = conf >= 80 ? '#16a34a' : conf >= 50 ? '#d97706' : '#dc2626';
           html += '<div class="nous-principle">';
           html += `<div class="nous-confidence-bar"><div class="nous-confidence-fill" style="width:${conf}%;background:${barColor}"></div></div>`;
-          html += `<div class="nous-principle-text">${p.text || p.id}</div>`;
+          html += `<div class="nous-principle-text">${escapeHtml(p.text || p.id)}</div>`;
           html += `<div class="nous-principle-score">${conf}%</div>`;
           html += '</div>';
         }
@@ -3570,7 +3575,7 @@ function burnAreaChart() {
           const colors = { dry_run: '#94a3b8', active: '#2563eb', completed: '#16a34a', aborted: '#dc2626', analysis: '#7c3aed', shadow_analysis: '#a78bfa' };
           const color = colors[entry.type] || '#94a3b8';
           const outcome = entry.outcome || entry.type;
-          html += `<div class="nous-timeline-bar" style="height:${20 + Math.random() * 20}px;background:${color}" title="${entry.id || '?'}: ${outcome}"></div>`;
+          html += `<div class="nous-timeline-bar" style="height:${20 + Math.random() * 20}px;background:${color}" title="${escapeHtml((entry.id || '?') + ': ' + outcome)}"></div>`;
         }
         html += '</div>';
         html += '<div style="font-size:0.65rem;color:var(--muted);margin-top:4px;display:flex;gap:12px">';
@@ -3589,8 +3594,8 @@ function burnAreaChart() {
         html += `<h3 style="color:#7c3aed">Pending Recommendations (${recs.length})</h3>`;
         for (const r of recs) {
           html += `<div style="font-size:0.78rem;padding:4px 0;border-bottom:1px solid var(--border)">`;
-          html += `<strong>${r.var}</strong>: ${r.current || '?'} → <strong>${r.proposed}</strong>`;
-          html += `<div style="font-size:0.7rem;color:var(--muted)">${r.rationale} (${Math.round((r.confidence || 0) * 100)}% confidence)</div>`;
+          html += `<strong>${escapeHtml(r.var)}</strong>: ${escapeHtml(String(r.current || '?'))} → <strong>${escapeHtml(String(r.proposed))}</strong>`;
+          html += `<div style="font-size:0.7rem;color:var(--muted)">${escapeHtml(r.rationale)} (${Math.round((r.confidence || 0) * 100)}% confidence)</div>`;
           html += '</div>';
         }
         html += '</div>';
@@ -4125,7 +4130,7 @@ function burnAreaChart() {
         const v = await res.json();
         const el = document.getElementById('git-version');
         const ocEl = document.getElementById('oc-git-version');
-        let html = `<a href="https://github.com/kubestellar/hive/commit/${v.hash}" target="_blank" style="color:inherit;text-decoration:none" title="${v.hash}">${v.short}</a>`;
+        let html = `<a href="https://github.com/kubestellar/hive/commit/${escapeHtml(v.hash)}" target="_blank" style="color:inherit;text-decoration:none" title="${escapeHtml(v.hash)}">${escapeHtml(v.short)}</a>`;
         if (v.dirty) html += ' <span class="git-dirty">*</span>';
         if (v.behind > 0) html += ` <span class="git-behind">${v.behind} behind</span>`;
         el.innerHTML = html;
@@ -5106,7 +5111,7 @@ function burnAreaChart() {
       const msgs = [];
       chatMessages.querySelectorAll('.chat-msg').forEach(el => {
         if (el.classList.contains('thinking')) return;
-        msgs.push({ cls: el.classList.contains('user') ? 'user' : 'system', html: el.innerHTML });
+        msgs.push({ cls: el.classList.contains('user') ? 'user' : 'system', text: el.textContent });
       });
       const MAX_PERSIST = 30;
       localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(msgs.slice(-MAX_PERSIST)));
@@ -5118,7 +5123,13 @@ function burnAreaChart() {
         saved.forEach(m => {
           const el = document.createElement('div');
           el.className = 'chat-msg ' + m.cls;
-          el.innerHTML = m.html;
+          // Restore as text to prevent persistent DOM-XSS from poisoned localStorage
+          if (m.text != null) {
+            el.textContent = m.text;
+          } else if (m.html != null) {
+            // Legacy format — escape before rendering
+            el.textContent = m.html.replace(/<[^>]*>/g, '');
+          }
           chatMessages.appendChild(el);
         });
         if (saved.length) chatMessages.scrollTop = chatMessages.scrollHeight;
