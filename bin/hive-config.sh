@@ -1,6 +1,10 @@
 #!/bin/bash
 # hive-config.sh — Shared config reader for all hive scripts.
-# Sources project-specific values from hive-project.yaml.
+#
+# Precedence (lowest → highest):
+#   1. hive-project.yaml  (static defaults from repo)
+#   2. /etc/hive/config.env  (dynamic overrides, dashboard reads/writes this)
+#   3. Explicit env vars set before sourcing this file
 #
 # Usage: source /usr/local/bin/hive-config.sh
 #        (or source this file from the repo at bin/hive-config.sh)
@@ -21,7 +25,7 @@ HIVE_REPO_DIR="${HIVE_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/
 export HIVE_REPO_DIR
 
 _HIVE_CONFIG="${HIVE_PROJECT_CONFIG:-/etc/hive/hive-project.yaml}"
-_HIVE_RUNTIME="${HIVE_RUNTIME_CONFIG:-/etc/hive/hive-runtime.yaml}"
+_HIVE_CONFIG_ENV="${HIVE_CONFIG_ENV:-/etc/hive/config.env}"
 
 _hive_yq_file() {
   local file="$1" path="$2"
@@ -64,20 +68,6 @@ _hive_yq() {
   _hive_yq_file "$_HIVE_CONFIG" "$1"
 }
 
-# Read from runtime config first, fall back to project config
-_hive_runtime_yq() {
-  local val=""
-  if [[ -f "$_HIVE_RUNTIME" ]]; then
-    val=$(_hive_yq_file "$_HIVE_RUNTIME" "$1")
-  fi
-  if [[ "$val" == "null" || -z "$val" || "$val" == "[]" ]]; then
-    _hive_yq "$1"
-  else
-    echo "$val"
-  fi
-}
-
-
 _hive_read() {
   local val
   val=$(_hive_yq "$1")
@@ -102,34 +92,17 @@ _hive_read_array() {
   fi
 }
 
-# Runtime-aware array reader: checks hive-runtime.yaml first, falls back to hive-project.yaml
-_hive_read_runtime_array() {
-  local val=""
-  if [[ -f "$_HIVE_RUNTIME" ]]; then
-    val=$(_hive_yq_file "$_HIVE_RUNTIME" "$1")
-  fi
-  if [[ "$val" == "null" || -z "$val" || "$val" == "[]" ]]; then
-    _hive_read_array "$1" "${2:-}"
-  else
-    if command -v python3 &>/dev/null; then
-      python3 -c "import json; print(' '.join(json.loads('''$val''')))" 2>/dev/null || echo "${2:-}"
-    else
-      echo "$val" | tr -d '[]",' | xargs
-    fi
-  fi
-}
-
 if [[ -f "$_HIVE_CONFIG" ]]; then
   # Project
   PROJECT_NAME=$(_hive_read "project.name" "")
   PROJECT_ORG=$(_hive_read "project.org" "")
   PROJECT_PRIMARY_REPO=$(_hive_read "project.primary_repo" "")
-  PROJECT_REPOS=$(_hive_read_runtime_array "project.repos" "")
+  PROJECT_REPOS=$(_hive_read_array "project.repos" "")
   PROJECT_AI_AUTHOR=$(_hive_read "project.ai_author" "")
   PROJECT_WEBSITE=$(_hive_read "project.website" "")
 
   # Agents
-  AGENTS_ENABLED=$(_hive_read_runtime_array "agents.enabled" "supervisor scanner reviewer")
+  AGENTS_ENABLED=$(_hive_read_array "agents.enabled" "supervisor scanner reviewer")
   BEADS_BASE=$(_hive_read "agents.beads_base" "/home/dev")
   AGENTS_WORKDIR=$(_hive_read "agents.workdir" "")
 
@@ -188,6 +161,16 @@ if [[ -f "$_HIVE_CONFIG" ]]; then
   HIVE_CONFIG_LOADED=true
 else
   HIVE_CONFIG_LOADED=false
+fi
+
+# ── config.env overrides ──────────────────────────────────────────
+# Flat key=value file for dynamic overrides. Dashboard reads/writes this.
+# Values here win over hive-project.yaml defaults.
+if [[ -f "$_HIVE_CONFIG_ENV" ]]; then
+  set -a
+  # shellcheck source=/etc/hive/config.env
+  source "$_HIVE_CONFIG_ENV"
+  set +a
 fi
 
 # ─── Shared utility functions ─────────────────────────────────────────────
