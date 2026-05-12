@@ -803,6 +803,18 @@ ${_MERGE_LIST}"
   fi
 fi
 
+# Build dynamic repo list for all kick messages — agents must ONLY interact with these repos
+_REPOS_INLINE=""
+for _r in ${PROJECT_REPOS}; do
+  _REPOS_INLINE="${_REPOS_INLINE}  ${PROJECT_ORG}/${_r}
+"
+done
+_HIVE_REPO="${PROJECT_HIVE_REPO:-${PROJECT_ORG}/hive}"
+_REPOS_INLINE="${_REPOS_INLINE}  ${_HIVE_REPO} (issues only — file hive-related issues here)
+"
+_REPOS_SECTION="AUTHORIZED REPOS (you may ONLY interact with these):
+${_REPOS_INLINE}⛔ NEVER access, search, list, file issues in, or open PRs on repos not listed above."
+
 if policy_changed "scanner"; then
   _SCANNER_POLICY_INSTR="Read your CLAUDE.md."
 else
@@ -818,6 +830,7 @@ ${_CLUSTERS_INLINE}"
 fi
 SCANNER_MSG="[agent:scanner] [KICK] git pull /tmp/hive. ${_SCANNER_POLICY_INSTR}
 ${_GH_AUTH_INSTR}
+${_REPOS_SECTION}
 YOUR WORK LIST (pre-filtered — hold/ADOPTERS/drafts excluded, classified):
 ${_WORK_LIST}${_CLUSTER_SECTION}${_MERGE_INLINE}
 ⛔ NEVER run gh issue list, gh pr list, gh search issues, or gh search prs — the work list above is your ONLY source. You may use gh issue view, gh pr view, gh pr merge, gh pr create on individual items.
@@ -888,6 +901,7 @@ GA4: ${_GA4_SUMMARY}"
 fi
 REVIEWER_MSG="[agent:reviewer] [KICK] ${_HEALTH_PREAMBLE}git pull /tmp/hive. ${_REVIEWER_POLICY_INSTR}${_GA4_PREAMBLE}${_COPILOT_PREAMBLE}
 ${_GH_AUTH_INSTR}
+${_REPOS_SECTION}
 Fix REDs (NOT Playwright — file issues only, scanner owns Playwright fixes), merge green PRs. Copilot comments and GA4 data above are pre-computed — do NOT re-query. Read /var/run/hive-metrics/copilot-comments.json and /var/run/hive-metrics/ga4-anomalies.json for full details. Beads: ~/reviewer-beads"
 
 if policy_changed "architect"; then
@@ -897,6 +911,7 @@ else
 fi
 ARCHITECT_MSG="[agent:architect] [KICK] git pull /tmp/hive. ${_ARCHITECT_POLICY_INSTR}
 ${_GH_AUTH_INSTR}
+${_REPOS_SECTION}
 Full architect pass — refactor/perf scan. Beads: ~/architect-beads"
 
 if policy_changed "outreach"; then
@@ -1113,6 +1128,7 @@ else
 fi
 SUPERVISOR_MSG="[agent:supervisor] [KICK] MONITORING PASS ${_now_et}. ${_SUPERVISOR_POLICY_INSTR}
 ${_GH_AUTH_INSTR}
+${_REPOS_SECTION}
 Check all agent panes, merge green PRs, unstick idle agents. Beads: ~/supervisor-beads"
 
 case "$TARGET" in
@@ -1132,7 +1148,10 @@ case "$TARGET" in
     apply_model_if_changed "supervisor" "supervisor" && kick "supervisor" "$SUPERVISOR_MSG" "supervisor"
     ;;
   sec-check)
-    SEC_CHECK_MSG="Please run a security review pass now. Your instructions are in /etc/hive/sec-check-CLAUDE.md — read that file first to understand what to check. The current work queue is at /var/run/hive-metrics/actionable.json. Time: ${_now_et}."
+    SEC_CHECK_MSG="[agent:sec-check] [KICK] git pull /tmp/hive. Read your CLAUDE.md. Time: ${_now_et}.
+${_GH_AUTH_INSTR}
+${_REPOS_SECTION}
+Run a security review pass. The current work queue is at /var/run/hive-metrics/actionable.json."
     apply_model_if_changed "sec-check" "sec-check" && kick "sec-check" "$SEC_CHECK_MSG" "sec-check"
     ;;
   all)
@@ -1154,7 +1173,10 @@ case "$TARGET" in
     else
       _GENERIC_INSTR="Run your next pass as described in your CLAUDE.md."
     fi
-    _GENERIC_MSG="[agent:${TARGET}] [KICK] git pull /tmp/hive. ${_GENERIC_POLICY_INSTR} ${_GENERIC_INSTR} Kick time: ${_now_et}."
+    _GENERIC_MSG="[agent:${TARGET}] [KICK] git pull /tmp/hive. ${_GENERIC_POLICY_INSTR} ${_GENERIC_INSTR}
+${_GH_AUTH_INSTR}
+${_REPOS_SECTION}
+Kick time: ${_now_et}."
     apply_model_if_changed "$TARGET" "$TARGET" && kick "$TARGET" "$_GENERIC_MSG" "$TARGET"
     ;;
 esac
