@@ -4614,7 +4614,7 @@ function burnAreaChart() {
     // ── Configuration Dialog ──────────────────────────────────────────
     let _configState = { type: null, agent: null, tab: null, data: {}, dirty: {} };
 
-    const AGENT_CONFIG_TABS = ['General', 'Cadences', 'Pipeline', 'Hooks', 'Restrictions', 'Stats', 'Prompts'];
+    const AGENT_CONFIG_TABS = ['General', 'Cadences', 'Pipeline', 'Hooks', 'Restrictions', 'Stats', 'Template', 'Last Prompt'];
     const GOVERNOR_CONFIG_TABS = ['Agents', 'Thresholds', 'Labels', 'Repos', 'Budget', 'Notifications', 'Health', 'Sensing'];
     const PIPELINE_STAGES = ['resolve-beads', 'track-prs', 'stale-check', 'repo-scan', 'coverage-gate', 'prompt-compose', 'budget-check', 'api-collect', 'final-compose'];
     const RESTART_STRATEGIES = ['immediate', 'backoff', 'none'];
@@ -4686,7 +4686,8 @@ function burnAreaChart() {
         case 'Hooks': return renderAgentHooks(d.hooks || {});
         case 'Restrictions': return renderAgentRestrictions(d.restrictions || {});
         case 'Stats': return renderAgentStatsTab(d.stats || []);
-        case 'Prompts': return renderAgentPrompts(d.prompt || '');
+        case 'Template': return renderAgentPromptTemplate();
+        case 'Last Prompt': return renderAgentLastPrompt(d.prompt || '');
         default: return '';
       }
     }
@@ -4880,29 +4881,30 @@ function burnAreaChart() {
       return html;
     }
 
-    function renderAgentPrompts(prompt) {
+    function renderAgentPromptTemplate() {
       const agentName = _configState.agent;
-      const templateId = 'prompt-template-content';
-      const lastRunId = 'prompt-lastrun-content';
+      const elId = 'prompt-template-content';
       if (agentName) {
         fetch(`/api/config/agent/${agentName}/prompt`)
           .then(r => r.json())
           .then(data => {
-            const el = document.getElementById(templateId);
+            const el = document.getElementById(elId);
             if (el) el.textContent = data.prompt || '(no template found in kick-agents.sh)';
           })
           .catch(() => {});
       }
       return `
-        <div style="display:flex;flex-direction:column;height:100%;gap:12px">
-        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
-          <p style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;flex-shrink:0;font-weight:600">📋 Prompt Template <span style="font-weight:400">(from kick-agents.sh — edit there to change)</span></p>
-          <pre class="config-pre" id="${templateId}" style="flex:1;overflow:auto;min-height:80px;max-height:40%">${esc('Loading template…')}</pre>
-        </div>
-        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
-          <p style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;flex-shrink:0;font-weight:600">🕐 Last Prompt Sent <span style="font-weight:400">(expanded prompt from most recent kick)</span></p>
-          <pre class="config-pre config-pre-fill" id="${lastRunId}" style="flex:1;overflow:auto;min-height:80px">${esc(prompt || '(awaiting first kick)')}</pre>
-        </div>
+        <div style="display:flex;flex-direction:column;height:100%">
+        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:8px;flex-shrink:0">Prompt template from <code>kick-agents.sh</code>. Variable names shown as <code>⟨name⟩</code> — these are filled by the deterministic pipeline at kick time. Edit the template in kick-agents.sh or hive-project.yaml.</p>
+        <pre class="config-pre config-pre-fill" id="${elId}">${esc('Loading template…')}</pre>
+        </div>`;
+    }
+
+    function renderAgentLastPrompt(prompt) {
+      return `
+        <div style="display:flex;flex-direction:column;height:100%">
+        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:8px;flex-shrink:0">The fully expanded prompt sent to this agent on its most recent kick. This is exactly what the agent received — all variables resolved, pipeline data injected.</p>
+        <pre class="config-pre config-pre-fill">${esc(prompt || '(awaiting first kick — the expanded prompt will appear here after the governor kicks this agent)')}</pre>
         </div>`;
     }
 
