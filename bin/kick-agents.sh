@@ -638,23 +638,32 @@ kick() {
   fi
 
   # Reset conversation context so agent reads kick message fresh.
-  # With 40-50 restarts/day the accumulated context is mostly stale
-  # rationalization; the kick message already contains all deterministic data.
-  log "CLEAR-CONTEXT $session — sending /clear before kick"
-  $TMUX_BIN send-keys -t "$session" -l "/clear" 2>/dev/null || true
-  sleep 1
-  $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
-  local CLEAR_WAIT=15
-  local _cw=0
-  while [ "$_cw" -lt "$CLEAR_WAIT" ]; do
+  # Controlled by AGENT_CLEAR_ON_KICK in the agent's env file (default: true).
+  local _clear_on_kick="true"
+  local _agent_env="/etc/hive/${agent}.env"
+  if [ -f "$_agent_env" ]; then
+    _clear_on_kick=$(grep -m1 '^AGENT_CLEAR_ON_KICK=' "$_agent_env" 2>/dev/null | cut -d= -f2 || echo "true")
+    _clear_on_kick="${_clear_on_kick:-true}"
+  fi
+  if [ "$_clear_on_kick" = "true" ]; then
+    log "CLEAR-CONTEXT $session — sending /clear before kick"
+    $TMUX_BIN send-keys -t "$session" -l "/clear" 2>/dev/null || true
     sleep 1
-    _cw=$(( _cw + 1 ))
-    if session_idle "$session"; then
-      break
+    $TMUX_BIN send-keys -t "$session" Enter 2>/dev/null || true
+    local CLEAR_WAIT=15
+    local _cw=0
+    while [ "$_cw" -lt "$CLEAR_WAIT" ]; do
+      sleep 1
+      _cw=$(( _cw + 1 ))
+      if session_idle "$session"; then
+        break
+      fi
+    done
+    if ! session_idle "$session"; then
+      log "WARN $session — /clear did not return to prompt within ${CLEAR_WAIT}s, proceeding anyway"
     fi
-  done
-  if ! session_idle "$session"; then
-    log "WARN $session — /clear did not return to prompt within ${CLEAR_WAIT}s, proceeding anyway"
+  else
+    log "SKIP-CLEAR $session — AGENT_CLEAR_ON_KICK=false"
   fi
 
   log "KICK $session (${#message} chars)"
