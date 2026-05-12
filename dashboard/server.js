@@ -18,6 +18,10 @@ app.use(express.json());
 
 // Auth middleware — protect mutating endpoints with Bearer token
 const DASHBOARD_TOKEN = process.env.HIVE_DASHBOARD_TOKEN || '';
+if (!DASHBOARD_TOKEN && process.env.NODE_ENV === 'production') {
+  console.error('[SECURITY] HIVE_DASHBOARD_TOKEN is not set — all mutations are unauthenticated!');
+  process.exit(1);
+}
 function requireAuth(req, res, next) {
   if (!DASHBOARD_TOKEN) return next(); // no token configured — skip (local dev)
   const authHeader = req.headers.authorization || '';
