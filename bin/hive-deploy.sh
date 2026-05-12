@@ -174,6 +174,20 @@ if [ -f "$HIVE_PROJECT" ] && ! cmp -s "$HIVE_PROJECT" "$HIVE_PROJECT_INSTALLED" 
     log "WARN: failed to sync hive-project.yaml"
 fi
 
+# Sync agent CLAUDE.md policies from repo to /etc/hive/
+AGENTS_SRC=$(find "$HIVE_REPO" -path '*/examples/*/agents' -type d 2>/dev/null | head -1)
+if [ -n "$AGENTS_SRC" ]; then
+  for policy in "$AGENTS_SRC"/*-CLAUDE.md; do
+    [ -f "$policy" ] || continue
+    policyname=$(basename "$policy")
+    dst="/etc/hive/$policyname"
+    if [ -f "$dst" ] && cmp -s "$policy" "$dst"; then
+      continue
+    fi
+    sudo cp "$policy" "$dst" && SYNCED="$SYNCED $policyname" || true
+  done
+fi
+
 # Sync systemd units if changed
 for unit in "$HIVE_REPO"/systemd/*.service "$HIVE_REPO"/systemd/*.timer; do
   [ -f "$unit" ] || continue
