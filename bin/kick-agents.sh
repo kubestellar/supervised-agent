@@ -806,8 +806,12 @@ fi
 # Build dynamic repo list for all kick messages — agents must ONLY interact with these repos
 _REPOS_INLINE=""
 for _r in ${PROJECT_REPOS}; do
-  _REPOS_INLINE="${_REPOS_INLINE}  ${PROJECT_ORG}/${_r}
-"
+  case "$_r" in
+    */*) _REPOS_INLINE="${_REPOS_INLINE}  ${_r}
+" ;;
+    *)   _REPOS_INLINE="${_REPOS_INLINE}  ${PROJECT_ORG}/${_r}
+" ;;
+  esac
 done
 _HIVE_REPO="${PROJECT_HIVE_REPO:-${PROJECT_ORG}/hive}"
 _REPOS_INLINE="${_REPOS_INLINE}  ${_HIVE_REPO} (issues only — file hive-related issues here)
