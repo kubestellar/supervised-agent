@@ -13,6 +13,7 @@ project:
     - kubestellar/docs
     - kubestellar/console-marketplace
     - kubestellar/kubestellar-mcp
+    - kubestellar/homebrew-tap
   ai_author: "clubanderson"
   website: "console.kubestellar.io"
   hive_repo: "kubestellar/hive"
