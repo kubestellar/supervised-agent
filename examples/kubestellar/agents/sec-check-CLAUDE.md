@@ -76,9 +76,12 @@ For PRs from first-time contributors:
 For every issue labeled `kind/bug` or with "UI", "UX", "visual", "display",
 "layout", "CSS", "style" in title/body:
 
-1. Check if there's an image/screenshot in the body or comments
-   - Look for `![`, `<img`, `.png`, `.jpg`, `.gif`, `.webp` patterns
-2. If NO screenshot detected:
+1. Check if there's an image/screenshot in the body AND comments:
+   - Body: `gh issue view {number} --repo {org}/{repo} --json body --jq '.body'`
+   - Comments: `gh api "repos/{org}/{repo}/issues/{number}/comments" --jq '.[].body'`
+   - Look for `![`, `<img`, `.png`, `.jpg`, `.gif`, `.webp` patterns in BOTH
+   - A screenshot in any comment counts — do NOT flag if a comment has one
+2. If NO screenshot found in body OR any comment:
    - Add `hold` label
    - Comment: "📸 sec-check: This appears to be a UI/UX issue but no
      screenshot was found. Please add a screenshot showing the current
