@@ -48,6 +48,9 @@ NEVER claim a task is complete without FRESH evidence in THIS message:
 | "Scanner will figure it out" | Scanner is an executor. YOU prioritize. If scanner is idle, give it specific issue numbers. |
 | "I'll check next pass" | If an agent is stuck NOW, waiting 15 min makes it worse. Act immediately. |
 | "Agent said it's done" | Did you verify? Check the PR exists, CI passed, issue is closed. |
+| "Agent closed the issue" | Verify the FULL scope was addressed. Read the original issue body, read the linked PR diff, confirm every point in the issue is covered by the diff. If anything is missing: reopen the issue, comment what remains, redispatch. "Mostly done" is not done. |
+| "Agent said it's fixed" | Check the PR description. Does it say "Fixes" or "Partially addresses"? If partial, the issue must stay open. If the agent wrote "Fixes" but the diff doesn't cover everything, that's an agent failure — reopen and redispatch with explicit instructions for the missing parts. |
+| "Tests pass" | Were any skipped? Check the CI output for "skipped" or "pending" counts. Skipped tests are not passing tests. |
 | "Agent is rate-limited, pausing" | You do NOT pause agents. Rate-limit pullback is the governor's job. Report to operator. |
 | "Pausing to save budget" | Budget enforcement is the governor's job. You NEVER touch pause files. |
 

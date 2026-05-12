@@ -82,6 +82,16 @@
       margin: 2px 10px;
     }
     .oc-nav-item:hover { background: #f5f5f7; color: #374151; }
+    .oc-nav-item .oc-nav-actions {
+      display: none; margin-left: auto; gap: 2px; flex-shrink: 0;
+    }
+    .oc-nav-item:hover .oc-nav-actions { display: flex; }
+    .oc-nav-actions button {
+      background: none; border: none; cursor: pointer; padding: 2px 4px;
+      font-size: 0.7rem; color: #9ca3af; border-radius: 4px; line-height: 1;
+    }
+    .oc-nav-actions button:hover { background: #e5e7eb; color: #374151; }
+    .oc-nav-actions .oc-nav-delete:hover { background: #fecaca; color: #dc2626; }
     .oc-nav-item.active {
       background: #fef2f2; color: #dc2626; font-weight: 600;
     }
@@ -1271,6 +1281,53 @@
     .nous-experiment-live { background: #f0fdf4; border: 1px solid #16a34a; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
     .nous-experiment-live h4 { margin: 0 0 6px 0; font-size: 0.82rem; color: #166534; }
 
+    /* Nous Config Panel */
+    .nous-config-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .nous-config-dialog { background: var(--card); border: 1px solid var(--border); border-radius: 12px; width: 720px; max-width: 95vw; max-height: 85vh; overflow-y: auto; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    .nous-config-dialog h2 { font-size: 1.1rem; margin: 0 0 16px 0; display: flex; align-items: center; gap: 8px; }
+    .nous-config-section { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .nous-config-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .nous-config-section h3 { font-size: 0.85rem; color: var(--accent); margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px; }
+    .nous-config-section label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+    .nous-config-section textarea, .nous-config-section input[type="text"], .nous-config-section input[type="number"] {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
+      color: var(--fg); font-size: 0.8rem; font-family: inherit; resize: vertical;
+    }
+    .nous-config-section textarea:focus, .nous-config-section input:focus { outline: none; border-color: var(--accent); }
+    .nous-config-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 8px; }
+    .nous-config-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
+    .nous-config-check { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--fg); cursor: pointer; padding: 4px 0; }
+    .nous-config-check input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+    .nous-config-pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; border: 1px solid var(--border); margin: 2px; cursor: pointer; transition: all 0.15s; }
+    .nous-config-pill.active { background: rgba(88,166,255,0.15); border-color: var(--accent); color: var(--accent); }
+    .nous-config-pill:not(.active) { background: var(--bg); color: var(--muted); }
+    .nous-config-pill:hover { border-color: var(--accent); }
+    .nous-config-output-modes { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px; }
+    .nous-config-output-mode { flex: 1; padding: 8px 10px; text-align: center; font-size: 0.76rem; cursor: pointer; border: none; background: var(--bg); color: var(--muted); transition: all 0.2s; }
+    .nous-config-output-mode:not(:last-child) { border-right: 1px solid var(--border); }
+    .nous-config-output-mode.active { background: #7c3aed; color: white; }
+    .nous-config-output-mode:hover:not(.active) { background: rgba(124,58,237,0.1); }
+    .nous-config-btn-bar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .nous-config-btn { padding: 8px 18px; border: none; border-radius: 6px; font-size: 0.82rem; cursor: pointer; font-weight: 600; }
+    .nous-config-btn-save { background: #7c3aed; color: white; }
+    .nous-config-btn-save:hover { background: #6d28d9; }
+    .nous-config-btn-cancel { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+    .nous-config-btn-cancel:hover { color: var(--fg); }
+    .nous-config-principle-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.78rem; }
+    .nous-config-principle-row:last-child { border-bottom: none; }
+    .nous-config-principle-row .conf { width: 40px; text-align: right; color: var(--muted); font-size: 0.72rem; flex-shrink: 0; }
+    .nous-config-principle-row .text { flex: 1; color: var(--fg); }
+    .nous-config-principle-row .del-btn { background: none; border: none; color: #dc2626; cursor: pointer; font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; }
+    .nous-config-principle-row .del-btn:hover { background: rgba(220,38,38,0.1); }
+    .nous-trust-ladder { display: flex; align-items: center; gap: 0; margin: 12px 0; }
+    .nous-trust-step { flex: 1; text-align: center; padding: 10px 8px; font-size: 0.72rem; border: 1px solid var(--border); position: relative; }
+    .nous-trust-step:first-child { border-radius: 8px 0 0 8px; }
+    .nous-trust-step:last-child { border-radius: 0 8px 8px 0; }
+    .nous-trust-step:not(:last-child) { border-right: none; }
+    .nous-trust-step.current { font-weight: 700; }
+    .nous-trust-step .step-label { font-weight: 600; display: block; margin-bottom: 2px; }
+    .nous-trust-step .step-desc { color: var(--muted); font-size: 0.65rem; }
+
     /* Right info sidebar */
     #hive-info-sidebar {
       position: fixed; right: 0; top: 0; width: 220px; height: 100vh;
@@ -1406,8 +1463,9 @@
   </div>
 
   <div id="nous-section" style="margin-top: 16px; margin-bottom: 24px;">
-    <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 8px;">🧪 Strategy Lab <span id="nous-mode-badge" style="font-size:0.75rem;padding:2px 8px;border-radius:9999px;margin-left:8px"></span></h2>
+    <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 8px;">🧪 Strategy Lab <span id="nous-mode-badge" style="font-size:0.75rem;padding:2px 8px;border-radius:9999px;margin-left:8px"></span> <button onclick="openNousConfig()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--muted);margin-left:6px;padding:2px" title="Strategy Lab Configuration">⚙️</button></h2>
     <div id="nous-panel"></div>
+    <div id="nous-config-overlay" class="nous-config-overlay" style="display:none"></div>
   </div>
 
   <div id="debug-section" style="margin-top: 16px; margin-bottom: 24px;">
@@ -1834,7 +1892,7 @@
       const isActive = _ocSelectedAgent === a.name ? ' active' : '';
       const agentDesc = AGENT_DESCRIPTIONS[a.name] || '';
       const label = a.displayName || a.name;
-      return `<a class="oc-nav-item${isActive}" data-agent-nav="${esc(a.name)}" draggable="true" data-action="ocSelectAgent" data-agent="${esc(a.name)}" title="${esc(agentDesc)}"><span class="oc-agent-dot ${dotCls}"></span> ${esc(label)}</a>`;
+      return `<a class="oc-nav-item${isActive}" data-agent-nav="${esc(a.name)}" draggable="true" data-action="ocSelectAgent" data-agent="${esc(a.name)}" title="${esc(agentDesc)}"><span class="oc-agent-dot ${dotCls}"></span> ${esc(label)}<span class="oc-nav-actions" onclick="event.stopPropagation();event.preventDefault()"><button data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Configure">⚙</button><button class="oc-nav-delete" data-action="deleteAgentFromConfig" data-agent="${esc(a.name)}" title="Delete">✕</button></span></a>`;
     }
 
     function _sidebarBuildGroups(agents) {
@@ -3660,6 +3718,328 @@ function burnAreaChart() {
       } catch (e) { showToast('Abort failed: ' + e.message, 'error'); }
     }
 
+    // ── Nous Config Dialog ──────────────────────────────────────────────────
+    let _nousConfig = null;
+
+    async function fetchNousConfig() {
+      try {
+        const r = await fetch('/api/nous/config');
+        _nousConfig = await r.json();
+      } catch (_) { _nousConfig = null; }
+      return _nousConfig;
+    }
+
+    async function openNousConfig() {
+      const overlay = document.getElementById('nous-config-overlay');
+      if (!overlay) return;
+      overlay.style.display = 'flex';
+      overlay.innerHTML = '<div class="nous-config-dialog"><div style="text-align:center;color:var(--muted);padding:40px">Loading configuration...</div></div>';
+
+      const cfg = await fetchNousConfig();
+      if (!cfg) {
+        overlay.innerHTML = '<div class="nous-config-dialog"><div style="color:#dc2626;padding:20px">Failed to load config</div><div class="nous-config-btn-bar"><button class="nous-config-btn nous-config-btn-cancel" onclick="closeNousConfig()">Close</button></div></div>';
+        return;
+      }
+      renderNousConfig(cfg);
+    }
+
+    function closeNousConfig() {
+      const overlay = document.getElementById('nous-config-overlay');
+      if (overlay) overlay.style.display = 'none';
+    }
+
+    function renderNousConfig(cfg) {
+      const overlay = document.getElementById('nous-config-overlay');
+      if (!overlay) return;
+
+      const camp = cfg.campaign || {};
+      const repoCamp = cfg.repoCampaign || {};
+      const govCamp = cfg.govCampaign || {};
+      const output = cfg.output || {};
+      const ff = camp.fast_fail || {};
+      const sched = camp.schedule || {};
+      const controllables = camp.controllables || [];
+      const invariants = camp.invariants || [];
+      const principles = cfg.principles || [];
+      const projectRepos = cfg.projectRepos || [];
+      const repoTargets = cfg.repoTargets || [];
+      const mode = camp.mode || 'observe';
+
+      const confThresh = configEnvVal(cfg, 'NOUS_CONFIDENCE_THRESHOLD', '0.8');
+      const decayRate = configEnvVal(cfg, 'NOUS_DECAY_RATE_PER_WEEK', '0.05');
+
+      let h = '';
+      h += '<div class="nous-config-dialog">';
+      h += '<h2>⚙️ Strategy Lab Configuration</h2>';
+
+      // Trust Ladder
+      h += '<div class="nous-config-section">';
+      h += '<h3>Trust Ladder</h3>';
+      h += '<div class="nous-trust-ladder">';
+      const trustSteps = [
+        { id: 'observe', label: 'Observe', desc: 'Data collection only', color: '#2563eb' },
+        { id: 'suggest', label: 'Suggest', desc: 'Experiments need approval', color: '#d97706' },
+        { id: 'evolve', label: 'Evolve', desc: 'Fully autonomous', color: '#16a34a' },
+      ];
+      for (const step of trustSteps) {
+        const isCurrent = step.id === mode;
+        const bg = isCurrent ? step.color : 'var(--bg)';
+        const fg = isCurrent ? 'white' : 'var(--muted)';
+        h += `<div class="nous-trust-step${isCurrent ? ' current' : ''}" style="background:${bg};color:${fg}">`;
+        h += `<span class="step-label">${escapeHtml(step.label)}</span>`;
+        h += `<span class="step-desc" style="color:${isCurrent ? 'rgba(255,255,255,0.8)' : ''}">${escapeHtml(step.desc)}</span>`;
+        h += '</div>';
+      }
+      h += '</div>';
+      h += '<div style="font-size:0.7rem;color:var(--muted);margin-top:6px">The issue/PR output trail builds evidence for operators to advance the trust level.</div>';
+      h += '</div>';
+
+      // Goal Definition
+      h += '<div class="nous-config-section">';
+      h += '<h3>🎯 Goal Definition</h3>';
+      h += '<label>Governor Research Question</label>';
+      h += `<textarea id="nc-gov-goal" rows="2">${escapeHtml(camp.research_question || '')}</textarea>`;
+      h += '<label style="margin-top:10px">Repo Research Question</label>';
+      h += `<textarea id="nc-repo-goal" rows="2">${escapeHtml(repoCamp.research_question || '')}</textarea>`;
+      h += '</div>';
+
+      // Output Mode
+      h += '<div class="nous-config-section">';
+      h += '<h3>📤 Output Mode</h3>';
+      h += '<div class="nous-config-output-modes">';
+      const outModes = [
+        { id: 'state-only', label: 'State Only', desc: 'Write to files, read in dashboard' },
+        { id: 'issue', label: 'Issue', desc: 'Open GitHub issue with proposal' },
+        { id: 'issue+pr', label: 'Issue + PR', desc: 'Open issue and PR pair' },
+      ];
+      for (const om of outModes) {
+        const active = (output.mode || 'state-only') === om.id ? ' active' : '';
+        h += `<button class="nous-config-output-mode${active}" data-output-mode="${om.id}" onclick="selectNousOutputMode(this)" title="${escapeHtml(om.desc)}">${escapeHtml(om.label)}</button>`;
+      }
+      h += '</div>';
+      h += '<div style="margin-top:8px">';
+      h += `<label class="nous-config-check"><input type="checkbox" id="nc-auto-hold" ${output.autoHold ? 'checked' : ''}> Auto-apply <code>hold</code> label to Nous issues/PRs</label>`;
+      h += `<label class="nous-config-check"><input type="checkbox" id="nc-auto-dnm" ${output.autoDoNotMerge ? 'checked' : ''}> Auto-apply <code>do-not-merge</code> label to Nous PRs</label>`;
+      h += '</div>';
+      h += '</div>';
+
+      // Repo Targets
+      h += '<div class="nous-config-section">';
+      h += '<h3>📂 Repo Targets <span style="font-weight:400;color:var(--muted);font-size:0.72rem">(for repo-scope experiments)</span></h3>';
+      h += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+      for (const repo of projectRepos) {
+        const active = repoTargets.includes(repo) ? ' active' : '';
+        const shortName = repo.includes('/') ? repo.split('/')[1] : repo;
+        h += `<div class="nous-config-pill${active}" data-repo="${escapeHtml(repo)}" onclick="toggleNousRepo(this)">`;
+        h += `<span>${escapeHtml(shortName)}</span>`;
+        h += '</div>';
+      }
+      h += '</div>';
+      h += '<div style="font-size:0.68rem;color:var(--muted);margin-top:6px">Select which repos Nous can target for code experiments. Click to toggle.</div>';
+      h += '</div>';
+
+      // Campaign Parameters
+      h += '<div class="nous-config-section">';
+      h += '<h3>⚡ Fast-Fail Bounds</h3>';
+      h += '<div class="nous-config-row">';
+      h += `<div><label>Queue Depth Max</label><input type="number" id="nc-ff-queue" value="${ff.queue_depth_max || 30}" min="5" max="100"></div>`;
+      h += `<div><label>MTTR Max (min)</label><input type="number" id="nc-ff-mttr" value="${ff.mttr_max_minutes || 180}" min="30" max="1440"></div>`;
+      h += `<div><label>Burn Rate Max %</label><input type="number" id="nc-ff-burn" value="${ff.budget_burn_rate_max_pct || 110}" min="80" max="200"></div>`;
+      h += '</div>';
+      h += '</div>';
+
+      h += '<div class="nous-config-section">';
+      h += '<h3>⏱️ Experiment Timing</h3>';
+      h += '<div class="nous-config-row">';
+      h += `<div><label>Duration (hours)</label><input type="number" id="nc-sched-dur" value="${sched.experiment_duration_hours || 4}" min="1" max="48" step="0.5"></div>`;
+      h += `<div><label>Baseline (hours)</label><input type="number" id="nc-sched-base" value="${sched.baseline_hours || 4}" min="1" max="48" step="0.5"></div>`;
+      h += `<div><label>Cooldown (hours)</label><input type="number" id="nc-sched-cool" value="${sched.cooldown_hours || 2}" min="0.5" max="24" step="0.5"></div>`;
+      h += '</div>';
+      h += '</div>';
+
+      // Controllable Knobs
+      h += '<div class="nous-config-section">';
+      h += '<h3>🎛️ Controllable Knobs</h3>';
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">';
+      for (const knob of controllables) {
+        const enabled = knob.enabled !== false;
+        const rangeInfo = knob.type === 'int' ? ` (${knob.min}–${knob.max})` : knob.type === 'enum' ? ` (${(knob.values || []).length} options)` : '';
+        h += `<label class="nous-config-check"><input type="checkbox" data-knob="${escapeHtml(knob.name)}" ${enabled ? 'checked' : ''}> <code>${escapeHtml(knob.name)}</code><span style="color:var(--muted);font-size:0.7rem">${escapeHtml(rangeInfo)}</span></label>`;
+      }
+      h += '</div>';
+      h += '</div>';
+
+      // Invariants (display only)
+      h += '<div class="nous-config-section">';
+      h += '<h3>🔒 Invariants <span style="font-weight:400;color:var(--muted);font-size:0.72rem">(never touched by experiments)</span></h3>';
+      h += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+      for (const inv of invariants) {
+        h += `<span style="display:inline-block;padding:4px 10px;border-radius:6px;font-size:0.75rem;background:rgba(220,38,38,0.1);color:#f87171;border:1px solid rgba(220,38,38,0.2)">${escapeHtml(inv)}</span>`;
+      }
+      h += '</div>';
+      h += '</div>';
+
+      // Principle Store
+      h += '<div class="nous-config-section">';
+      h += '<h3>🧠 Principle Store</h3>';
+      h += '<div class="nous-config-row-2">';
+      h += `<div><label>Recommendation Threshold</label><input type="number" id="nc-prin-thresh" value="${confThresh}" min="0.1" max="1.0" step="0.05"></div>`;
+      h += `<div><label>Decay Rate / Week</label><input type="number" id="nc-prin-decay" value="${decayRate}" min="0.01" max="0.5" step="0.01"></div>`;
+      h += '</div>';
+      if (principles.length > 0) {
+        h += '<div style="margin-top:10px;max-height:200px;overflow-y:auto">';
+        const sorted = [...principles].sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+        for (const p of sorted) {
+          const conf = Math.round((p.confidence || 0) * 100);
+          h += '<div class="nous-config-principle-row">';
+          h += `<span class="conf">${conf}%</span>`;
+          h += `<span class="text">${escapeHtml(p.text || p.id)}</span>`;
+          h += `<button class="del-btn" onclick="deleteNousPrinciple('${escapeHtml(p.id)}')" title="Invalidate this principle">✕</button>`;
+          h += '</div>';
+        }
+        h += '</div>';
+      } else {
+        h += '<div style="font-size:0.75rem;color:var(--muted);margin-top:8px">No principles accumulated yet.</div>';
+      }
+      h += '</div>';
+
+      // Save / Cancel
+      h += '<div class="nous-config-btn-bar">';
+      h += '<button class="nous-config-btn nous-config-btn-cancel" onclick="closeNousConfig()">Cancel</button>';
+      h += '<button class="nous-config-btn nous-config-btn-save" onclick="saveNousConfig()">Save Configuration</button>';
+      h += '</div>';
+
+      h += '</div>';
+      overlay.innerHTML = h;
+    }
+
+    function configEnvVal(cfg, key, fallback) {
+      if (cfg && cfg.campaign && cfg.campaign[key]) return cfg.campaign[key];
+      return fallback;
+    }
+
+    function selectNousOutputMode(btn) {
+      const parent = btn.parentElement;
+      parent.querySelectorAll('.nous-config-output-mode').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function toggleNousRepo(pill) {
+      pill.classList.toggle('active');
+    }
+
+    async function deleteNousPrinciple(id) {
+      if (!confirm('Invalidate this principle? It will be removed from the store.')) return;
+      try {
+        const r = await fetch('/api/nous/principles/' + encodeURIComponent(id), { method: 'DELETE' });
+        const j = await r.json();
+        if (j.ok) {
+          showToast('Principle invalidated', 'success');
+          openNousConfig();
+          fetchNousStatus();
+        } else {
+          showToast(j.error || 'Failed', 'error');
+        }
+      } catch (e) { showToast('Failed: ' + e.message, 'error'); }
+    }
+
+    async function saveNousConfig() {
+      const errors = [];
+
+      // Goals
+      const govGoal = document.getElementById('nc-gov-goal')?.value;
+      const repoGoal = document.getElementById('nc-repo-goal')?.value;
+      try {
+        const r = await fetch('/api/nous/config/goals', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ governorGoal: govGoal, repoGoal: repoGoal }),
+        });
+        if (!r.ok) errors.push('goals: ' + (await r.json()).error);
+      } catch (e) { errors.push('goals: ' + e.message); }
+
+      // Output mode
+      const activeOutput = document.querySelector('.nous-config-output-mode.active');
+      const outputMode = activeOutput ? activeOutput.dataset.outputMode : 'state-only';
+      const autoHold = document.getElementById('nc-auto-hold')?.checked || false;
+      const autoDnm = document.getElementById('nc-auto-dnm')?.checked || false;
+      try {
+        const r = await fetch('/api/nous/config/output', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: outputMode, autoHold, autoDoNotMerge: autoDnm }),
+        });
+        if (!r.ok) errors.push('output: ' + (await r.json()).error);
+      } catch (e) { errors.push('output: ' + e.message); }
+
+      // Repo targets
+      const activeRepoPills = document.querySelectorAll('.nous-config-pill.active');
+      const repos = Array.from(activeRepoPills).map(p => p.dataset.repo);
+      try {
+        const r = await fetch('/api/nous/config/repos', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repos }),
+        });
+        if (!r.ok) errors.push('repos: ' + (await r.json()).error);
+      } catch (e) { errors.push('repos: ' + e.message); }
+
+      // Fast-fail
+      const ffQueue = document.getElementById('nc-ff-queue')?.value;
+      const ffMttr = document.getElementById('nc-ff-mttr')?.value;
+      const ffBurn = document.getElementById('nc-ff-burn')?.value;
+      try {
+        const r = await fetch('/api/nous/config/fast-fail', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ queueDepthMax: Number(ffQueue), mttrMaxMinutes: Number(ffMttr), budgetBurnRateMaxPct: Number(ffBurn) }),
+        });
+        if (!r.ok) errors.push('fast-fail: ' + (await r.json()).error);
+      } catch (e) { errors.push('fast-fail: ' + e.message); }
+
+      // Schedule
+      const schedDur = document.getElementById('nc-sched-dur')?.value;
+      const schedBase = document.getElementById('nc-sched-base')?.value;
+      const schedCool = document.getElementById('nc-sched-cool')?.value;
+      try {
+        const r = await fetch('/api/nous/config/schedule', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ experimentDurationHours: Number(schedDur), baselineHours: Number(schedBase), cooldownHours: Number(schedCool) }),
+        });
+        if (!r.ok) errors.push('schedule: ' + (await r.json()).error);
+      } catch (e) { errors.push('schedule: ' + e.message); }
+
+      // Controllables
+      const enabledKnobs = Array.from(document.querySelectorAll('[data-knob]:checked')).map(cb => cb.dataset.knob);
+      try {
+        const r = await fetch('/api/nous/config/controllables', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: enabledKnobs }),
+        });
+        if (!r.ok) errors.push('controllables: ' + (await r.json()).error);
+      } catch (e) { errors.push('controllables: ' + e.message); }
+
+      // Principle settings
+      const prinThresh = document.getElementById('nc-prin-thresh')?.value;
+      const prinDecay = document.getElementById('nc-prin-decay')?.value;
+      try {
+        const r = await fetch('/api/nous/config/principles', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confidenceThreshold: Number(prinThresh), decayRatePerWeek: Number(prinDecay) }),
+        });
+        if (!r.ok) errors.push('principles: ' + (await r.json()).error);
+      } catch (e) { errors.push('principles: ' + e.message); }
+
+      if (errors.length > 0) {
+        showToast('Some settings failed: ' + errors.join('; '), 'error');
+      } else {
+        showToast('Configuration saved', 'success');
+        closeNousConfig();
+        fetchNousStatus();
+      }
+    }
+
+    // Close config on overlay click (but not dialog click)
+    document.getElementById('nous-config-overlay')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeNousConfig();
+    });
+
     fetchNousStatus();
     setInterval(fetchNousStatus, NOUS_POLL_MS);
 
@@ -4501,10 +4881,28 @@ function burnAreaChart() {
     }
 
     function renderAgentPrompts(prompt) {
+      const agentName = _configState.agent;
+      const templateId = 'prompt-template-content';
+      const lastRunId = 'prompt-lastrun-content';
+      if (agentName) {
+        fetch(`/api/config/agent/${agentName}/prompt`)
+          .then(r => r.json())
+          .then(data => {
+            const el = document.getElementById(templateId);
+            if (el) el.textContent = data.prompt || '(no template found in kick-agents.sh)';
+          })
+          .catch(() => {});
+      }
       return `
-        <div style="display:flex;flex-direction:column;height:100%">
-        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:8px;flex-shrink:0">Current kick prompt template (read-only). Edit in kick-agents.sh or hive-project.yaml.</p>
-        <pre class="config-pre config-pre-fill">${esc(prompt || 'No prompt data available')}</pre>
+        <div style="display:flex;flex-direction:column;height:100%;gap:12px">
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+          <p style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;flex-shrink:0;font-weight:600">📋 Prompt Template <span style="font-weight:400">(from kick-agents.sh — edit there to change)</span></p>
+          <pre class="config-pre" id="${templateId}" style="flex:1;overflow:auto;min-height:80px;max-height:40%">${esc('Loading template…')}</pre>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+          <p style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;flex-shrink:0;font-weight:600">🕐 Last Prompt Sent <span style="font-weight:400">(expanded prompt from most recent kick)</span></p>
+          <pre class="config-pre config-pre-fill" id="${lastRunId}" style="flex:1;overflow:auto;min-height:80px">${esc(prompt || '(awaiting first kick)')}</pre>
+        </div>
         </div>`;
     }
 

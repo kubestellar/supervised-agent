@@ -50,6 +50,21 @@ NEVER claim a task is complete without FRESH evidence in THIS message:
 | "The code is fine as-is" | Check for: magic numbers, raw hex colors, missing array guards, unused imports, oversized files. |
 | "I'll plan it next pass" | If you identified a problem, at minimum open a tracking issue NOW. |
 
+## Pattern Conflicts — Surface, Never Blend
+
+When planning refactors or reviewing PRs, watch for competing patterns in the codebase. If two approaches exist for the same concern:
+
+1. **Pick one** — prefer the one with more recent adoption or better test coverage.
+2. **State the choice** in your plan: "Codebase has pattern A (N files) and pattern B (M files). Consolidating on A because [reason]."
+3. **Scope the cleanup** — include migration of the losing pattern as an explicit phase in the plan, not a vague "future cleanup."
+4. **Flag blends in PR review** — if a fix agent's diff mixes two patterns in the same file, reject it. This is a structural regression even if the code works.
+
+## Completion Integrity — Plans Must Be Complete
+
+When producing a plan:
+- If any part of the plan has a TODO, unknown, or "TBD," the plan is INCOMPLETE. State what's missing and what you need to resolve it.
+- Never produce a plan that silently omits part of the issue scope. If you can't address a bullet point, say so explicitly and why.
+
 ## Repo Scope — HARD BOUNDARY
 
 ⛔ **NEVER file issues, open PRs, or make changes on repos outside your allowed list.** Your allowed repos are ONLY the ones listed under `repos:` in `hive-project.yaml`:

@@ -275,6 +275,22 @@ NEVER claim a task is complete without FRESH evidence in THIS message:
 "It should work" is NOT evidence. "I believe it merged" is NOT evidence.
 Run the verification command and paste the output.
 
+## Completion Integrity — Fail Loud
+
+"Fixed" means EVERYTHING in the issue is addressed. Partial work reported as complete is worse than no work — it closes the feedback loop and the gap rots.
+
+| Status word | When you can use it |
+|-------------|---------------------|
+| **Fixed** / **Completed** / **Resolved** | Every point in the issue body is addressed by the diff. No items deferred, skipped, or "left for follow-up." |
+| **Partial** | Some points addressed, others remain. You MUST: (1) keep the issue OPEN, (2) list what remains in a comment, (3) dispatch a follow-up agent or file a new issue for the remainder. |
+| **Blocked** | Cannot proceed without external input. State what's blocking and who can unblock. |
+
+**Rules:**
+- If your fix agent's PR addresses 3 of 4 bullets in an issue, the status is PARTIAL, not fixed. Do NOT close the issue.
+- If a test suite "passes" but some tests were skipped, that is NOT "tests pass." Report: "N tests passed, M skipped: [list]."
+- If a migration ran but logged constraint violations, that is NOT "migration complete." Report: "Migration ran with N constraint violations on [tables]. Rows affected: [count]."
+- PR descriptions must not say "Fixes #N" unless the fix is complete. Use "Partially addresses #N" for partial work — this prevents GitHub from auto-closing the issue.
+
 ## Rationalization Defense — Known Excuses
 
 | Excuse | Rebuttal |
@@ -291,6 +307,23 @@ Run the verification command and paste the output.
 | "Deferred to next pass" | If a deferred bead appears in your work list, retry it. If it doesn't appear, the pipeline excluded it for a reason (hold, ADOPTERS, etc.) — leave it alone. |
 | "Nightly failure is flaky, not a bug" | Flaky tests are bugs. Dispatch a fix agent to stabilize the test. |
 | "PR partially addresses it" | Partially is not fully. If the issue is still open, dispatch a fix agent for the remaining gap. |
+| "I combined both approaches" | Pick one. Blending two patterns creates a third pattern nobody recognizes. Choose the more recent or better-tested one, state which and why in the PR, flag the other for cleanup. |
+
+## Pattern Conflicts — Surface, Never Blend
+
+When fixing code that involves a pattern the codebase implements in two different ways (error handling, data fetching, state management, logging, component structure), do NOT blend them into a hybrid. Pick ONE:
+
+1. **Check recency**: `git log --oneline -5 -- <file>` on files using each pattern. More recent = preferred.
+2. **Check test coverage**: pattern with passing tests > pattern with none.
+3. **Pick one, state why** in the PR description: "Codebase has two error-handling patterns (try/catch in hooks vs .catch() chains). Using try/catch — it's the pattern in the 4 most recent files."
+4. **Flag the loser** for cleanup: add a one-line note in the PR description: "Cleanup: 3 files still use .catch() chains — consolidate in a future pass."
+
+**NEVER** produce code that mixes two conventions in the same file or function. If your fix agent's diff shows a blend (e.g., `useEffect` + `componentDidMount`, `async/await` + `.then()` chains in the same flow, two different toast/notification patterns), reject the PR and redispatch with explicit pattern instructions.
+
+This also applies to dispatch prompts — when writing a fix-agent prompt, if you know the codebase has competing patterns for the area being fixed, specify which pattern to follow:
+```
+Use the try/catch pattern (see src/hooks/useClusterData.ts), NOT .catch() chains.
+```
 
 ## Model Tiering for Sub-agents — Pre-Computed by Pipeline
 

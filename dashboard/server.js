@@ -1760,7 +1760,7 @@ app.get('/api/config/agent/:name/prompt', (req, res) => {
           end++;
         }
         const raw = kickScript.slice(afterEq + 1, end);
-        prompt = raw.replace(/\$\{[^}]+\}/g, '(…)').slice(0, 4000);
+        prompt = raw.replace(/\$\{([^}]+)\}/g, '⟨$1⟩').slice(0, 8000);
       }
     }
     res.json({ prompt });
@@ -2604,6 +2604,211 @@ app.get('/api/nous/gate-response', (req, res) => {
     clearTimeout(timeout);
     res.json({ decision });
   };
+});
+
+// ---------------------------------------------------------------------------
+// Nous Strategy Lab — Configuration endpoints
+// ---------------------------------------------------------------------------
+const NOUS_REPO_CAMPAIGN_PATH = process.env.NOUS_REPO_CAMPAIGN_PATH || '/etc/hive/nous-repo-campaign.yaml';
+const NOUS_GOV_CAMPAIGN_PATH = process.env.NOUS_GOV_CAMPAIGN_PATH || '/etc/hive/nous-governor-campaign.yaml';
+
+// GET /api/nous/config — full configuration for Strategy Lab config page
+app.get('/api/nous/config', (_req, res) => {
+  const campaign = readNousCampaign();
+  const repoCampaign = _loadYaml(NOUS_REPO_CAMPAIGN_PATH);
+  const govCampaign = _loadYaml(NOUS_GOV_CAMPAIGN_PATH);
+  const principles = readJsonFile(NOUS_PRINCIPLES_PATH) || [];
+  const projectRepos = (projectConfig.project || {}).repos || [];
+
+  // Read repo target list from config.env or default to primary repo only
+  const repoTargetsRaw = configEnv.NOUS_REPO_TARGETS || '';
+  const repoTargets = repoTargetsRaw
+    ? repoTargetsRaw.split(/\s+/).filter(Boolean)
+    : [((projectConfig.project || {}).primary_repo || '')];
+
+  res.json({
+    campaign: campaign.campaign || {},
+    repoCampaign,
+    govCampaign,
+    projectRepos,
+    repoTargets,
+    principles: principles.map(p => ({
+      id: p.id,
+      text: p.text,
+      confidence: p.confidence,
+      source_experiment: p.source_experiment,
+      validated_at: p.validated_at,
+      created_at: p.created_at,
+    })),
+    output: {
+      mode: configEnv.NOUS_OUTPUT_MODE || 'state-only',
+      autoHold: configEnv.NOUS_AUTO_HOLD === 'true',
+      autoDoNotMerge: configEnv.NOUS_AUTO_DO_NOT_MERGE === 'true',
+    },
+  });
+});
+
+// PUT /api/nous/config/goals — update research questions
+app.put('/api/nous/config/goals', (req, res) => {
+  const { governorGoal, repoGoal } = req.body;
+  if (!yaml) return res.status(500).json({ error: 'js-yaml not available' });
+
+  try {
+    if (governorGoal != null) {
+      const campaign = readNousCampaign();
+      if (!campaign.campaign) campaign.campaign = {};
+      campaign.campaign.research_question = governorGoal;
+      fs.writeFileSync(NOUS_CAMPAIGN_PATH, yaml.dump(campaign, { lineWidth: 120 }));
+    }
+    if (repoGoal != null) {
+      const repoCampaign = _loadYaml(NOUS_REPO_CAMPAIGN_PATH);
+      repoCampaign.research_question = repoGoal;
+      fs.writeFileSync(NOUS_REPO_CAMPAIGN_PATH, yaml.dump(repoCampaign, { lineWidth: 120 }));
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/nous/config/repos — update repo target list
+app.put('/api/nous/config/repos', (req, res) => {
+  const { repos } = req.body;
+  if (!Array.isArray(repos)) return res.status(400).json({ error: 'repos must be an array' });
+
+  const projectRepos = (projectConfig.project || {}).repos || [];
+  const invalid = repos.filter(r => !projectRepos.includes(r));
+  if (invalid.length > 0) {
+    return res.status(400).json({ error: `Repos not in project: ${invalid.join(', ')}` });
+  }
+
+  try {
+    writeEnvVar(CONFIG_ENV_PATH, 'NOUS_REPO_TARGETS', repos.join(' '));
+    configEnv.NOUS_REPO_TARGETS = repos.join(' ');
+    res.json({ ok: true, repos });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/nous/config/output — update output mode and label settings
+const VALID_OUTPUT_MODES = ['state-only', 'issue', 'issue+pr'];
+app.put('/api/nous/config/output', (req, res) => {
+  const { mode, autoHold, autoDoNotMerge } = req.body;
+  if (mode && !VALID_OUTPUT_MODES.includes(mode)) {
+    return res.status(400).json({ error: `Invalid output mode: ${mode}` });
+  }
+
+  try {
+    if (mode != null) {
+      writeEnvVar(CONFIG_ENV_PATH, 'NOUS_OUTPUT_MODE', mode);
+      configEnv.NOUS_OUTPUT_MODE = mode;
+    }
+    if (autoHold != null) {
+      writeEnvVar(CONFIG_ENV_PATH, 'NOUS_AUTO_HOLD', String(autoHold));
+      configEnv.NOUS_AUTO_HOLD = String(autoHold);
+    }
+    if (autoDoNotMerge != null) {
+      writeEnvVar(CONFIG_ENV_PATH, 'NOUS_AUTO_DO_NOT_MERGE', String(autoDoNotMerge));
+      configEnv.NOUS_AUTO_DO_NOT_MERGE = String(autoDoNotMerge);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/nous/config/fast-fail — update fast-fail bounds
+app.put('/api/nous/config/fast-fail', (req, res) => {
+  const { queueDepthMax, mttrMaxMinutes, budgetBurnRateMaxPct } = req.body;
+  if (!yaml) return res.status(500).json({ error: 'js-yaml not available' });
+
+  try {
+    const campaign = readNousCampaign();
+    if (!campaign.campaign) campaign.campaign = {};
+    if (!campaign.campaign.fast_fail) campaign.campaign.fast_fail = {};
+    if (queueDepthMax != null) campaign.campaign.fast_fail.queue_depth_max = Number(queueDepthMax);
+    if (mttrMaxMinutes != null) campaign.campaign.fast_fail.mttr_max_minutes = Number(mttrMaxMinutes);
+    if (budgetBurnRateMaxPct != null) campaign.campaign.fast_fail.budget_burn_rate_max_pct = Number(budgetBurnRateMaxPct);
+    fs.writeFileSync(NOUS_CAMPAIGN_PATH, yaml.dump(campaign, { lineWidth: 120 }));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/nous/config/schedule — update experiment timing
+app.put('/api/nous/config/schedule', (req, res) => {
+  const { experimentDurationHours, baselineHours, cooldownHours } = req.body;
+  if (!yaml) return res.status(500).json({ error: 'js-yaml not available' });
+
+  try {
+    const campaign = readNousCampaign();
+    if (!campaign.campaign) campaign.campaign = {};
+    if (!campaign.campaign.schedule) campaign.campaign.schedule = {};
+    if (experimentDurationHours != null) campaign.campaign.schedule.experiment_duration_hours = Number(experimentDurationHours);
+    if (baselineHours != null) campaign.campaign.schedule.baseline_hours = Number(baselineHours);
+    if (cooldownHours != null) campaign.campaign.schedule.cooldown_hours = Number(cooldownHours);
+    fs.writeFileSync(NOUS_CAMPAIGN_PATH, yaml.dump(campaign, { lineWidth: 120 }));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/nous/config/controllables — enable/disable individual controllable knobs
+app.put('/api/nous/config/controllables', (req, res) => {
+  const { enabled } = req.body; // array of knob names that should be active
+  if (!Array.isArray(enabled)) return res.status(400).json({ error: 'enabled must be an array of knob names' });
+  if (!yaml) return res.status(500).json({ error: 'js-yaml not available' });
+
+  try {
+    const campaign = readNousCampaign();
+    if (!campaign.campaign) campaign.campaign = {};
+    const allKnobs = campaign.campaign.controllables || [];
+    for (const knob of allKnobs) {
+      knob.enabled = enabled.includes(knob.name);
+    }
+    campaign.campaign.controllables = allKnobs;
+    fs.writeFileSync(NOUS_CAMPAIGN_PATH, yaml.dump(campaign, { lineWidth: 120 }));
+    res.json({ ok: true, controllables: allKnobs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/nous/principles/:id — invalidate a specific principle
+app.delete('/api/nous/principles/:id', (req, res) => {
+  const { id } = req.params;
+  try {
+    const principles = readJsonFile(NOUS_PRINCIPLES_PATH) || [];
+    const filtered = principles.filter(p => p.id !== id);
+    if (filtered.length === principles.length) {
+      return res.status(404).json({ error: `Principle not found: ${id}` });
+    }
+    fs.writeFileSync(NOUS_PRINCIPLES_PATH, JSON.stringify(filtered, null, 2));
+    res.json({ ok: true, remaining: filtered.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/nous/config/principles — update principle store settings
+app.put('/api/nous/config/principles', (req, res) => {
+  const { confidenceThreshold, decayRatePerWeek } = req.body;
+  try {
+    if (confidenceThreshold != null) {
+      writeEnvVar(CONFIG_ENV_PATH, 'NOUS_CONFIDENCE_THRESHOLD', String(confidenceThreshold));
+      configEnv.NOUS_CONFIDENCE_THRESHOLD = String(confidenceThreshold);
+    }
+    if (decayRatePerWeek != null) {
+      writeEnvVar(CONFIG_ENV_PATH, 'NOUS_DECAY_RATE_PER_WEEK', String(decayRatePerWeek));
+      configEnv.NOUS_DECAY_RATE_PER_WEEK = String(decayRatePerWeek);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Graceful shutdown — clear all intervals to prevent memory leaks on restart

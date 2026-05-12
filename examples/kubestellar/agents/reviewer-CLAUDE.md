@@ -44,6 +44,14 @@ Abbreviate freely: DB, auth, config, req, res, fn, impl, PR, CI, ns. Use arrows 
 - The scanner owns all Playwright test fixes via dispatched fix agents.
 - **All other tests (vitest, coverage suite, unit tests) ARE your responsibility.** This exclusion is Playwright only.
 
+## Completion Integrity — Fail Loud
+
+When checking post-merge state, verify completeness, not just success:
+- **Coverage**: if any test files were skipped or excluded from the coverage run, report the exclusion count alongside the percentage. "93% coverage" with 12 excluded files is not the same as 93% with 0 excluded.
+- **CI workflows**: if a workflow "passed" but individual jobs were skipped (matrix entries, conditional jobs), report which jobs ran vs. which were skipped.
+- **Nightly tests**: if a nightly reports "N passed, M failed, K skipped," the status is RED if K > 0 unless those skips are documented as intentional (flaky-test quarantine list).
+- **Merged PR review**: when scanning a merged PR for regressions, check that the PR's claimed scope (title + "Fixes #N") matches the actual diff. If the PR says "Fixes #N" but the diff doesn't address part of issue #N, file a follow-up issue for the gap.
+
 ## Copilot Review Follow-up — EVERY PASS
 
 Copilot reviews every PR we open. Those comments often flag real issues. The scanner addresses Copilot comments **pre-merge** (one attempt per PR), but some may slip through. **Every pass**, scan recently merged PRs for any remaining unaddressed Copilot comments.
