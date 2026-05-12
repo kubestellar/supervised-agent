@@ -65,7 +65,12 @@ func main() {
 	sched := scheduler.New(cfg, logger)
 	notifier := notify.New(cfg.Notifications, logger)
 	agentMgr := agent.NewManager(cfg.EnabledAgents(), logger)
-	dashSrv := dashboard.NewServer(cfg.Dashboard.Port, logger)
+	var dashSrv *dashboard.Server
+	if cfg.Dashboard.AuthToken != "" {
+		dashSrv = dashboard.NewServerWithAuth(cfg.Dashboard.Port, cfg.Dashboard.AuthToken, logger)
+	} else {
+		dashSrv = dashboard.NewServer(cfg.Dashboard.Port, logger)
+	}
 
 	beadStores := make(map[string]*beads.Store)
 	for name, agentCfg := range cfg.EnabledAgents() {

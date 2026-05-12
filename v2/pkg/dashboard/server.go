@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,6 +20,7 @@ var staticFS embed.FS
 
 type Server struct {
 	port       int
+	authToken  string
 	statusMu   sync.RWMutex
 	status     *StatusPayload
 	sseClients map[chan []byte]struct{}
@@ -60,6 +62,15 @@ func NewServer(port int, logger *slog.Logger) *Server {
 	}
 }
 
+func NewServerWithAuth(port int, authToken string, logger *slog.Logger) *Server {
+	return &Server{
+		port:       port,
+		authToken:  authToken,
+		sseClients: make(map[chan []byte]struct{}),
+		logger:     logger,
+	}
+}
+
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
@@ -73,9 +84,44 @@ func (s *Server) Start() error {
 	}
 	mux.Handle("GET /", http.FileServer(http.FS(staticContent)))
 
+	handler := s.securityHeaders(mux)
+
 	addr := fmt.Sprintf(":%d", s.port)
 	s.logger.Info("dashboard starting", "addr", addr)
-	return http.ListenAndServe(addr, mux)
+	return http.ListenAndServe(addr, handler)
+}
+
+func (s *Server) securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+
+		if s.authToken != "" && strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/api/health" {
+			token := r.Header.Get("Authorization")
+			if token == "" {
+				token = r.URL.Query().Get("token")
+			}
+			expected := "Bearer " + s.authToken
+			if token != expected && token != s.authToken {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/health", s.handleHealth)
+	mux.HandleFunc("GET /api/status", s.handleStatus)
+	mux.HandleFunc("GET /api/events", s.handleSSE)
+	return s.securityHeaders(mux)
 }
 
 func (s *Server) UpdateStatus(status *StatusPayload) {

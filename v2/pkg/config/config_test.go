@@ -511,3 +511,181 @@ agents:
 		t.Errorf("Project.Org = %q, want %q", cfg.Project.Org, "env-org")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// config.env overrides
+// ---------------------------------------------------------------------------
+
+func writeConfigEnv(t *testing.T, dir, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, "config.env")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("writing config.env: %v", err)
+	}
+	return path
+}
+
+func TestParseEnvFile_Basic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.env")
+	content := `# Comment line
+PROJECT_ORG=override-org
+PROJECT_REPOS=repo-x repo-y repo-z
+DASHBOARD_PORT=4000
+`
+	os.WriteFile(path, []byte(content), 0o600)
+
+	env, err := ParseEnvFile(path)
+	if err != nil {
+		t.Fatalf("ParseEnvFile() error = %v", err)
+	}
+	if env["PROJECT_ORG"] != "override-org" {
+		t.Errorf("PROJECT_ORG = %q, want %q", env["PROJECT_ORG"], "override-org")
+	}
+	if env["PROJECT_REPOS"] != "repo-x repo-y repo-z" {
+		t.Errorf("PROJECT_REPOS = %q", env["PROJECT_REPOS"])
+	}
+	if env["DASHBOARD_PORT"] != "4000" {
+		t.Errorf("DASHBOARD_PORT = %q, want %q", env["DASHBOARD_PORT"], "4000")
+	}
+}
+
+func TestParseEnvFile_QuotedValues(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.env")
+	content := `KEY1="double quoted"
+KEY2='single quoted'
+`
+	os.WriteFile(path, []byte(content), 0o600)
+
+	env, err := ParseEnvFile(path)
+	if err != nil {
+		t.Fatalf("ParseEnvFile() error = %v", err)
+	}
+	if env["KEY1"] != "double quoted" {
+		t.Errorf("KEY1 = %q, want %q", env["KEY1"], "double quoted")
+	}
+	if env["KEY2"] != "single quoted" {
+		t.Errorf("KEY2 = %q, want %q", env["KEY2"], "single quoted")
+	}
+}
+
+func TestParseEnvFile_MissingFile(t *testing.T) {
+	_, err := ParseEnvFile("/nonexistent/config.env")
+	if err == nil {
+		t.Fatal("ParseEnvFile() expected error for missing file, got nil")
+	}
+}
+
+func TestLoadWithOverrides_ConfigEnvOverridesOrg(t *testing.T) {
+	dir := t.TempDir()
+	yamlPath := filepath.Join(dir, "hive.yaml")
+	os.WriteFile(yamlPath, []byte(minimalValidYAML("yaml-org", "ghp_tok")), 0o600)
+
+	envPath := filepath.Join(dir, "config.env")
+	os.WriteFile(envPath, []byte("PROJECT_ORG=env-org\n"), 0o600)
+
+	cfg, err := LoadWithOverrides(yamlPath, envPath)
+	if err != nil {
+		t.Fatalf("LoadWithOverrides() error = %v", err)
+	}
+	if cfg.Project.Org != "env-org" {
+		t.Errorf("Project.Org = %q, want %q (config.env should override yaml)", cfg.Project.Org, "env-org")
+	}
+}
+
+func TestLoadWithOverrides_ConfigEnvOverridesRepos(t *testing.T) {
+	dir := t.TempDir()
+	yamlPath := filepath.Join(dir, "hive.yaml")
+	os.WriteFile(yamlPath, []byte(minimalValidYAML("my-org", "ghp_tok")), 0o600)
+
+	envPath := filepath.Join(dir, "config.env")
+	os.WriteFile(envPath, []byte("PROJECT_REPOS=my-org/alpha my-org/beta\n"), 0o600)
+
+	cfg, err := LoadWithOverrides(yamlPath, envPath)
+	if err != nil {
+		t.Fatalf("LoadWithOverrides() error = %v", err)
+	}
+	if len(cfg.Project.Repos) != 2 {
+		t.Fatalf("len(Project.Repos) = %d, want 2", len(cfg.Project.Repos))
+	}
+	if cfg.Project.Repos[0] != "my-org/alpha" {
+		t.Errorf("Project.Repos[0] = %q, want %q", cfg.Project.Repos[0], "my-org/alpha")
+	}
+}
+
+func TestLoadWithOverrides_DashDisabled(t *testing.T) {
+	dir := t.TempDir()
+	yamlPath := filepath.Join(dir, "hive.yaml")
+	os.WriteFile(yamlPath, []byte(minimalValidYAML("my-org", "ghp_tok")), 0o600)
+
+	cfg, err := LoadWithOverrides(yamlPath, "-")
+	if err != nil {
+		t.Fatalf("LoadWithOverrides() error = %v", err)
+	}
+	if cfg.Project.Org != "my-org" {
+		t.Errorf("Project.Org = %q, want %q (dash should skip config.env)", cfg.Project.Org, "my-org")
+	}
+}
+
+func TestLoadWithOverrides_AutoDetectConfigEnv(t *testing.T) {
+	dir := t.TempDir()
+	yamlPath := filepath.Join(dir, "hive.yaml")
+	os.WriteFile(yamlPath, []byte(minimalValidYAML("yaml-org", "ghp_tok")), 0o600)
+
+	writeConfigEnv(t, dir, "PROJECT_ORG=auto-detected-org\n")
+
+	cfg, err := LoadWithOverrides(yamlPath, "")
+	if err != nil {
+		t.Fatalf("LoadWithOverrides() error = %v", err)
+	}
+	if cfg.Project.Org != "auto-detected-org" {
+		t.Errorf("Project.Org = %q, want %q (auto-detected config.env)", cfg.Project.Org, "auto-detected-org")
+	}
+}
+
+func TestLoadWithOverrides_DashboardPort(t *testing.T) {
+	dir := t.TempDir()
+	yamlPath := filepath.Join(dir, "hive.yaml")
+	os.WriteFile(yamlPath, []byte(minimalValidYAML("my-org", "ghp_tok")+"\ndashboard:\n  port: 3001\n"), 0o600)
+
+	envPath := filepath.Join(dir, "config.env")
+	os.WriteFile(envPath, []byte("DASHBOARD_PORT=9090\n"), 0o600)
+
+	cfg, err := LoadWithOverrides(yamlPath, envPath)
+	if err != nil {
+		t.Fatalf("LoadWithOverrides() error = %v", err)
+	}
+	if cfg.Dashboard.Port != 9090 {
+		t.Errorf("Dashboard.Port = %d, want 9090 (config.env override)", cfg.Dashboard.Port)
+	}
+}
+
+func TestAgentConfig_ClearOnKick(t *testing.T) {
+	yaml := `
+project:
+  org: my-org
+  repos:
+    - repo-a
+github:
+  token: ghp_tok
+agents:
+  scanner:
+    backend: claude
+    clear_on_kick: true
+  reviewer:
+    backend: claude
+    clear_on_kick: false
+`
+	path := writeTempConfig(t, yaml)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.Agents["scanner"].ClearOnKick {
+		t.Error("scanner.ClearOnKick should be true")
+	}
+	if cfg.Agents["reviewer"].ClearOnKick {
+		t.Error("reviewer.ClearOnKick should be false")
+	}
+}

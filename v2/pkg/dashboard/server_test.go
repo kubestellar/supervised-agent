@@ -830,3 +830,127 @@ func TestStart_ServesEndpoints(t *testing.T) {
 		t.Errorf("static index: expected 200, got %d", resp3.StatusCode)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Security headers
+// ---------------------------------------------------------------------------
+
+func TestSecurityHeaders_Present(t *testing.T) {
+	s := newTestServer()
+	handler := s.Handler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/health")
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	headers := map[string]string{
+		"X-Frame-Options":        "DENY",
+		"X-Content-Type-Options": "nosniff",
+		"X-Xss-Protection":      "1; mode=block",
+		"Referrer-Policy":        "strict-origin-when-cross-origin",
+	}
+	for name, want := range headers {
+		got := resp.Header.Get(name)
+		if got != want {
+			t.Errorf("header %q = %q, want %q", name, got, want)
+		}
+	}
+
+	csp := resp.Header.Get("Content-Security-Policy")
+	if csp == "" {
+		t.Error("Content-Security-Policy header missing")
+	}
+	if !strings.Contains(csp, "default-src 'self'") {
+		t.Errorf("CSP missing default-src: %q", csp)
+	}
+}
+
+func TestAuthMiddleware_RejectsUnauthorized(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	s := NewServerWithAuth(0, "secret-token-123", logger)
+	handler := s.Handler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/status")
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthenticated request, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthMiddleware_AcceptsBearerToken(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	s := NewServerWithAuth(0, "secret-token-123", logger)
+	handler := s.Handler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	req, _ := http.NewRequest("GET", ts.URL+"/api/status", nil)
+	req.Header.Set("Authorization", "Bearer secret-token-123")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 for authorized request, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthMiddleware_AcceptsQueryToken(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	s := NewServerWithAuth(0, "secret-token-123", logger)
+	handler := s.Handler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/status?token=secret-token-123")
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 for query-token request, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthMiddleware_HealthBypassesAuth(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	s := NewServerWithAuth(0, "secret-token-123", logger)
+	handler := s.Handler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/health")
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 for /api/health (no auth required), got %d", resp.StatusCode)
+	}
+}
+
+func TestNoAuth_AllEndpointsAccessible(t *testing.T) {
+	s := newTestServer()
+	handler := s.Handler()
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/status")
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 when auth is not configured, got %d", resp.StatusCode)
+	}
+}

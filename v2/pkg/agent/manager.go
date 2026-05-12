@@ -157,6 +157,14 @@ func (m *Manager) SendKick(name string, message string) error {
 		return fmt.Errorf("agent %s not running", name)
 	}
 
+	if agent.Config.ClearOnKick {
+		if _, err := fmt.Fprintf(agent.stdin, "/clear\n"); err != nil {
+			return fmt.Errorf("sending /clear to %s: %w", name, err)
+		}
+		m.logger.Info("clear sent before kick", "name", name)
+		time.Sleep(clearBeforeKickDelay)
+	}
+
 	if _, err := fmt.Fprintf(agent.stdin, "%s\n", message); err != nil {
 		return fmt.Errorf("sending kick to %s: %w", name, err)
 	}
@@ -167,6 +175,8 @@ func (m *Manager) SendKick(name string, message string) error {
 
 	return nil
 }
+
+const clearBeforeKickDelay = 2 * time.Second
 
 func (m *Manager) GetStatus(name string) (*AgentProcess, error) {
 	m.mu.RLock()

@@ -29,11 +29,15 @@ type KickMessage struct {
 
 func (s *Scheduler) BuildKickMessages(actionable *github.ActionableResult, agentsDue []string) []KickMessage {
 	classifiedIssues := classify.ClassifyAll(actionable.Issues.Items)
+	reposSection := s.buildReposSection()
 
 	var messages []KickMessage
 	for _, agentName := range agentsDue {
 		msg := s.buildAgentMessage(agentName, classifiedIssues, actionable)
 		if msg != "" {
+			if agentName != "outreach" {
+				msg += "\n" + reposSection
+			}
 			messages = append(messages, KickMessage{
 				Agent:   agentName,
 				Message: msg,
@@ -41,6 +45,21 @@ func (s *Scheduler) BuildKickMessages(actionable *github.ActionableResult, agent
 		}
 	}
 	return messages
+}
+
+func (s *Scheduler) buildReposSection() string {
+	var b strings.Builder
+	b.WriteString("AUTHORIZED REPOS (you may ONLY interact with these):\n")
+	org := s.cfg.Project.Org
+	for _, repo := range s.cfg.Project.Repos {
+		if strings.Contains(repo, "/") {
+			b.WriteString(fmt.Sprintf("  %s\n", repo))
+		} else {
+			b.WriteString(fmt.Sprintf("  %s/%s\n", org, repo))
+		}
+	}
+	b.WriteString("⛔ NEVER access, search, list, file issues in, or open PRs on repos not listed above.\n")
+	return b.String()
 }
 
 const maxIssuesPerKick = 20

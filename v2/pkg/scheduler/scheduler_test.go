@@ -15,7 +15,12 @@ import (
 // ---------------------------------------------------------------------------
 
 func newScheduler() *Scheduler {
-	cfg := &config.Config{}
+	cfg := &config.Config{
+		Project: config.ProjectConfig{
+			Org:   "test-org",
+			Repos: []string{"test-org/console", "test-org/docs", "test-org/hive"},
+		},
+	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	return New(cfg, logger)
 }
@@ -858,5 +863,76 @@ func TestKickMessage_AgentAndMessageSet(t *testing.T) {
 	}
 	if m.Message == "" {
 		t.Error("KickMessage.Message is empty")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AUTHORIZED REPOS section
+// ---------------------------------------------------------------------------
+
+func TestBuildKickMessages_ScannerHasAuthorizedRepos(t *testing.T) {
+	s := newScheduler()
+	messages := s.BuildKickMessages(emptyActionable(), []string{"scanner"})
+	if len(messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(messages))
+	}
+	msg := messages[0].Message
+	if !strings.Contains(msg, "AUTHORIZED REPOS") {
+		t.Error("scanner kick missing AUTHORIZED REPOS section")
+	}
+	if !strings.Contains(msg, "test-org/console") {
+		t.Error("scanner kick missing test-org/console in repos list")
+	}
+	if !strings.Contains(msg, "test-org/docs") {
+		t.Error("scanner kick missing test-org/docs in repos list")
+	}
+	if !strings.Contains(msg, "NEVER access") {
+		t.Error("scanner kick missing repo restriction warning")
+	}
+}
+
+func TestBuildKickMessages_ReviewerHasAuthorizedRepos(t *testing.T) {
+	s := newScheduler()
+	messages := s.BuildKickMessages(emptyActionable(), []string{"reviewer"})
+	msg := messages[0].Message
+	if !strings.Contains(msg, "AUTHORIZED REPOS") {
+		t.Error("reviewer kick missing AUTHORIZED REPOS section")
+	}
+}
+
+func TestBuildKickMessages_SupervisorHasAuthorizedRepos(t *testing.T) {
+	s := newScheduler()
+	messages := s.BuildKickMessages(emptyActionable(), []string{"supervisor"})
+	msg := messages[0].Message
+	if !strings.Contains(msg, "AUTHORIZED REPOS") {
+		t.Error("supervisor kick missing AUTHORIZED REPOS section")
+	}
+}
+
+func TestBuildKickMessages_OutreachNoAuthorizedRepos(t *testing.T) {
+	s := newScheduler()
+	messages := s.BuildKickMessages(emptyActionable(), []string{"outreach"})
+	msg := messages[0].Message
+	if strings.Contains(msg, "AUTHORIZED REPOS") {
+		t.Error("outreach kick should NOT have AUTHORIZED REPOS (targets external repos)")
+	}
+}
+
+func TestBuildReposSection_BareRepoGetsPrefixed(t *testing.T) {
+	cfg := &config.Config{
+		Project: config.ProjectConfig{
+			Org:   "my-org",
+			Repos: []string{"bare-repo", "my-org/full-repo"},
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	s := New(cfg, logger)
+
+	section := s.buildReposSection()
+	if !strings.Contains(section, "my-org/bare-repo") {
+		t.Errorf("bare repo should be prefixed with org: %q", section)
+	}
+	if !strings.Contains(section, "my-org/full-repo") {
+		t.Errorf("full repo should appear as-is: %q", section)
 	}
 }

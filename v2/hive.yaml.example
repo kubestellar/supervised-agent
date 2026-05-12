@@ -1,6 +1,10 @@
 # Hive v2 Configuration
 # All values support ${ENV_VAR} interpolation for secrets.
 # Copy this file to hive.yaml and customize for your setup.
+#
+# Dynamic overrides: place a config.env file next to hive.yaml (or at
+# /etc/hive/config.env) with KEY=VALUE lines. These override yaml values.
+# Precedence: hive.yaml < config.env < explicit env vars.
 
 project:
   org: your-org                          # GitHub organization
@@ -24,31 +28,37 @@ agents:
     backend: claude                       # claude | copilot | gemini | goose
     model: claude-sonnet-4-6
     beads_dir: /data/beads/scanner
+    clear_on_kick: true                   # Send /clear before each kick to reset context
   reviewer:
     enabled: true
     backend: claude
     model: claude-sonnet-4-6
     beads_dir: /data/beads/reviewer
+    clear_on_kick: true
   architect:
     enabled: false                        # Disabled by default — enable for design work
     backend: claude
     model: claude-sonnet-4-6
     beads_dir: /data/beads/architect
+    clear_on_kick: false
   supervisor:
     enabled: true
     backend: claude
     model: claude-sonnet-4-6
     beads_dir: /data/beads/supervisor
+    clear_on_kick: true
   outreach:
     enabled: false
     backend: claude
     model: claude-sonnet-4-6
     beads_dir: /data/beads/outreach
+    clear_on_kick: false
   sec-check:
     enabled: false
     backend: claude
     model: claude-sonnet-4-6
     beads_dir: /data/beads/sec-check
+    clear_on_kick: true
 
 # Governor — adaptive scheduler that adjusts agent cadences based on queue depth
 governor:
@@ -101,9 +111,12 @@ notifications:
 #   channel_id: "1234567890"
 
 # Dashboard — embedded web UI with SSE live updates
+# Security headers (CSP, X-Frame-Options, etc.) are always active.
+# Set auth_token to require Bearer auth on /api/* endpoints (except /api/health).
 dashboard:
   port: 3001
   snapshot_dir: /data/snapshots
+  auth_token: ${HIVE_DASHBOARD_TOKEN}     # Optional — omit to allow unauthenticated access
 
 # Data directories — all persistent state
 data:
