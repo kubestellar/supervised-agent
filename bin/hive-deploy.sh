@@ -163,8 +163,8 @@ if [ -n "$DISCORD_RESTART_NEEDED" ] && [ -z "$DISCORD_CHANGED" ]; then
     log "WARN: failed to restart hive-discord (drift)"
 fi
 
-# Sync hive-project.yaml (code-managed config) — safe to overwrite since
-# runtime customizations (sidebar, repos, agents) live in hive-runtime.yaml
+# Sync hive-project.yaml (code-managed static defaults) — safe to overwrite since
+# dynamic overrides live in /etc/hive/config.env
 HIVE_PROJECT="${HIVE_PROJECT_CONFIG_SRC:-$HIVE_REPO/examples/kubestellar/hive-project.yaml}"
 HIVE_PROJECT_INSTALLED="/etc/hive/hive-project.yaml"
 if [ -f "$HIVE_PROJECT" ] && ! cmp -s "$HIVE_PROJECT" "$HIVE_PROJECT_INSTALLED" 2>/dev/null; then
@@ -172,6 +172,14 @@ if [ -f "$HIVE_PROJECT" ] && ! cmp -s "$HIVE_PROJECT" "$HIVE_PROJECT_INSTALLED" 
   sudo cp "$HIVE_PROJECT" "$HIVE_PROJECT_INSTALLED" && \
     SYNCED="$SYNCED hive-project.yaml" || \
     log "WARN: failed to sync hive-project.yaml"
+fi
+
+# Seed config.env from example if it doesn't exist yet (never overwrite user config)
+EXAMPLE_CONFIG_ENV=$(find "$HIVE_REPO/examples" -name 'example-config.env' -type f 2>/dev/null | head -1)
+if [ -n "$EXAMPLE_CONFIG_ENV" ] && [ ! -f /etc/hive/config.env ]; then
+  sudo cp "$EXAMPLE_CONFIG_ENV" /etc/hive/config.env && \
+    SYNCED="$SYNCED config.env(seed)" || \
+    log "WARN: failed to seed config.env"
 fi
 
 # Sync agent CLAUDE.md policies from repo to /etc/hive/

@@ -24,7 +24,7 @@ if ! flock -n 200; then
   exit 0
 fi
 
-# Source project config (reads hive-runtime.yaml for repos, falls back to hive-project.yaml)
+# Source project config (yaml defaults + config.env overrides)
 # shellcheck source=hive-config.sh
 source "$(dirname "$0")/hive-config.sh" 2>/dev/null || source /usr/local/bin/hive-config.sh 2>/dev/null || true
 

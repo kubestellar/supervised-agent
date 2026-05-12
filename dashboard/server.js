@@ -61,8 +61,9 @@ app.use((_req, res, next) => {
 
 // Load project config from hive-project.yaml (code-managed, synced from repo)
 const CONFIG_PATH = process.env.HIVE_PROJECT_CONFIG || '/etc/hive/hive-project.yaml';
-// Runtime config — dashboard customizations that survive deploys
-const RUNTIME_CONFIG_PATH = process.env.HIVE_RUNTIME_CONFIG || '/etc/hive/hive-runtime.yaml';
+// Dynamic config — operator overrides that survive deploys (flat key=value)
+const CONFIG_ENV_PATH = process.env.HIVE_CONFIG_ENV || '/etc/hive/config.env';
+const SIDEBAR_JSON_PATH = process.env.HIVE_SIDEBAR_CONFIG || '/etc/hive/sidebar.json';
 
 function _loadYaml(filePath) {
   try {
@@ -77,20 +78,24 @@ function _loadYaml(filePath) {
 }
 
 let projectConfig = _loadYaml(CONFIG_PATH);
-let runtimeConfig = _loadYaml(RUNTIME_CONFIG_PATH);
+const configEnv = parseEnvFile(CONFIG_ENV_PATH);
 
-// Migrate: if runtime file is empty but project config has runtime keys, extract them
-if (!runtimeConfig.agents && !runtimeConfig.project) {
-  const existingSidebar = (projectConfig.agents || {}).sidebar;
-  const existingEnabled = (projectConfig.agents || {}).enabled;
-  const existingRepos = (projectConfig.project || {}).repos;
-  if (existingSidebar || existingEnabled || existingRepos) {
-    runtimeConfig = {};
-    if (existingSidebar) { runtimeConfig.agents = runtimeConfig.agents || {}; runtimeConfig.agents.sidebar = existingSidebar; }
-    if (existingEnabled) { runtimeConfig.agents = runtimeConfig.agents || {}; runtimeConfig.agents.enabled = existingEnabled; }
-    if (existingRepos) { runtimeConfig.project = { repos: existingRepos }; }
-    _persistRuntime();
+// Migrate: if hive-runtime.yaml exists but config.env does not, extract dynamic values
+const LEGACY_RUNTIME_PATH = process.env.HIVE_RUNTIME_CONFIG || '/etc/hive/hive-runtime.yaml';
+if (fs.existsSync(LEGACY_RUNTIME_PATH) && !fs.existsSync(CONFIG_ENV_PATH)) {
+  const legacyRuntime = _loadYaml(LEGACY_RUNTIME_PATH);
+  const legacyEnabled = (legacyRuntime.agents || {}).enabled;
+  const legacyRepos = (legacyRuntime.project || {}).repos;
+  const legacySidebar = (legacyRuntime.agents || {}).sidebar;
+  if (legacyEnabled) writeEnvVar(CONFIG_ENV_PATH, 'AGENTS_ENABLED', legacyEnabled.join(' '));
+  if (legacyRepos) writeEnvVar(CONFIG_ENV_PATH, 'PROJECT_REPOS', legacyRepos.join(' '));
+  if (legacySidebar) {
+    const tmpSb = `/tmp/hive-sidebar-${process.pid}-${Date.now()}.json`;
+    fs.writeFileSync(tmpSb, JSON.stringify(legacySidebar, null, 2));
+    execSync(`sudo mv ${shellQuote(tmpSb)} ${shellQuote(SIDEBAR_JSON_PATH)}`);
   }
+  // Rename legacy file so migration doesn't re-run
+  try { execSync(`sudo mv ${shellQuote(LEGACY_RUNTIME_PATH)} ${shellQuote(LEGACY_RUNTIME_PATH + '.migrated')}`); } catch (_) {}
 }
 
 const PROJECT_NAME = (projectConfig.project || {}).name || '';
@@ -98,20 +103,14 @@ const PROJECT_PRIMARY_REPO = (projectConfig.project || {}).primary_repo || '';
 const PROJECT_ORG = (projectConfig.project || {}).org || '';
 const DASHBOARD_TITLE = ((projectConfig.dashboard || {}).title) || (PROJECT_NAME ? PROJECT_NAME + ' Hive' : 'Hive');
 const HIVE_REPO_DIR = process.env.HIVE_REPO_DIR || path.resolve(__dirname, '..');
-let ENABLED_AGENTS = ((runtimeConfig.agents || {}).enabled
-  || (projectConfig.agents || {}).enabled
-  || ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach']);
+let ENABLED_AGENTS = configEnv.AGENTS_ENABLED
+  ? configEnv.AGENTS_ENABLED.split(/\s+/).filter(Boolean)
+  : ((projectConfig.agents || {}).enabled
+    || ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach']);
 let ENABLED_AGENTS_PLUS_ALL = [...ENABLED_AGENTS, 'all'];
 
 const CONFIG_REPO_SOURCE = process.env.HIVE_PROJECT_CONFIG_SRC
   || path.join(HIVE_REPO_DIR, 'examples', 'kubestellar', 'hive-project.yaml');
-
-function _persistRuntime() {
-  const dumpYaml = yaml ? yaml.dump(runtimeConfig) : JSON.stringify(runtimeConfig, null, 2);
-  const tmpFile = `/tmp/hive-runtime-${process.pid}-${Date.now()}.yaml`;
-  fs.writeFileSync(tmpFile, dumpYaml);
-  execSync(`sudo mv ${shellQuote(tmpFile)} ${shellQuote(RUNTIME_CONFIG_PATH)}`);
-}
 
 function persistProjectConfig() {
   const dumpYaml = yaml ? yaml.dump(projectConfig) : JSON.stringify(projectConfig, null, 2);
@@ -124,10 +123,8 @@ function persistProjectConfig() {
 }
 
 function persistEnabledAgents() {
-  if (!runtimeConfig.agents) runtimeConfig.agents = {};
-  runtimeConfig.agents.enabled = ENABLED_AGENTS.slice();
+  writeEnvVar(CONFIG_ENV_PATH, 'AGENTS_ENABLED', ENABLED_AGENTS.join(' '));
   ENABLED_AGENTS_PLUS_ALL = [...ENABLED_AGENTS, 'all'];
-  _persistRuntime();
 }
 
 // ── Centralized backend/model config (JS equivalent of backends.conf) ──────
@@ -1833,7 +1830,10 @@ app.get('/api/config/governor', (_req, res) => {
       pullbackSeconds: parseInt(govEnv.SENSING_PULLBACK_SECONDS || '900', 10),
     };
 
-    const repos = ((runtimeConfig.project || {}).repos || (projectConfig.project || {}).repos || []).slice();
+    const freshEnv = parseEnvFile(CONFIG_ENV_PATH);
+    const repos = freshEnv.PROJECT_REPOS
+      ? freshEnv.PROJECT_REPOS.split(/\s+/).filter(Boolean)
+      : ((projectConfig.project || {}).repos || []).slice();
     res.json({ agents, thresholds, labels, budget, notifications, health, repos, sensing });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2020,9 +2020,7 @@ app.delete('/api/config/governor/agents/:name', (req, res) => {
 app.put('/api/config/governor/repos', (req, res) => {
   try {
     const list = req.body.list || [];
-    if (!runtimeConfig.project) runtimeConfig.project = {};
-    runtimeConfig.project.repos = list;
-    _persistRuntime();
+    writeEnvVar(CONFIG_ENV_PATH, 'PROJECT_REPOS', list.join(' '));
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2032,8 +2030,11 @@ app.put('/api/config/governor/repos', (req, res) => {
 // ── Sidebar layout (agent order + groups) ──────────────────────────────────
 app.get('/api/config/sidebar', (_req, res) => {
   try {
-    const sidebar = (runtimeConfig.agents || {}).sidebar
-      || (projectConfig.agents || {}).sidebar || null;
+    let sidebar = null;
+    if (fs.existsSync(SIDEBAR_JSON_PATH)) {
+      try { sidebar = JSON.parse(fs.readFileSync(SIDEBAR_JSON_PATH, 'utf8')); } catch (_) {}
+    }
+    if (!sidebar) sidebar = (projectConfig.agents || {}).sidebar || null;
     res.json({ sidebar });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2044,9 +2045,9 @@ app.put('/api/config/sidebar', (req, res) => {
   try {
     const { groups } = req.body;
     if (!Array.isArray(groups)) return res.status(400).json({ error: 'groups must be an array' });
-    if (!runtimeConfig.agents) runtimeConfig.agents = {};
-    runtimeConfig.agents.sidebar = { groups };
-    _persistRuntime();
+    const tmpSb = `/tmp/hive-sidebar-${process.pid}-${Date.now()}.json`;
+    fs.writeFileSync(tmpSb, JSON.stringify({ groups }, null, 2));
+    execSync(`sudo mv ${shellQuote(tmpSb)} ${shellQuote(SIDEBAR_JSON_PATH)}`);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
