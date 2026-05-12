@@ -1575,6 +1575,7 @@ app.get('/api/config/agent/:name', (req, res) => {
       staleTimeout: parseInt(agentEnv.AGENT_STALE_TIMEOUT_SEC || agentEnv.AGENT_STALE_MAX_SEC || '1200', 10),
       restartStrategy: agentEnv.AGENT_RESTART_STRATEGY || 'immediate',
       model: modeModel || (modelMatch ? modelMatch[1] : ''),
+      clearOnKick: agentEnv.AGENT_CLEAR_ON_KICK !== 'false',
     };
 
     const cadences = {
@@ -1626,13 +1627,14 @@ app.put('/api/config/agent/:name/general', (req, res) => {
   if (!validateAgentName(name, res)) return;
   const envFile = `${ENV_DIR}/${name}.env`;
   try {
-    const { launchCmd, cliPinned, cliPinValue, staleTimeout, restartStrategy, model, displayName } = req.body;
+    const { launchCmd, cliPinned, cliPinValue, staleTimeout, restartStrategy, model, displayName, clearOnKick } = req.body;
     if (displayName !== undefined) writeEnvVar(envFile, 'AGENT_DISPLAY_NAME', displayName);
     if (launchCmd !== undefined) writeEnvVar(envFile, 'AGENT_LAUNCH_CMD', launchCmd);
     if (cliPinned !== undefined) writeEnvVar(envFile, 'AGENT_CLI_PINNED', String(cliPinned));
     if (cliPinValue !== undefined) writeEnvVar(envFile, 'AGENT_CLI_PIN_VALUE', cliPinValue);
     if (staleTimeout !== undefined) writeEnvVar(envFile, 'AGENT_STALE_TIMEOUT_SEC', String(staleTimeout));
     if (restartStrategy !== undefined) writeEnvVar(envFile, 'AGENT_RESTART_STRATEGY', restartStrategy);
+    if (clearOnKick !== undefined) writeEnvVar(envFile, 'AGENT_CLEAR_ON_KICK', String(clearOnKick));
     if (model !== undefined) {
       const currentCmd = parseEnvFile(envFile).AGENT_LAUNCH_CMD || '';
       const updatedCmd = currentCmd.includes('--model')

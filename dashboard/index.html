@@ -4339,6 +4339,10 @@ function burnAreaChart() {
           <input type="text" id="cfg-launch-cmd" value="${esc(g.launchCmd || '')}" onchange="markDirty('general','launchCmd',this.value)">
         </div>
         <div class="config-toggle">
+          <div class="config-toggle-switch ${g.clearOnKick !== false ? 'on' : ''}" id="cfg-clear-on-kick" data-action="toggleConfigSwitch" data-section="general" data-key="clearOnKick"></div>
+          <span class="config-toggle-label">Clear on Kick <span class="config-info">i<span class="config-tooltip">Send /clear before each governor kick to reset conversation context. Prevents stale context buildup across runs. On by default for all agents.</span></span></span>
+        </div>
+        <div class="config-toggle">
           <div class="config-toggle-switch ${g.cliPinned ? 'on' : ''}" id="cfg-cli-pinned" data-action="toggleConfigSwitch" data-section="general" data-key="cliPinned"></div>
           <span class="config-toggle-label">CLI Pinned</span>
         </div>
