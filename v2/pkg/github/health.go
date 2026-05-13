@@ -252,6 +252,7 @@ func (c *Client) deployChecks(ctx context.Context, repo string, health map[strin
 	runs, _, err := c.client.Actions.ListWorkflowRunsByID(ctx, c.org, repo, workflowID, &gh.ListWorkflowRunsOptions{
 		Branch:      "main",
 		Event:       "push",
+		Status:      "completed",
 		ListOptions: gh.ListOptions{PerPage: 1},
 	})
 	if err != nil || runs == nil || len(runs.WorkflowRuns) == 0 {
@@ -281,10 +282,10 @@ func (c *Client) deployChecks(ctx context.Context, repo string, health map[strin
 	for _, job := range jobs.Jobs {
 		for key, jobName := range deployJobs {
 			if job.GetName() == jobName {
-				if job.GetConclusion() == "success" {
-					health[key] = healthStatusSuccess
-				} else {
+				if job.GetConclusion() == "failure" {
 					health[key] = healthStatusFailure
+				} else {
+					health[key] = healthStatusSuccess
 				}
 			}
 		}
