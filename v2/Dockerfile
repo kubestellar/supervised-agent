@@ -9,7 +9,7 @@ RUN CGO_ENABLED=0 go build -ldflags "-X main.gitHash=${GIT_HASH} -X main.gitShor
 FROM node:24-alpine
 
 # --- Layer 1: system packages (rarely changes) ---
-RUN apk add --no-cache git ca-certificates bash curl tzdata tmux libuv bzip2
+RUN apk add --no-cache git ca-certificates bash curl tzdata tmux libuv bzip2 gcompat
 
 # --- Layer 2: ttyd (stable, infrequent releases) ---
 RUN ARCH=$(uname -m) && \
@@ -26,10 +26,10 @@ RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then GOOSE_ARCH=x86_64; \
     elif [ "$ARCH" = "aarch64" ]; then GOOSE_ARCH=aarch64; \
     else GOOSE_ARCH=x86_64; fi && \
-    curl -sL -o /tmp/goose.tar.bz2 \
-      "https://github.com/block/goose/releases/latest/download/goose-${GOOSE_ARCH}-unknown-linux-musl.tar.bz2" && \
-    tar -xjf /tmp/goose.tar.bz2 -C /usr/local/bin/ && \
-    rm /tmp/goose.tar.bz2 && \
+    curl -sL -o /tmp/goose.tar.gz \
+      "https://github.com/block/goose/releases/latest/download/goose-${GOOSE_ARCH}-unknown-linux-gnu.tar.gz" && \
+    tar -xzf /tmp/goose.tar.gz -C /usr/local/bin/ && \
+    rm /tmp/goose.tar.gz && \
     chmod +x /usr/local/bin/goose
 
 # --- Layer 4: IBM Bob Shell (moderate release cadence) ---
