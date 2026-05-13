@@ -200,6 +200,14 @@ func main() {
 	ticker := time.NewTicker(time.Duration(cfg.Governor.EvalIntervalS) * time.Second)
 	defer ticker.Stop()
 
+	const cliStartupDelay = 30 * time.Second
+	logger.Info("waiting for CLI startup before first eval", "delay", cliStartupDelay)
+	select {
+	case <-time.After(cliStartupDelay):
+	case <-ctx.Done():
+		return
+	}
+
 	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, &lastActionable, logger)
 
 	for {

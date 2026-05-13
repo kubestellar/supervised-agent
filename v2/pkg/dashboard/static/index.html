@@ -2176,7 +2176,17 @@
     applyLayout(getLayout());
 
     // ── Sparkline helper ──
-    let historyData = [];
+    const SPARKLINE_STORAGE_KEY = 'hive_sparkline_history';
+    const SPARKLINE_MAX_POINTS = 200;
+    let historyData = (() => {
+      try {
+        const stored = localStorage.getItem(SPARKLINE_STORAGE_KEY);
+        return stored ? JSON.parse(stored) : [];
+      } catch { return []; }
+    })();
+    function persistSparklineHistory() {
+      try { localStorage.setItem(SPARKLINE_STORAGE_KEY, JSON.stringify(historyData)); } catch {}
+    }
     const SPARK_W = 80, SPARK_H = 20;
 
     function sparkSvg(rawValues, color) {
@@ -2464,12 +2474,13 @@
     }
 
     const AGENT_TMUX_SESSION = {
-      supervisor: 'supervisor',
-      scanner: 'scanner',
-      reviewer: 'reviewer',
-      architect: 'architect',
-      outreach: 'outreach',
-      strategist: 'strategist',
+      supervisor: 'hive-supervisor',
+      scanner: 'hive-scanner',
+      reviewer: 'hive-reviewer',
+      architect: 'hive-architect',
+      outreach: 'hive-outreach',
+      strategist: 'hive-strategist',
+      'sec-check': 'hive-sec-check',
     };
     const TTYD_PORT = 7681;
 
@@ -4589,7 +4600,8 @@ function burnAreaChart() {
             snap.tokenModels[name] = (stats.input || 0) + (stats.output || 0) + (stats.cacheRead || 0);
           }
           historyData.push(snap);
-          if (historyData.length > 200) historyData.shift();
+          if (historyData.length > SPARKLINE_MAX_POINTS) historyData.shift();
+          persistSparklineHistory();
         } catch (err) {
           console.error('SSE parse error:', err);
         }
