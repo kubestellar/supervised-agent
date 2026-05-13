@@ -111,12 +111,9 @@ func main() {
 		}
 	}
 
-	var dashSrv *dashboard.Server
-	if cfg.Dashboard.AuthToken != "" {
-		dashSrv = dashboard.NewServerWithAuth(cfg.Dashboard.Port, cfg.Dashboard.AuthToken, logger)
-	} else {
-		dashSrv = dashboard.NewServer(cfg.Dashboard.Port, logger)
-	}
+	// Go binary serves the internal API without auth — the Node.js proxy
+	// on port 3001 handles public-facing authentication.
+	dashSrv := dashboard.NewServer(cfg.Dashboard.Port, logger)
 
 	beadStores := make(map[string]*beads.Store)
 	for name, agentCfg := range cfg.EnabledAgents() {
