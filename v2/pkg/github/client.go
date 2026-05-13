@@ -360,3 +360,11 @@ func (c *Client) RateLimits(ctx context.Context) (*RateLimitInfo, error) {
 
 	return info, nil
 }
+
+func (c *Client) LatestCommitHash(ctx context.Context, owner, repo, branch string) (string, error) {
+	ref, _, err := c.client.Git.GetRef(ctx, owner, repo, "refs/heads/"+branch)
+	if err != nil {
+		return "", fmt.Errorf("fetching ref %s/%s@%s: %w", owner, repo, branch, err)
+	}
+	return ref.GetObject().GetSHA(), nil
+}

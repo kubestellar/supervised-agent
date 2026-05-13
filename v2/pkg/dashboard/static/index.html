@@ -5196,7 +5196,11 @@ function burnAreaChart() {
         const ocEl = document.getElementById('oc-git-version');
         let html = `<a href="https://github.com/kubestellar/hive/commit/${escapeHtml(v.hash)}" target="_blank" style="color:inherit;text-decoration:none" title="${escapeHtml(v.hash)}">${escapeHtml(v.short)}</a>`;
         if (v.dirty) html += ' <span class="git-dirty">*</span>';
-        if (v.behind > 0) html += ` <span class="git-behind">${v.behind} behind</span>`;
+        if (v.behind) {
+          html += ` <span class="git-behind" title="Latest: ${escapeHtml(v.latestShort || '?')}">⬆ behind</span>`;
+        } else if (v.latestHash) {
+          html += ' <span style="color:#22c55e" title="Up to date with remote">✓</span>';
+        }
         el.innerHTML = html;
         if (ocEl) ocEl.innerHTML = html;
       } catch (_) {}

@@ -155,12 +155,38 @@ func decodeBody(r *http.Request, v interface{}) error {
 // --- Core status endpoints ---
 
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, map[string]interface{}{
+	resp := map[string]interface{}{
 		"version": "2.0.0",
 		"go":      "1.25",
 		"hash":    versionHash,
 		"short":   versionShort,
-	})
+	}
+
+	// Check latest commit on remote v2 branch
+	latest, err := s.fetchLatestRemoteHash()
+	if err == nil && latest != "" {
+		latestShort := latest
+		const shortHashLen = 7
+		if len(latestShort) > shortHashLen {
+			latestShort = latestShort[:shortHashLen]
+		}
+		resp["latestHash"] = latest
+		resp["latestShort"] = latestShort
+		resp["behind"] = latest != versionHash
+	}
+
+	jsonResponse(w, resp)
+}
+
+func (s *Server) fetchLatestRemoteHash() (string, error) {
+	if s.deps == nil || s.deps.GHClient == nil {
+		return "", fmt.Errorf("no github client")
+	}
+	ctx := s.deps.Ctx
+	if ctx == nil {
+		return "", fmt.Errorf("no context")
+	}
+	return s.deps.GHClient.LatestCommitHash(ctx, "kubestellar", "hive", "v2")
 }
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
