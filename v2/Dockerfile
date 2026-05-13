@@ -34,7 +34,7 @@ RUN ARCH=$(uname -m) && \
 
 # --- Layer 4: IBM Bob Shell (moderate release cadence) ---
 ARG BOB_VERSION=latest
-RUN curl -fsSL https://bob.ibm.com/download/bobshell.sh | bash
+RUN curl -fsSL https://bob.ibm.com/download/bobshell.sh | bash -s -- --pm npm
 
 # --- Layer 5: Gemini CLI (moderate release cadence) ---
 ARG GEMINI_CLI_VERSION=latest
