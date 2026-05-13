@@ -1,7 +1,10 @@
-const express = require('express');
-const { createProxyMiddleware } = require('http-proxy-middleware');
-const path = require('path');
-const crypto = require('crypto');
+import express from 'express';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+import path from 'path';
+import crypto from 'crypto';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PROXY_PORT = parseInt(process.env.HIVE_PROXY_PORT || '3001', 10);
 const GO_API_PORT = parseInt(process.env.HIVE_API_PORT || '3002', 10);
@@ -59,12 +62,14 @@ app.use('/api', createProxyMiddleware({
   target: GO_API_URL,
   changeOrigin: true,
   ws: true,
-  onError(err, req, res) {
-    console.error(`[proxy] ${req.method} ${req.url} → ${err.message}`);
-    if (res.writeHead) {
-      res.writeHead(502, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Go API unavailable', detail: err.message }));
-    }
+  on: {
+    error(err, req, res) {
+      console.error(`[proxy] ${req.method} ${req.url} → ${err.message}`);
+      if (res.writeHead) {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Go API unavailable', detail: err.message }));
+      }
+    },
   },
 }));
 

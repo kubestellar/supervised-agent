@@ -3,12 +3,13 @@
   "version": "2.0.0",
   "private": true,
   "description": "Thin proxy: auth + static files → Go binary API",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "http-proxy-middleware": "^3.0.6"
+    "express": "^5.2.0",
+    "http-proxy-middleware": "^4.0.0"
   }
 }
