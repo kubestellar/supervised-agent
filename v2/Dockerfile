@@ -6,10 +6,12 @@ ARG GIT_HASH=unknown
 ARG GIT_SHORT=unknown
 RUN CGO_ENABLED=0 go build -ldflags "-X main.gitHash=${GIT_HASH} -X main.gitShort=${GIT_SHORT}" -o /hive ./cmd/hive
 
-FROM node:24-alpine
+FROM node:24-slim
 
 # --- Layer 1: system packages (rarely changes) ---
-RUN apk add --no-cache git ca-certificates bash curl tzdata tmux libuv bzip2 gcompat
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git ca-certificates bash curl tmux bzip2 \
+ && rm -rf /var/lib/apt/lists/*
 
 # --- Layer 2: ttyd (stable, infrequent releases) ---
 RUN ARCH=$(uname -m) && \
