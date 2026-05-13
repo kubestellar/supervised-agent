@@ -74,7 +74,7 @@ app.use('/api', createProxyMiddleware({
 }));
 
 app.use(express.static(STATIC_DIR));
-app.get('*', (req, res) => {
+app.get('/{*splat}', (req, res) => {
   res.sendFile(path.join(STATIC_DIR, 'index.html'));
 });
 
