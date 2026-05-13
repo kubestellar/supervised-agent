@@ -347,13 +347,14 @@ func buildBudget(gov *governor.Governor, tokenCollector *tokens.Collector) Front
 }
 
 func buildCadenceMatrix(cfg *config.Config, agentStatuses map[string]*agent.AgentProcess) []FrontendCadence {
-	agentNames := make(map[string]bool)
+	sortedNames := make([]string, 0, len(cfg.Agents))
 	for name := range cfg.Agents {
-		agentNames[name] = true
+		sortedNames = append(sortedNames, name)
 	}
+	sort.Strings(sortedNames)
 
-	matrix := make([]FrontendCadence, 0, len(agentNames))
-	for name := range agentNames {
+	matrix := make([]FrontendCadence, 0, len(sortedNames))
+	for _, name := range sortedNames {
 		entry := FrontendCadence{Agent: name}
 
 		paused := false

@@ -4483,6 +4483,8 @@ function burnAreaChart() {
       const agents = window._lastAgents || [];
       applyPinOverrides(agents);
       renderAgents(agents);
+      const lastData = window._lastStatus || {};
+      renderGovernor(lastData.governor || {}, lastData.cadenceMatrix || [], lastData);
     }
     function applyPinOverrides(agents) {
       const now = Date.now();
