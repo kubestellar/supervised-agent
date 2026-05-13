@@ -17,6 +17,7 @@ import (
 	"github.com/kubestellar/hive/v2/pkg/dashboard"
 	"github.com/kubestellar/hive/v2/pkg/github"
 	"github.com/kubestellar/hive/v2/pkg/governor"
+	"github.com/kubestellar/hive/v2/pkg/knowledge"
 	"github.com/kubestellar/hive/v2/pkg/notify"
 	"github.com/kubestellar/hive/v2/pkg/policies"
 	"github.com/kubestellar/hive/v2/pkg/scheduler"
@@ -86,6 +87,22 @@ func main() {
 	}
 	gov := governor.New(cfg.Governor, cfg.EnabledAgents(), logger)
 	sched := scheduler.New(cfg, logger)
+
+	if cfg.Knowledge.Enabled {
+		layers := convertKnowledgeLayers(cfg.Knowledge.Layers)
+		primerCfg := knowledge.PrimerConfig{
+			MaxFacts:      cfg.Knowledge.Primer.MaxFacts,
+			Priority:      cfg.Knowledge.Primer.Priority,
+			MergeStrategy: cfg.Knowledge.Primer.MergeStrategy,
+		}
+		primer := knowledge.NewPrimer(layers, primerCfg, logger)
+		sched.SetPrimer(primer)
+		logger.Info("knowledge primer enabled",
+			"layers", len(cfg.Knowledge.Layers),
+			"max_facts", primerCfg.MaxFacts,
+		)
+	}
+
 	notifier := notify.New(cfg.Notifications, logger)
 	agentMgr := agent.NewManager(cfg.EnabledAgents(), logger)
 
@@ -156,12 +173,22 @@ func main() {
 		))
 	}
 
+	var knowledgeAPI *knowledge.KnowledgeAPI
+	if cfg.Knowledge.Enabled {
+		layers := convertKnowledgeLayers(cfg.Knowledge.Layers)
+		knowledgeAPI = knowledge.NewKnowledgeAPI(layers, knowledge.KnowledgeConfig{
+			Enabled: cfg.Knowledge.Enabled,
+			Engine:  cfg.Knowledge.Engine,
+		}, logger)
+	}
+
 	dashSrv.RegisterAPI(&dashboard.Dependencies{
 		Config:      cfg,
 		AgentMgr:    agentMgr,
 		Governor:    gov,
 		GHClient:    ghClient,
 		Tokens:      tokenCollector,
+		Knowledge:   knowledgeAPI,
 		Logger:      logger,
 		Ctx:         ctx,
 		RefreshFunc: refreshDashboard,
@@ -295,6 +322,19 @@ func runEvalCycle(
 		ghClient,
 		ctx,
 	))
+}
+
+func convertKnowledgeLayers(cfgLayers []config.KnowledgeLayer) []knowledge.LayerConfig {
+	layers := make([]knowledge.LayerConfig, len(cfgLayers))
+	for i, l := range cfgLayers {
+		layers[i] = knowledge.LayerConfig{
+			Type:   knowledge.LayerType(l.Type),
+			Path:   l.Path,
+			URL:    l.URL,
+			Shared: l.Shared,
+		}
+	}
+	return layers
 }
 
 func persistState(agentMgr *agent.Manager, gov *governor.Governor, path string, logger *slog.Logger) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kubestellar/hive/v2/pkg/config"
+	"github.com/kubestellar/hive/v2/pkg/knowledge"
 )
 
 func (s *Server) RegisterAPI(deps *Dependencies) {
@@ -68,6 +69,13 @@ func (s *Server) RegisterAPI(deps *Dependencies) {
 	s.mux.HandleFunc("GET /api/config/sidebar", s.handleSidebarGet)
 	s.mux.HandleFunc("PUT /api/config/sidebar", s.handleSidebarSet)
 	s.mux.HandleFunc("GET /api/config/backends", s.handleBackends)
+
+	s.mux.HandleFunc("GET /api/knowledge", s.handleKnowledgeList)
+	s.mux.HandleFunc("GET /api/knowledge/search", s.handleKnowledgeSearch)
+	s.mux.HandleFunc("GET /api/knowledge/health", s.handleKnowledgeHealth)
+	s.mux.HandleFunc("GET /api/knowledge/stats", s.handleKnowledgeStats)
+	s.mux.HandleFunc("GET /api/knowledge/{layer}", s.handleKnowledgeLayer)
+	s.mux.HandleFunc("GET /api/knowledge/{layer}/{slug}", s.handleKnowledgeFact)
 
 	s.mux.HandleFunc("POST /api/chat", s.handleChat)
 
@@ -806,6 +814,102 @@ func (s *Server) handleBackends(w http.ResponseWriter, r *http.Request) {
 		{"id": "gemini", "name": "Gemini", "models": []string{"gemini-2.5-pro", "gemini-2.5-flash"}},
 		{"id": "goose", "name": "Goose", "models": []string{"default"}},
 	})
+}
+
+// --- Knowledge endpoints ---
+
+func (s *Server) handleKnowledgeList(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonResponse(w, map[string]interface{}{"enabled": false, "facts": []interface{}{}})
+		return
+	}
+
+	typeFilter := r.URL.Query().Get("type")
+	facts := s.deps.Knowledge.SearchAll(s.deps.Ctx, "", typeFilter, 0)
+	jsonResponse(w, map[string]interface{}{
+		"enabled": true,
+		"count":   len(facts),
+		"facts":   facts,
+	})
+}
+
+func (s *Server) handleKnowledgeSearch(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonResponse(w, map[string]interface{}{"results": []interface{}{}})
+		return
+	}
+
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		jsonError(w, "q parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	typeFilter := r.URL.Query().Get("type")
+	limitStr := r.URL.Query().Get("limit")
+	limit := 0
+	if limitStr != "" {
+		limit, _ = strconv.Atoi(limitStr)
+	}
+
+	results := s.deps.Knowledge.SearchAll(s.deps.Ctx, query, typeFilter, limit)
+	jsonResponse(w, map[string]interface{}{
+		"query":   query,
+		"count":   len(results),
+		"results": results,
+	})
+}
+
+func (s *Server) handleKnowledgeHealth(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonResponse(w, map[string]interface{}{"enabled": false})
+		return
+	}
+	jsonResponse(w, s.deps.Knowledge.Health(s.deps.Ctx))
+}
+
+func (s *Server) handleKnowledgeStats(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonResponse(w, map[string]interface{}{"enabled": false})
+		return
+	}
+	jsonResponse(w, s.deps.Knowledge.Stats(s.deps.Ctx))
+}
+
+func (s *Server) handleKnowledgeLayer(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonResponse(w, map[string]interface{}{"enabled": false, "facts": []interface{}{}})
+		return
+	}
+
+	layer := r.PathValue("layer")
+	typeFilter := r.URL.Query().Get("type")
+
+	knowledgeLayer := knowledge.LayerType(layer)
+	facts := s.deps.Knowledge.LayerFacts(s.deps.Ctx, knowledgeLayer, typeFilter)
+	if facts == nil {
+		facts = []knowledge.Fact{}
+	}
+	jsonResponse(w, map[string]interface{}{
+		"layer": layer,
+		"count": len(facts),
+		"facts": facts,
+	})
+}
+
+func (s *Server) handleKnowledgeFact(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonError(w, "knowledge not enabled", http.StatusNotFound)
+		return
+	}
+
+	slug := r.PathValue("slug")
+	fact, err := s.deps.Knowledge.ReadFact(s.deps.Ctx, slug)
+	if err != nil || fact == nil {
+		jsonError(w, "fact not found", http.StatusNotFound)
+		return
+	}
+	jsonResponse(w, fact)
 }
 
 // --- Chat endpoint ---

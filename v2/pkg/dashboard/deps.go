@@ -8,6 +8,7 @@ import (
 	"github.com/kubestellar/hive/v2/pkg/config"
 	"github.com/kubestellar/hive/v2/pkg/governor"
 	ghpkg "github.com/kubestellar/hive/v2/pkg/github"
+	"github.com/kubestellar/hive/v2/pkg/knowledge"
 	"github.com/kubestellar/hive/v2/pkg/tokens"
 )
 
@@ -17,6 +18,7 @@ type Dependencies struct {
 	Governor    *governor.Governor
 	GHClient    *ghpkg.Client
 	Tokens      *tokens.Collector
+	Knowledge   *knowledge.KnowledgeAPI
 	Nous        *NousState
 	Logger      *slog.Logger
 	Ctx         context.Context
