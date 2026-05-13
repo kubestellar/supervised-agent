@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -170,7 +171,18 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, s.deps.Governor.EvalHistory())
+	history := s.deps.Governor.EvalHistory()
+	if len(history) > 0 {
+		jsonResponse(w, history)
+		return
+	}
+	seedData, err := os.ReadFile("/data/sparkline-history.json")
+	if err != nil {
+		jsonResponse(w, history)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(seedData)
 }
 
 func (s *Server) handleTrends(w http.ResponseWriter, r *http.Request) {
