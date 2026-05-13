@@ -1,0 +1,62 @@
+# Hive v2 — architect-only deployment
+# Single agent instance managing KubeStellar Console repos.
+# Runs inside Docker on a Proxmox LXC.
+
+project:
+  org: kubestellar
+  repos:
+    - console
+    - docs
+    - console-kb
+    - kubestellar-mcp
+    - console-marketplace
+    - homebrew-tap
+  ai_author: clubanderson
+  primary_repo: console
+
+policies:
+  repo: https://github.com/kubestellar/hive
+  path: examples/kubestellar/agents/
+  local_dir: /data/policies
+  poll_interval: 5m
+
+agents:
+  architect:
+    enabled: true
+    backend: claude
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/architect
+    clear_on_kick: false
+
+governor:
+  eval_interval_s: 900
+  modes:
+    surge:
+      threshold: 20
+      architect: 15m
+    busy:
+      threshold: 10
+      architect: 30m
+    quiet:
+      threshold: 2
+      architect: 45m
+    idle:
+      threshold: 0
+      architect: 30m
+
+github:
+  token: ${HIVE_GITHUB_TOKEN}
+
+notifications:
+  ntfy:
+    server: https://ntfy.sh
+    topic: hive-architect
+
+dashboard:
+  port: 3001
+  snapshot_dir: /data/snapshots
+  auth_token: ${HIVE_DASHBOARD_TOKEN}
+
+data:
+  metrics_dir: /data/metrics
+  logs_dir: /data/logs

@@ -1,0 +1,24 @@
+services:
+  hive:
+    build:
+      context: ..
+      dockerfile: v2/Dockerfile
+    container_name: hive-architect
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./architect-only.yaml:/etc/hive/hive.yaml:ro
+      - hive-data:/data
+    environment:
+      - HIVE_GITHUB_TOKEN=${HIVE_GITHUB_TOKEN}
+      - HIVE_DASHBOARD_TOKEN=${HIVE_DASHBOARD_TOKEN}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  hive-data:
