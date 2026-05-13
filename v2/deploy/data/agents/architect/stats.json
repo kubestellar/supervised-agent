@@ -1,0 +1,4 @@
+[
+  {"key": "prs", "label": "PRs", "source": "agentMetrics", "field": "prs", "style": "number"},
+  {"key": "closed", "label": "Closed", "source": "agentMetrics", "field": "closed", "style": "number"}
+]

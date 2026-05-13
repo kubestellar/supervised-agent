@@ -1,0 +1,9 @@
+[
+  {"key": "stars", "label": "Stars", "source": "agentMetrics", "field": "stars", "style": "spark", "trendField": "stars", "icon": "⭐"},
+  {"key": "forks", "label": "Forks", "source": "agentMetrics", "field": "forks", "style": "number", "icon": "🍴"},
+  {"key": "contributors", "label": "Contributors", "source": "agentMetrics", "field": "contributors", "style": "number", "icon": "👥"},
+  {"key": "adopters", "label": "Adopters", "source": "agentMetrics", "field": "adopters", "style": "number"},
+  {"key": "acmm", "label": "ACMM", "source": "agentMetrics", "field": "acmm", "style": "number"},
+  {"key": "outreachOpen", "label": "Open PRs", "source": "agentMetrics", "field": "outreachOpen", "style": "spark", "trendField": "outreachOpen"},
+  {"key": "outreachMerged", "label": "Merged PRs", "source": "agentMetrics", "field": "outreachMerged", "style": "spark", "trendField": "outreachMerged"}
+]

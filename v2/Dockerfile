@@ -61,6 +61,7 @@ RUN cd /opt/hive/proxy && npm install --omit=dev
 
 COPY v2/pkg/dashboard/static/index.html /opt/hive/proxy/public/
 
+COPY v2/deploy/data/ /opt/hive/seed-data/
 COPY v2/deploy/ttyd-tmux.sh /usr/local/bin/ttyd-tmux.sh
 RUN chmod +x /usr/local/bin/ttyd-tmux.sh
 

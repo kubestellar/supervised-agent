@@ -11,6 +11,7 @@ project:
     - kubestellar-mcp
     - console-marketplace
     - homebrew-tap
+    - hive
   ai_author: clubanderson
   primary_repo: console
 
@@ -24,45 +25,75 @@ agents:
   scanner:
     enabled: true
     backend: copilot
-    model: claude-sonnet-4-6
+    model: claude-opus-4.6
     beads_dir: /data/beads/scanner
     clear_on_kick: true
+    cli_pinned: true
+    stale_timeout: 1800
+    restart_strategy: immediate
+    launch_cmd: "/usr/bin/copilot --allow-all --model claude-opus-4.6"
+    display_name: scanner
   reviewer:
     enabled: true
     backend: copilot
-    model: claude-sonnet-4-6
+    model: claude-opus-4.6
     beads_dir: /data/beads/reviewer
     clear_on_kick: true
+    cli_pinned: true
+    stale_timeout: 2400
+    restart_strategy: immediate
+    launch_cmd: "/usr/bin/copilot --allow-all --model claude-opus-4.6"
   architect:
     enabled: true
     backend: copilot
-    model: claude-sonnet-4-6
+    model: claude-opus-4.6
     beads_dir: /data/beads/architect
-    clear_on_kick: false
+    clear_on_kick: true
+    cli_pinned: true
+    stale_timeout: 9000
+    restart_strategy: immediate
+    launch_cmd: "/usr/bin/copilot --allow-all --model claude-opus-4.6"
   supervisor:
     enabled: true
     backend: copilot
     model: claude-sonnet-4-6
     beads_dir: /data/beads/supervisor
     clear_on_kick: true
+    cli_pinned: true
+    stale_timeout: 3600
+    restart_strategy: immediate
+    launch_cmd: "agent-launch.sh --backend copilot --model claude-sonnet-4-6"
   outreach:
     enabled: true
     backend: copilot
-    model: claude-sonnet-4-6
+    model: claude-opus-4.6
     beads_dir: /data/beads/outreach
-    clear_on_kick: false
+    clear_on_kick: true
+    cli_pinned: true
+    stale_timeout: 7200
+    restart_strategy: immediate
+    launch_cmd: "/usr/bin/copilot --allow-all --model claude-opus-4.6"
   sec-check:
     enabled: true
     backend: copilot
-    model: claude-sonnet-4-6
+    model: claude-opus-4.6
     beads_dir: /data/beads/sec-check
     clear_on_kick: true
+    cli_pinned: true
+    stale_timeout: 1800
+    restart_strategy: immediate
+    launch_cmd: "/usr/bin/copilot --allow-all --model claude-opus-4.6"
+    display_name: sec-check
   strategist:
     enabled: true
     backend: copilot
     model: claude-sonnet-4-6
     beads_dir: /data/beads/strategist
-    clear_on_kick: false
+    clear_on_kick: true
+    stale_timeout: 3600
+    restart_strategy: immediate
+    launch_cmd: "agent-launch.sh --backend copilot --model claude-sonnet-4-6"
+    display_name: Strategist
 
 governor:
   eval_interval_s: 300
@@ -84,7 +115,7 @@ governor:
       architect: pause
       outreach: pause
       sec-check: 2m
-      strategist: 8h
+      strategist: pause
     quiet:
       threshold: 5
       supervisor: 5m
@@ -93,7 +124,7 @@ governor:
       architect: pause
       outreach: pause
       sec-check: 2m
-      strategist: 4h
+      strategist: pause
     idle:
       threshold: 0
       supervisor: 5m
@@ -102,15 +133,50 @@ governor:
       architect: 2h
       outreach: 2h
       sec-check: 2m
-      strategist: 4h
+      strategist: pause
+  labels:
+    exempt:
+      - nightly-tests
+      - LFX
+      - do-not-merge
+      - meta-tracker
+      - auto-qa-tuning-report
+      - hold
+      - adopters
+      - changes-requested
+      - waiting-on-author
+  sensing:
+    gh_rate_patterns:
+      - "API rate limit exceeded"
+      - "secondary rate limit"
+      - "403.*rate limit"
+      - "You have exceeded a secondary rate"
+      - "retry-after:[[:space:]]*[0-9]"
+      - "gh: Resource not accessible"
+      - "abuse detection mechanism"
+    cli_exclude_patterns:
+      - "You.re out of extra usage"
+      - "out of extra usage"
+      - "extra usage.*resets"
+      - "resets [0-9]+(:[0-9]+)?[aApP][mM]"
+    ttl_seconds: 900
+    pullback_seconds: 900
+  health:
+    healthcheck_interval: 300
+    restart_cooldown: 60
+    model_lock: false
+  budget:
+    total_tokens: 0
+    period_days: 7
+    critical_pct: 90
 
 github:
   token: ${HIVE_GITHUB_TOKEN}
 
 notifications:
   ntfy:
-    server: https://ntfy.sh
-    topic: hive-v2
+    server: ${NTFY_SERVER}
+    topic: ${NTFY_TOPIC}
 
 dashboard:
   port: 3001

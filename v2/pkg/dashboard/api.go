@@ -602,11 +602,34 @@ func (s *Server) handleAgentConfigGet(w http.ResponseWriter, r *http.Request) {
 		model = proc.ModelOverride
 	}
 
-	launchCmd := fmt.Sprintf("%s --model %s", cli, model)
-	if cli == "claude" {
-		launchCmd = fmt.Sprintf("claude --model %s --dangerously-skip-permissions", model)
-	} else if cli == "copilot" {
-		launchCmd = fmt.Sprintf("copilot --model %s --allow-all", model)
+	// Use configured launch command if available; otherwise construct one
+	launchCmd := agentCfg.LaunchCmd
+	if launchCmd == "" {
+		launchCmd = fmt.Sprintf("%s --model %s", cli, model)
+		if cli == "claude" {
+			launchCmd = fmt.Sprintf("claude --model %s --dangerously-skip-permissions", model)
+		} else if cli == "copilot" {
+			launchCmd = fmt.Sprintf("/usr/bin/copilot --allow-all --model %s", model)
+		}
+	}
+
+	// Use configured display name if available
+	displayName := agentCfg.DisplayName
+	if displayName == "" {
+		displayName = ""
+	}
+
+	// Stale timeout from config, default to 1200
+	const defaultStaleTimeoutS = 1200
+	staleTimeout := agentCfg.StaleTimeout
+	if staleTimeout == 0 {
+		staleTimeout = defaultStaleTimeoutS
+	}
+
+	// Restart strategy from config, default to "immediate"
+	restartStrategy := agentCfg.RestartStrategy
+	if restartStrategy == "" {
+		restartStrategy = "immediate"
 	}
 
 	// Cadences as seconds (int) — frontend expects numbers, not duration strings
@@ -620,6 +643,12 @@ func (s *Server) handleAgentConfigGet(w http.ResponseWriter, r *http.Request) {
 				cadences[modeName] = int64(d.Seconds())
 			}
 		}
+	}
+
+	// Per-mode models (empty strings = inherit from general)
+	models := map[string]string{}
+	for modeName := range s.deps.Config.Governor.Modes {
+		models[modeName] = ""
 	}
 
 	var lastPrompt string
@@ -636,30 +665,38 @@ func (s *Server) handleAgentConfigGet(w http.ResponseWriter, r *http.Request) {
 	// Read stat sources from config
 	stats := s.loadAgentStats(name)
 
+	// Default pipeline — all steps enabled (matches old hive behavior)
+	pipeline := map[string]bool{
+		"resolve-beads":  true,
+		"track-prs":      true,
+		"stale-check":    true,
+		"repo-scan":      true,
+		"coverage-gate":  true,
+		"prompt-compose": true,
+		"budget-check":   true,
+		"api-collect":    true,
+		"final-compose":  true,
+	}
+
 	jsonResponse(w, map[string]interface{}{
-		"name": name,
 		"general": map[string]interface{}{
-			"displayName":     name,
 			"launchCmd":       launchCmd,
-			"clearOnKick":     agentCfg.ClearOnKick,
-			"cliPinned":       proc.PinnedCLI != "",
+			"displayName":     displayName,
+			"cliPinned":       agentCfg.CLIPinned || proc.PinnedCLI != "",
 			"cliPinValue":     cli,
+			"staleTimeout":    staleTimeout,
+			"restartStrategy": restartStrategy,
 			"model":           model,
-			"staleTimeout":    1200,
-			"restartStrategy": "immediate",
+			"clearOnKick":     agentCfg.ClearOnKick,
 		},
-		"cadences":     cadences,
-		"pipeline":     map[string]interface{}{},
-		"hooks":        map[string]interface{}{"preKick": []any{}, "postIdle": []any{}},
-		"restrictions": restrictions,
-		"stats":        stats,
-		"prompt":       lastPrompt,
+		"cadences": cadences,
+		"models":   models,
+		"pipeline": pipeline,
+		"hooks":    map[string]interface{}{"preKick": []any{}, "postIdle": []any{}},
+		"restrictions":   restrictions,
+		"stats":          stats,
+		"prompt":         lastPrompt,
 		"promptTemplate": promptTemplate,
-		"state":        proc.State,
-		"paused":       proc.Paused,
-		"pinned_cli":   proc.PinnedCLI,
-		"pinned_model": proc.PinnedModel,
-		"kick_history": proc.KickHistory,
 	})
 }
 
@@ -714,15 +751,38 @@ func (s *Server) loadAgentRestrictions(name string) map[string]interface{} {
 	result["agent"] = agentRestrictions
 
 	// Read policy restrictions from CLAUDE.md
+	// Old hive extracts lines containing policy-relevant keywords, including
+	// markdown-formatted lines with ** bold markers and numbered list items.
 	policyRestrictions := []any{}
 	claudeMdPath := fmt.Sprintf("/data/agents/%s/CLAUDE.md", name)
 	if data, err := os.ReadFile(claudeMdPath); err == nil {
 		content := string(data)
 		for _, line := range strings.Split(content, "\n") {
 			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "NEVER ") || strings.HasPrefix(line, "Do not ") || strings.HasPrefix(line, "ALWAYS ") {
+			// Strip leading markdown list markers (-, *, numbered)
+			stripped := line
+			if len(stripped) > 2 && (stripped[0] == '-' || stripped[0] == '*') && stripped[1] == ' ' {
+				stripped = strings.TrimSpace(stripped[2:])
+			}
+			// Strip bold markers for pattern matching
+			plain := strings.ReplaceAll(stripped, "**", "")
+
+			if strings.HasPrefix(plain, "NEVER ") ||
+				strings.HasPrefix(plain, "Do not ") ||
+				strings.HasPrefix(plain, "Do NOT ") ||
+				strings.HasPrefix(plain, "ALWAYS ") ||
+				strings.HasPrefix(plain, "Never ") ||
+				strings.Contains(plain, "HARD RULE") ||
+				strings.Contains(plain, "LANE BOUNDARY") ||
+				strings.Contains(plain, "DO NOT") {
+				// Truncate very long lines to keep the response manageable
+				const maxPolicyLen = 200
+				entry := stripped
+				if len(entry) > maxPolicyLen {
+					entry = entry[:maxPolicyLen] + "..."
+				}
 				policyRestrictions = append(policyRestrictions, restriction{
-					Pattern: line,
+					Pattern: entry,
 					Source:  "policy",
 				})
 			}
@@ -854,16 +914,73 @@ func (s *Server) handleStatSources(w http.ResponseWriter, r *http.Request) {
 // --- Governor config endpoints ---
 
 func (s *Server) handleGovernorConfigGet(w http.ResponseWriter, r *http.Request) {
-	state := s.deps.Governor.GetState()
-	budget := s.deps.Governor.GetBudget()
+	cfg := s.deps.Config
+
+	// Build agents list
+	agents := make([]string, 0, len(cfg.Agents))
+	for name := range cfg.Agents {
+		agents = append(agents, name)
+	}
+
+	// Extract thresholds from modes (exclude idle which is always 0)
+	thresholds := map[string]int{}
+	for modeName, mode := range cfg.Governor.Modes {
+		if modeName != "idle" {
+			thresholds[modeName] = mode.Threshold
+		}
+	}
+
+	// Build full org/repo paths
+	org := cfg.Project.Org
+	repos := make([]string, 0, len(cfg.Project.Repos))
+	for _, repo := range cfg.Project.Repos {
+		if strings.Contains(repo, "/") {
+			repos = append(repos, repo)
+		} else {
+			repos = append(repos, org+"/"+repo)
+		}
+	}
+
+	// Build notifications — mask sensitive values like the old hive does
+	notifications := map[string]interface{}{
+		"ntfyServer":     "",
+		"ntfyTopic":      "",
+		"discordWebhook": "",
+		"hasNtfy":        false,
+		"hasDiscord":     false,
+	}
+	if cfg.Notifications.Ntfy != nil {
+		notifications["ntfyServer"] = maskSecret(cfg.Notifications.Ntfy.Server)
+		notifications["ntfyTopic"] = maskSecret(cfg.Notifications.Ntfy.Topic)
+		notifications["hasNtfy"] = cfg.Notifications.Ntfy.Server != ""
+	}
+	if cfg.Notifications.Discord != nil {
+		notifications["discordWebhook"] = maskSecret(cfg.Notifications.Discord.Webhook)
+		notifications["hasDiscord"] = cfg.Notifications.Discord.Webhook != ""
+	}
 
 	jsonResponse(w, map[string]interface{}{
-		"mode":       state.Mode,
-		"eval_interval_s": s.deps.Config.Governor.EvalIntervalS,
-		"modes":      s.deps.Config.Governor.Modes,
-		"budget":     budget,
-		"org":        s.deps.Config.Project.Org,
-		"repos":      s.deps.Config.Project.Repos,
+		"agents":     agents,
+		"thresholds": thresholds,
+		"labels":     cfg.Governor.Labels.Exempt,
+		"repos":      repos,
+		"budget": map[string]interface{}{
+			"totalTokens": cfg.Governor.Budget.TotalTokens,
+			"periodDays":  cfg.Governor.Budget.PeriodDays,
+			"criticalPct": cfg.Governor.Budget.CriticalPct,
+		},
+		"notifications": notifications,
+		"health": map[string]interface{}{
+			"healthcheckInterval": cfg.Governor.Health.HealthcheckInterval,
+			"restartCooldown":     cfg.Governor.Health.RestartCooldown,
+			"modelLock":           cfg.Governor.Health.ModelLock,
+		},
+		"sensing": map[string]interface{}{
+			"ghRatePatterns":     cfg.Governor.Sensing.GHRatePatterns,
+			"cliExcludePatterns": cfg.Governor.Sensing.CLIExcludePatterns,
+			"ttlSeconds":         cfg.Governor.Sensing.TTLSeconds,
+			"pullbackSeconds":    cfg.Governor.Sensing.PullbackSeconds,
+		},
 	})
 }
 
@@ -901,7 +1018,15 @@ func (s *Server) handleGovernorThresholds(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleGovernorLabels(w http.ResponseWriter, r *http.Request) {
-	s.handleConfigStub(w, r, "labels")
+	var body struct {
+		Labels []string `json:"labels"`
+	}
+	if err := decodeBody(r, &body); err != nil {
+		jsonError(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	s.deps.Config.Governor.Labels.Exempt = body.Labels
+	okResponse(w, map[string]string{"status": "updated"})
 }
 
 func (s *Server) handleGovernorBudget(w http.ResponseWriter, r *http.Request) {
@@ -918,11 +1043,49 @@ func (s *Server) handleGovernorBudget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGovernorNotifications(w http.ResponseWriter, r *http.Request) {
-	s.handleConfigStub(w, r, "notifications")
+	var body struct {
+		NtfyServer     string `json:"ntfyServer"`
+		NtfyTopic      string `json:"ntfyTopic"`
+		DiscordWebhook string `json:"discordWebhook"`
+	}
+	if err := decodeBody(r, &body); err != nil {
+		jsonError(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	if body.NtfyServer != "" || body.NtfyTopic != "" {
+		if s.deps.Config.Notifications.Ntfy == nil {
+			s.deps.Config.Notifications.Ntfy = &config.NtfyConfig{}
+		}
+		s.deps.Config.Notifications.Ntfy.Server = body.NtfyServer
+		s.deps.Config.Notifications.Ntfy.Topic = body.NtfyTopic
+	}
+	if body.DiscordWebhook != "" {
+		if s.deps.Config.Notifications.Discord == nil {
+			s.deps.Config.Notifications.Discord = &config.DiscordConfig{}
+		}
+		s.deps.Config.Notifications.Discord.Webhook = body.DiscordWebhook
+	}
+	okResponse(w, map[string]string{"status": "updated"})
 }
 
 func (s *Server) handleGovernorHealth(w http.ResponseWriter, r *http.Request) {
-	s.handleConfigStub(w, r, "health")
+	var body struct {
+		HealthcheckInterval int  `json:"healthcheckInterval"`
+		RestartCooldown     int  `json:"restartCooldown"`
+		ModelLock           bool `json:"modelLock"`
+	}
+	if err := decodeBody(r, &body); err != nil {
+		jsonError(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	if body.HealthcheckInterval > 0 {
+		s.deps.Config.Governor.Health.HealthcheckInterval = body.HealthcheckInterval
+	}
+	if body.RestartCooldown > 0 {
+		s.deps.Config.Governor.Health.RestartCooldown = body.RestartCooldown
+	}
+	s.deps.Config.Governor.Health.ModelLock = body.ModelLock
+	okResponse(w, map[string]string{"status": "updated"})
 }
 
 func (s *Server) handleGovernorAddAgent(w http.ResponseWriter, r *http.Request) {
@@ -1521,6 +1684,20 @@ func (s *Server) handleConfigStub(w http.ResponseWriter, r *http.Request, sectio
 	}
 
 	okResponse(w, map[string]string{"status": "updated", "section": section})
+}
+
+// maskSecret replaces the interior of a secret string with bullet characters,
+// revealing only the last 4 characters (matching old hive behavior).
+func maskSecret(s string) string {
+	if s == "" {
+		return ""
+	}
+	const visibleSuffix = 4
+	if len(s) <= visibleSuffix {
+		return strings.Repeat("•", len(s))
+	}
+	masked := strings.Repeat("•", len(s)-visibleSuffix)
+	return masked + s[len(s)-visibleSuffix:]
 }
 
 // suppress unused import warnings

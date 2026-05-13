@@ -6,6 +6,12 @@ export HIVE_API_PORT="${HIVE_API_PORT:-3002}"
 export HIVE_PROXY_PORT="${HIVE_PROXY_PORT:-3001}"
 export HIVE_STATIC_DIR="${HIVE_STATIC_DIR:-/opt/hive/proxy/public}"
 
+# Seed data files from image into /data if they don't already exist
+if [ -d /opt/hive/seed-data ]; then
+  echo "[entrypoint] Seeding data files..."
+  cp -rn /opt/hive/seed-data/* /data/ 2>/dev/null || true
+fi
+
 echo "[entrypoint] Starting Go binary on :${HIVE_API_PORT}"
 hive "$@" &
 HIVE_PID=$!

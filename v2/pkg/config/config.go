@@ -65,11 +65,16 @@ type PoliciesConfig struct {
 }
 
 type AgentConfig struct {
-	Backend     string `yaml:"backend"`
-	Model       string `yaml:"model"`
-	BeadsDir    string `yaml:"beads_dir"`
-	Enabled     bool   `yaml:"enabled"`
-	ClearOnKick bool   `yaml:"clear_on_kick"`
+	Backend         string `yaml:"backend"`
+	Model           string `yaml:"model"`
+	BeadsDir        string `yaml:"beads_dir"`
+	Enabled         bool   `yaml:"enabled"`
+	ClearOnKick     bool   `yaml:"clear_on_kick"`
+	CLIPinned       bool   `yaml:"cli_pinned"`
+	StaleTimeout    int    `yaml:"stale_timeout"`
+	RestartStrategy string `yaml:"restart_strategy"`
+	LaunchCmd       string `yaml:"launch_cmd"`
+	DisplayName     string `yaml:"display_name"`
 	// clearOnKickSet tracks whether YAML explicitly set clear_on_kick to false
 	clearOnKickSet bool
 }
@@ -90,8 +95,35 @@ func (a *AgentConfig) UnmarshalYAML(value *yaml.Node) error {
 }
 
 type GovernorConfig struct {
-	Modes          map[string]ModeConfig `yaml:"modes"`
-	EvalIntervalS  int                   `yaml:"eval_interval_s"`
+	Modes         map[string]ModeConfig `yaml:"modes"`
+	EvalIntervalS int                   `yaml:"eval_interval_s"`
+	Labels        LabelsConfig          `yaml:"labels"`
+	Sensing       SensingConfig         `yaml:"sensing"`
+	Health        HealthConfig          `yaml:"health"`
+	Budget        BudgetConfig          `yaml:"budget"`
+}
+
+type LabelsConfig struct {
+	Exempt []string `yaml:"exempt"`
+}
+
+type SensingConfig struct {
+	GHRatePatterns     []string `yaml:"gh_rate_patterns"`
+	CLIExcludePatterns []string `yaml:"cli_exclude_patterns"`
+	TTLSeconds         int      `yaml:"ttl_seconds"`
+	PullbackSeconds    int      `yaml:"pullback_seconds"`
+}
+
+type HealthConfig struct {
+	HealthcheckInterval int  `yaml:"healthcheck_interval"`
+	RestartCooldown     int  `yaml:"restart_cooldown"`
+	ModelLock           bool `yaml:"model_lock"`
+}
+
+type BudgetConfig struct {
+	TotalTokens int64 `yaml:"total_tokens"`
+	PeriodDays  int   `yaml:"period_days"`
+	CriticalPct int   `yaml:"critical_pct"`
 }
 
 type ModeConfig struct {
@@ -310,13 +342,19 @@ func expandEnvVars(s string) string {
 }
 
 const (
-	defaultDashboardPort       = 3002
-	defaultEvalIntervalS       = 300
-	defaultPollIntervalMins    = 5
-	defaultKnowledgeMaxFacts   = 25
-	defaultKnowledgeEngine     = "llm-wiki"
-	defaultCuratorSchedule     = "daily"
-	defaultPromoteThreshold    = 0.9
+	defaultDashboardPort          = 3002
+	defaultEvalIntervalS          = 300
+	defaultPollIntervalMins       = 5
+	defaultKnowledgeMaxFacts      = 25
+	defaultKnowledgeEngine        = "llm-wiki"
+	defaultCuratorSchedule        = "daily"
+	defaultPromoteThreshold       = 0.9
+	defaultSensingTTLSeconds      = 900
+	defaultSensingPullbackSeconds = 900
+	defaultHealthcheckIntervalS   = 300
+	defaultRestartCooldownS       = 60
+	defaultBudgetPeriodDays       = 7
+	defaultBudgetCriticalPct      = 90
 )
 
 func (c *Config) applyDefaults() {
@@ -346,6 +384,51 @@ func (c *Config) applyDefaults() {
 			agent.ClearOnKick = true
 		}
 		c.Agents[name] = agent
+	}
+
+	if len(c.Governor.Labels.Exempt) == 0 {
+		c.Governor.Labels.Exempt = []string{
+			"nightly-tests", "LFX", "do-not-merge", "meta-tracker",
+			"auto-qa-tuning-report", "hold", "adopters",
+			"changes-requested", "waiting-on-author",
+		}
+	}
+	if len(c.Governor.Sensing.GHRatePatterns) == 0 {
+		c.Governor.Sensing.GHRatePatterns = []string{
+			"API rate limit exceeded",
+			"secondary rate limit",
+			"403.*rate limit",
+			"You have exceeded a secondary rate",
+			"retry-after:[[:space:]]*[0-9]",
+			"gh: Resource not accessible",
+			"abuse detection mechanism",
+		}
+	}
+	if len(c.Governor.Sensing.CLIExcludePatterns) == 0 {
+		c.Governor.Sensing.CLIExcludePatterns = []string{
+			"You.re out of extra usage",
+			"out of extra usage",
+			"extra usage.*resets",
+			"resets [0-9]+(:[0-9]+)?[aApP][mM]",
+		}
+	}
+	if c.Governor.Sensing.TTLSeconds == 0 {
+		c.Governor.Sensing.TTLSeconds = defaultSensingTTLSeconds
+	}
+	if c.Governor.Sensing.PullbackSeconds == 0 {
+		c.Governor.Sensing.PullbackSeconds = defaultSensingPullbackSeconds
+	}
+	if c.Governor.Health.HealthcheckInterval == 0 {
+		c.Governor.Health.HealthcheckInterval = defaultHealthcheckIntervalS
+	}
+	if c.Governor.Health.RestartCooldown == 0 {
+		c.Governor.Health.RestartCooldown = defaultRestartCooldownS
+	}
+	if c.Governor.Budget.PeriodDays == 0 {
+		c.Governor.Budget.PeriodDays = defaultBudgetPeriodDays
+	}
+	if c.Governor.Budget.CriticalPct == 0 {
+		c.Governor.Budget.CriticalPct = defaultBudgetCriticalPct
 	}
 
 	if c.Knowledge.Enabled {

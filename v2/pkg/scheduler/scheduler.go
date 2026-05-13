@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/kubestellar/hive/v2/pkg/classify"
 	"github.com/kubestellar/hive/v2/pkg/config"
@@ -157,12 +158,46 @@ func (s *Scheduler) buildReviewerMessage(actionable *github.ActionableResult) st
 }
 
 func (s *Scheduler) buildSupervisorMessage(actionable *github.ActionableResult) string {
+	now := time.Now().In(time.FixedZone("EDT", -4*3600))
 	var b strings.Builder
 	b.WriteString("[agent:supervisor] [KICK]\n")
-	b.WriteString("Sweep all agents. Check for stalls, idle sessions, missed work.\n")
+	b.WriteString(fmt.Sprintf("MONITORING PASS %s\n\n", now.Format("1/2 3:04 PM MST")))
+
+	b.WriteString(s.ghAuthInstructions())
+	b.WriteString(s.reposSection())
+
+	b.WriteString("ROLE: You are the SUPERVISOR. Your job is to MONITOR other agents, NOT to fix issues yourself.\n")
+	b.WriteString("⛔ NEVER work on issues directly — that is scanner's job.\n")
+	b.WriteString("⛔ NEVER open PRs or commit code — that is scanner's and architect's job.\n")
+	b.WriteString("⛔ NEVER merge PRs — that is scanner's job.\n")
+	b.WriteString("⛔ NEVER launch background fix agents — that is scanner's job.\n\n")
+
+	b.WriteString("YOUR RESPONSIBILITIES:\n")
+	b.WriteString("  1. Check all agent tmux panes — are they working or stuck at a prompt?\n")
+	b.WriteString("  2. Check if agents are idle when they should be working (queue > 0 but agent idle)\n")
+	b.WriteString("  3. Report agent health: running/stuck/crashed/idle/rate-limited\n")
+	b.WriteString("  4. Flag stale agents that haven't produced output in > 1 cadence cycle\n")
+	b.WriteString("  5. Summarize current state: what each agent is doing, what's stuck, what needs attention\n\n")
+
 	b.WriteString(fmt.Sprintf("Queue: %d issues, %d PRs, %d on hold, %d SLA violations\n",
 		actionable.Issues.Count, actionable.PRs.Count,
 		actionable.Hold.Total, actionable.Issues.SLAViolations))
+
+	b.WriteString("\nBeads: ~/supervisor-beads\n")
+	return b.String()
+}
+
+func (s *Scheduler) ghAuthInstructions() string {
+	return "⚙ GH AUTH: ALWAYS prefix gh commands with: GH_TOKEN=$(cat /var/run/hive-metrics/gh-app-token.cache) gh ... — this uses the GitHub App token (15k/hr). NEVER use a PAT or hardcode tokens.\n\n"
+}
+
+func (s *Scheduler) reposSection() string {
+	var b strings.Builder
+	b.WriteString("AUTHORIZED REPOS (you may ONLY interact with these):\n")
+	for _, repo := range s.cfg.Project.Repos {
+		b.WriteString(fmt.Sprintf("  %s/%s\n", s.cfg.Project.Org, repo))
+	}
+	b.WriteString("⛔ NEVER access, search, list, file issues in, or open PRs on repos not listed above.\n\n")
 	return b.String()
 }
 
