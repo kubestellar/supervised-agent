@@ -121,12 +121,17 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	cfg := s.deps.Config
+	primaryRepo := cfg.Project.PrimaryRepo
+	if primaryRepo == "" && len(cfg.Project.Repos) > 0 {
+		primaryRepo = cfg.Project.Org + "/" + cfg.Project.Repos[0]
+	}
 	jsonResponse(w, map[string]interface{}{
-		"org":        cfg.Project.Org,
-		"repos":      cfg.Project.Repos,
-		"ai_author":  cfg.Project.AIAuthor,
-		"agents":     len(cfg.EnabledAgents()),
-		"eval_interval_s": cfg.Governor.EvalIntervalS,
+		"org":              cfg.Project.Org,
+		"repos":            cfg.Project.Repos,
+		"ai_author":        cfg.Project.AIAuthor,
+		"agents":           len(cfg.EnabledAgents()),
+		"eval_interval_s":  cfg.Governor.EvalIntervalS,
+		"primaryRepo":      primaryRepo,
 	})
 }
 
@@ -135,24 +140,34 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTrends(w http.ResponseWriter, r *http.Request) {
+	const hoursPerDay = 24
+	const hoursPerWeek = 168
+
+	rangeParam := r.URL.Query().Get("range")
 	hours, _ := strconv.Atoi(r.URL.Query().Get("hours"))
-	if hours <= 0 {
-		hours = 24
+
+	switch rangeParam {
+	case "week":
+		hours = hoursPerWeek
+	case "day":
+		hours = hoursPerDay
+	default:
+		if hours <= 0 {
+			hours = hoursPerDay
+		}
 	}
+
 	cutoff := time.Now().Add(-time.Duration(hours) * time.Hour)
 
 	evals := s.deps.Governor.EvalHistory()
-	var filtered []interface{}
+	filtered := make([]interface{}, 0)
 	for _, e := range evals {
 		if e.Timestamp.After(cutoff) {
 			filtered = append(filtered, e)
 		}
 	}
 
-	jsonResponse(w, map[string]interface{}{
-		"hours":  hours,
-		"points": filtered,
-	})
+	jsonResponse(w, filtered)
 }
 
 func (s *Server) handleTimeline(w http.ResponseWriter, r *http.Request) {
@@ -432,15 +447,22 @@ func (s *Server) handleSummaries(w http.ResponseWriter, r *http.Request) {
 	status := s.status
 	s.statusMu.RUnlock()
 
-	if status == nil || status.Actionable == nil {
+	if status == nil {
 		jsonResponse(w, map[string]interface{}{"issues": []interface{}{}, "prs": []interface{}{}})
 		return
 	}
 
+	allIssues := make([]any, 0)
+	allPRs := make([]any, 0)
+	for _, repo := range status.Repos {
+		allIssues = append(allIssues, repo.ActionableIssues...)
+		allPRs = append(allPRs, repo.OpenPrs...)
+	}
+
 	jsonResponse(w, map[string]interface{}{
-		"issues": status.Actionable.Issues.Items,
-		"prs":    status.Actionable.PRs.Items,
-		"hold":   status.Actionable.Hold.Items,
+		"issues": allIssues,
+		"prs":    allPRs,
+		"hold":   status.Hold.Items,
 	})
 }
 

@@ -135,18 +135,18 @@ func (b *Builder) buildIndexHTML(path string, status *dashboard.StatusPayload, t
 <div class="card">`,
 		ts, ts,
 		status.Governor.Mode,
-		status.Governor.QueueIssues,
-		status.Governor.QueuePRs,
+		status.Governor.Issues,
+		status.Governor.PRs,
 	)
 
-	for name, agent := range status.Agents {
+	for _, agent := range status.Agents {
 		stateClass := "state-" + agent.State
 		html += fmt.Sprintf(`
   <div class="agent">
     <span>%s</span>
     <span class="%s">%s</span>
     <span class="label">%s / %s</span>
-  </div>`, name, stateClass, agent.State, agent.Backend, agent.Model)
+  </div>`, agent.Name, stateClass, agent.State, agent.CLI, agent.Model)
 	}
 
 	html += `

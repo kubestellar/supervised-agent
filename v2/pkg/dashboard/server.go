@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubestellar/hive/v2/pkg/github"
-	"github.com/kubestellar/hive/v2/pkg/governor"
 )
 
 //go:embed static
@@ -32,28 +30,116 @@ type Server struct {
 	sidebarMu  sync.RWMutex
 }
 
+// StatusPayload matches the JSON contract the dashboard frontend render() expects.
 type StatusPayload struct {
-	Governor     governor.State            `json:"governor"`
-	Actionable   *github.ActionableResult  `json:"actionable,omitempty"`
-	Agents       map[string]AgentStatus    `json:"agents"`
-	Tokens       *TokenSummary             `json:"tokens,omitempty"`
-	Timestamp    time.Time                 `json:"timestamp"`
+	Timestamp     string              `json:"timestamp"`
+	Agents        []FrontendAgent     `json:"agents"`
+	Governor      FrontendGovernor    `json:"governor"`
+	Tokens        FrontendTokens      `json:"tokens"`
+	Repos         []FrontendRepo      `json:"repos"`
+	Beads         FrontendBeads       `json:"beads"`
+	Health        map[string]any      `json:"health"`
+	Budget        FrontendBudget      `json:"budget"`
+	CadenceMatrix []FrontendCadence   `json:"cadenceMatrix"`
+	GHRateLimits  map[string]any      `json:"ghRateLimits"`
+	AgentMetrics  map[string]any      `json:"agentMetrics"`
+	Hold          FrontendHold        `json:"hold"`
+	IssueToMerge  map[string]any      `json:"issueToMerge"`
 }
 
-type AgentStatus struct {
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	Backend   string `json:"backend"`
-	Model     string `json:"model"`
-	PID       int    `json:"pid,omitempty"`
-	LastKick  string `json:"last_kick,omitempty"`
+type FrontendAgent struct {
+	Name            string `json:"name"`
+	State           string `json:"state"`
+	Busy            string `json:"busy"`
+	Paused          bool   `json:"paused"`
+	OffByCadence    bool   `json:"offByCadence"`
+	NeedsLogin      bool   `json:"needsLogin"`
+	CLI             string `json:"cli"`
+	Model           string `json:"model"`
+	Cadence         string `json:"cadence"`
+	PinnedCli       bool   `json:"pinnedCli"`
+	PinnedModel     bool   `json:"pinnedModel"`
+	PinnedBoth      bool   `json:"pinnedBoth"`
+	LastKick        string `json:"lastKick,omitempty"`
+	NextKick        string `json:"nextKick,omitempty"`
+	Restarts        int    `json:"restarts"`
+	LiveSummary     string `json:"liveSummary,omitempty"`
+	StructuredStatus string `json:"structuredStatus,omitempty"`
+	GovReason       string `json:"govReason,omitempty"`
 }
 
-type TokenSummary struct {
-	TotalTokens  int64            `json:"total_tokens"`
-	ByAgent      map[string]int64 `json:"by_agent"`
-	ByModel      map[string]int64 `json:"by_model"`
-	SessionCount int              `json:"session_count"`
+type FrontendGovernor struct {
+	Active     bool                    `json:"active"`
+	Mode       string                  `json:"mode"`
+	Issues     int                     `json:"issues"`
+	PRs        int                     `json:"prs"`
+	Thresholds FrontendThresholds      `json:"thresholds"`
+	NextKick   string                  `json:"nextKick,omitempty"`
+}
+
+type FrontendThresholds struct {
+	Quiet int `json:"quiet"`
+	Busy  int `json:"busy"`
+	Surge int `json:"surge"`
+}
+
+type FrontendTokens struct {
+	LookbackHours int                        `json:"lookbackHours"`
+	Sessions      int                        `json:"sessions"`
+	Totals        FrontendTokenTotals        `json:"totals"`
+	ByAgent       map[string]FrontendTokenBucket `json:"byAgent"`
+	ByModel       map[string]FrontendTokenBucket `json:"byModel"`
+}
+
+type FrontendTokenTotals struct {
+	Input       int64 `json:"input"`
+	Output      int64 `json:"output"`
+	CacheRead   int64 `json:"cacheRead"`
+	CacheCreate int64 `json:"cacheCreate"`
+	Messages    int   `json:"messages"`
+}
+
+type FrontendTokenBucket struct {
+	Input     int64 `json:"input"`
+	Output    int64 `json:"output"`
+	CacheRead int64 `json:"cacheRead"`
+	Messages  int   `json:"messages,omitempty"`
+}
+
+type FrontendRepo struct {
+	Name             string        `json:"name"`
+	Full             string        `json:"full"`
+	Issues           int           `json:"issues"`
+	PRs              int           `json:"prs"`
+	ActionableIssues []any         `json:"actionableIssues"`
+	OpenPrs          []any         `json:"openPrs"`
+}
+
+type FrontendBeads struct {
+	Workers    int `json:"workers"`
+	Supervisor int `json:"supervisor"`
+}
+
+type FrontendBudget struct {
+	WeeklyBudget   int64   `json:"BUDGET_WEEKLY"`
+	Used           int64   `json:"BUDGET_USED"`
+	PctUsed        float64 `json:"BUDGET_PCT_USED"`
+	ProjectedPct   float64 `json:"PROJECTED_PCT"`
+	BurnRateHourly float64 `json:"BURN_RATE_HOURLY"`
+	HoursRemaining float64 `json:"HOURS_REMAINING"`
+}
+
+type FrontendCadence struct {
+	Agent string `json:"agent"`
+	Idle  string `json:"idle"`
+	Quiet string `json:"quiet"`
+	Busy  string `json:"busy"`
+	Surge string `json:"surge"`
+}
+
+type FrontendHold struct {
+	Total int   `json:"total"`
+	Items []any `json:"items"`
 }
 
 const sseRetryMs = 3000
@@ -132,7 +218,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) UpdateStatus(status *StatusPayload) {
 	s.statusMu.Lock()
-	status.Timestamp = time.Now()
+	status.Timestamp = time.Now().UTC().Format(time.RFC3339)
 	s.status = status
 	s.statusMu.Unlock()
 

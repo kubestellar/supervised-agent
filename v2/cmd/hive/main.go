@@ -177,7 +177,7 @@ func main() {
 	ticker := time.NewTicker(time.Duration(cfg.Governor.EvalIntervalS) * time.Second)
 	defer ticker.Stop()
 
-	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, logger)
+	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, logger)
 
 	for {
 		select {
@@ -186,7 +186,7 @@ func main() {
 			persistState(agentMgr, gov, statePath, logger)
 			return
 		case <-ticker.C:
-			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, logger)
+			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, logger)
 		}
 	}
 }
@@ -201,6 +201,7 @@ func runEvalCycle(
 	dashSrv *dashboard.Server,
 	notifier *notify.Notifier,
 	beadStores map[string]*beads.Store,
+	tokenCollector *tokens.Collector,
 	logger *slog.Logger,
 ) {
 	actionable, err := ghClient.EnumerateActionable(ctx)
@@ -248,26 +249,17 @@ func runEvalCycle(
 		}
 	}
 
-	agentStatuses := make(map[string]dashboard.AgentStatus)
-	for name, proc := range agentMgr.AllStatuses() {
-		status := dashboard.AgentStatus{
-			Name:    name,
-			State:   string(proc.State),
-			Backend: proc.Config.Backend,
-			Model:   proc.Config.Model,
-			PID:     proc.PID,
-		}
-		if proc.LastKick != nil {
-			status.LastKick = proc.LastKick.Format(time.RFC3339)
-		}
-		agentStatuses[name] = status
-	}
+	agentStatuses := agentMgr.AllStatuses()
 
-	dashSrv.UpdateStatus(&dashboard.StatusPayload{
-		Governor:   govState,
-		Actionable: actionable,
-		Agents:     agentStatuses,
-	})
+	dashSrv.UpdateStatus(dashboard.BuildFrontendStatus(
+		govState,
+		actionable,
+		agentStatuses,
+		cfg,
+		tokenCollector,
+		gov,
+		beadStores,
+	))
 }
 
 func persistState(agentMgr *agent.Manager, gov *governor.Governor, path string, logger *slog.Logger) {
