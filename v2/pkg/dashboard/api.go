@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kubestellar/hive/v2/pkg/config"
+	"github.com/kubestellar/hive/v2/pkg/governor"
 	"github.com/kubestellar/hive/v2/pkg/knowledge"
 )
 
@@ -180,17 +181,21 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	history := s.deps.Governor.EvalHistory()
-	if len(history) > 0 {
-		jsonResponse(w, history)
-		return
-	}
+
+	// Prepend seed data from old hive so sparklines have historical context
 	seedData, err := os.ReadFile("/data/sparkline-history.json")
-	if err != nil {
-		jsonResponse(w, history)
-		return
+	if err == nil {
+		var seed []governor.EvalSnapshot
+		if json.Unmarshal(seedData, &seed) == nil && len(seed) > 0 {
+			combined := make([]governor.EvalSnapshot, 0, len(seed)+len(history))
+			combined = append(combined, seed...)
+			combined = append(combined, history...)
+			jsonResponse(w, combined)
+			return
+		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(seedData)
+
+	jsonResponse(w, history)
 }
 
 func (s *Server) handleTrends(w http.ResponseWriter, r *http.Request) {

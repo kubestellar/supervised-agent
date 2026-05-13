@@ -65,11 +65,28 @@ type PoliciesConfig struct {
 }
 
 type AgentConfig struct {
-	Backend    string `yaml:"backend"`
-	Model      string `yaml:"model"`
-	BeadsDir   string `yaml:"beads_dir"`
-	Enabled    bool   `yaml:"enabled"`
-	ClearOnKick bool  `yaml:"clear_on_kick"`
+	Backend     string `yaml:"backend"`
+	Model       string `yaml:"model"`
+	BeadsDir    string `yaml:"beads_dir"`
+	Enabled     bool   `yaml:"enabled"`
+	ClearOnKick bool   `yaml:"clear_on_kick"`
+	// clearOnKickSet tracks whether YAML explicitly set clear_on_kick to false
+	clearOnKickSet bool
+}
+
+func (a *AgentConfig) UnmarshalYAML(value *yaml.Node) error {
+	type plain AgentConfig
+	if err := value.Decode((*plain)(a)); err != nil {
+		return err
+	}
+	// Check if clear_on_kick was explicitly present in YAML
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		if value.Content[i].Value == "clear_on_kick" {
+			a.clearOnKickSet = true
+			break
+		}
+	}
+	return nil
 }
 
 type GovernorConfig struct {
@@ -324,6 +341,9 @@ func (c *Config) applyDefaults() {
 		}
 		if !agent.Enabled {
 			agent.Enabled = true
+		}
+		if !agent.clearOnKickSet {
+			agent.ClearOnKick = true
 		}
 		c.Agents[name] = agent
 	}
