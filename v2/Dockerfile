@@ -8,18 +8,20 @@ RUN CGO_ENABLED=0 go build -ldflags "-X main.gitHash=${GIT_HASH} -X main.gitShor
 
 FROM node:24-alpine
 
-ARG CLAUDE_CODE_VERSION=latest
+# --- Layer 1: system packages (rarely changes) ---
+RUN apk add --no-cache git ca-certificates bash curl tzdata tmux libuv bzip2
 
-RUN apk add --no-cache git ca-certificates bash curl tzdata tmux libuv \
- && npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
- && npm install -g @github/copilot \
- && npm install -g @google/gemini-cli \
- && npm cache clean --force
+# --- Layer 2: ttyd (stable, infrequent releases) ---
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then TTYD_ARCH=x86_64; \
+    elif [ "$ARCH" = "aarch64" ]; then TTYD_ARCH=aarch64; \
+    else TTYD_ARCH=x86_64; fi && \
+    curl -sL -o /usr/local/bin/ttyd \
+      "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.${TTYD_ARCH}" && \
+    chmod +x /usr/local/bin/ttyd
 
-# IBM Bob Shell (curl installer)
-RUN curl -fsSL https://bob.ibm.com/download/bobshell.sh | bash
-
-# Goose CLI (Rust binary — not available via npm)
+# --- Layer 3: Goose CLI (Rust binary, moderate release cadence) ---
+ARG GOOSE_VERSION=latest
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then GOOSE_ARCH=x86_64; \
     elif [ "$ARCH" = "aarch64" ]; then GOOSE_ARCH=aarch64; \
@@ -30,14 +32,23 @@ RUN ARCH=$(uname -m) && \
     rm /tmp/goose.tar.bz2 && \
     chmod +x /usr/local/bin/goose
 
-RUN ARCH=$(uname -m) && \
-    if [ "$ARCH" = "x86_64" ]; then TTYD_ARCH=x86_64; \
-    elif [ "$ARCH" = "aarch64" ]; then TTYD_ARCH=aarch64; \
-    else TTYD_ARCH=x86_64; fi && \
-    curl -sL -o /usr/local/bin/ttyd \
-      "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.${TTYD_ARCH}" && \
-    chmod +x /usr/local/bin/ttyd
+# --- Layer 4: IBM Bob Shell (moderate release cadence) ---
+ARG BOB_VERSION=latest
+RUN curl -fsSL https://bob.ibm.com/download/bobshell.sh | bash
 
+# --- Layer 5: Gemini CLI (moderate release cadence) ---
+ARG GEMINI_CLI_VERSION=latest
+RUN npm install -g @google/gemini-cli@${GEMINI_CLI_VERSION} && npm cache clean --force
+
+# --- Layer 6: GitHub Copilot CLI (frequent updates) ---
+ARG COPILOT_VERSION=latest
+RUN npm install -g @github/copilot@${COPILOT_VERSION} && npm cache clean --force
+
+# --- Layer 7: Claude Code (most frequent updates) ---
+ARG CLAUDE_CODE_VERSION=latest
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} && npm cache clean --force
+
+# --- Application layers ---
 ENV HOME=/data/home
 RUN mkdir -p /data/home
 
