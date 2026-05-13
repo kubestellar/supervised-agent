@@ -1,13 +1,12 @@
 package agent
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,8 +30,10 @@ type KickRecord struct {
 }
 
 const (
-	outputBufferCapacity  = 500
-	kickHistoryCapacity   = 50
+	outputBufferCapacity = 500
+	kickHistoryCapacity  = 50
+	tmuxCaptureLines     = 200
+	paneCaptureSleep     = 500 * time.Millisecond
 )
 
 type AgentProcess struct {
@@ -50,23 +51,27 @@ type AgentProcess struct {
 	RestartCount    int
 	OutputBuffer    *RingBuffer
 	KickHistory     []KickRecord
-	cmd             *exec.Cmd
-	stdin           io.WriteCloser
-	stdout          io.ReadCloser
-	stderr          io.ReadCloser
+	tmuxSession     string
 	cancel          context.CancelFunc
 }
 
 type Manager struct {
-	agents map[string]*AgentProcess
-	mu     sync.RWMutex
-	logger *slog.Logger
+	agents  map[string]*AgentProcess
+	mu      sync.RWMutex
+	logger  *slog.Logger
+	workDir string
 }
 
 func NewManager(agents map[string]config.AgentConfig, logger *slog.Logger) *Manager {
+	workDir := os.Getenv("HIVE_WORK_DIR")
+	if workDir == "" {
+		workDir = "/data/agents"
+	}
+
 	m := &Manager{
-		agents: make(map[string]*AgentProcess),
-		logger: logger,
+		agents:  make(map[string]*AgentProcess),
+		logger:  logger,
+		workDir: workDir,
 	}
 
 	for name, cfg := range agents {
@@ -75,6 +80,7 @@ func NewManager(agents map[string]config.AgentConfig, logger *slog.Logger) *Mana
 			Config:       cfg,
 			State:        StateStopped,
 			OutputBuffer: NewRingBuffer(outputBufferCapacity),
+			tmuxSession:  "hive-" + name,
 		}
 	}
 
@@ -94,15 +100,44 @@ func (m *Manager) Start(ctx context.Context, name string) error {
 		return fmt.Errorf("agent %s already running", name)
 	}
 
+	if err := m.ensureTmuxSession(agent); err != nil {
+		return err
+	}
+
 	if agent.Paused {
 		agent.State = StatePaused
 		return nil
 	}
 
-	return m.startLocked(ctx, agent)
+	return m.launchInTmux(ctx, agent)
 }
 
-func (m *Manager) startLocked(ctx context.Context, agent *AgentProcess) error {
+func (m *Manager) ensureTmuxSession(agent *AgentProcess) error {
+	if m.tmuxSessionExists(agent.tmuxSession) {
+		return nil
+	}
+
+	agentDir := m.workDir + "/" + agent.Name
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		return fmt.Errorf("creating agent work dir %s: %w", agentDir, err)
+	}
+
+	cmd := exec.Command("tmux", "new-session", "-d", "-s", agent.tmuxSession, "-c", agentDir)
+	cmd.Env = append(os.Environ(), agentEnvVars(agent)...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("creating tmux session for %s: %w", agent.Name, err)
+	}
+
+	m.logger.Info("tmux session created", "name", agent.Name, "session", agent.tmuxSession)
+	return nil
+}
+
+func (m *Manager) tmuxSessionExists(session string) bool {
+	cmd := exec.Command("tmux", "has-session", "-t", session)
+	return cmd.Run() == nil
+}
+
+func (m *Manager) launchInTmux(ctx context.Context, agent *AgentProcess) error {
 	backend := agent.Config.Backend
 	if agent.BackendOverride != "" {
 		backend = agent.BackendOverride
@@ -110,62 +145,86 @@ func (m *Manager) startLocked(ctx context.Context, agent *AgentProcess) error {
 
 	binary, err := backendBinary(backend)
 	if err != nil {
-		return err
+		agent.State = StateFailed
+		m.logger.Warn("backend binary not found", "name", agent.Name, "backend", backend, "error", err)
+		return nil
 	}
 
-	agentCtx, cancel := context.WithCancel(ctx)
-	cmd := exec.CommandContext(agentCtx, binary)
-	cmd.Env = append(os.Environ(), agentEnvVars(agent)...)
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		cancel()
-		return fmt.Errorf("creating stdin pipe for %s: %w", agent.Name, err)
+	launchCmd := binary
+	model := agent.Config.Model
+	if agent.ModelOverride != "" {
+		model = agent.ModelOverride
 	}
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		cancel()
-		return fmt.Errorf("creating stdout pipe for %s: %w", agent.Name, err)
+	switch backend {
+	case "claude":
+		launchCmd = fmt.Sprintf("%s --model %s --dangerously-skip-permissions", binary, model)
+	case "copilot":
+		launchCmd = fmt.Sprintf("%s --model %s", binary, model)
+	default:
+		launchCmd = binary
 	}
 
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		cancel()
-		return fmt.Errorf("creating stderr pipe for %s: %w", agent.Name, err)
-	}
+	envCmd := m.buildEnvPrefix(agent)
+	fullCmd := envCmd + launchCmd
 
-	if err := cmd.Start(); err != nil {
-		cancel()
-		return fmt.Errorf("starting agent %s: %w", agent.Name, err)
+	cmd := exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, fullCmd, "Enter")
+	if err := cmd.Run(); err != nil {
+		agent.State = StateFailed
+		return fmt.Errorf("launching CLI in tmux for %s: %w", agent.Name, err)
 	}
 
 	now := time.Now()
-	agent.cmd = cmd
-	agent.stdin = stdin
-	agent.stdout = stdout
-	agent.stderr = stderr
-	agent.cancel = cancel
 	agent.State = StateRunning
-	agent.PID = cmd.Process.Pid
 	agent.StartedAt = &now
+	m.logger.Info("agent launched in tmux", "name", agent.Name, "backend", backend, "session", agent.tmuxSession)
 
-	m.logger.Info("agent started", "name", agent.Name, "pid", agent.PID, "backend", backend)
-
-	go m.captureOutput(agent.Name, stdout, agent.OutputBuffer)
-	go m.captureOutput(agent.Name, stderr, agent.OutputBuffer)
-	go m.watchProcess(agent.Name, cmd, agentCtx)
+	agentCtx, cancel := context.WithCancel(ctx)
+	agent.cancel = cancel
+	go m.pollTmuxOutput(agent.Name, agent.tmuxSession, agent.OutputBuffer, agentCtx)
 
 	return nil
 }
 
-func (m *Manager) captureOutput(name string, r io.ReadCloser, buf *RingBuffer) {
-	scanner := bufio.NewScanner(r)
-	const maxOutputLineBytes = 64 * 1024
-	scanner.Buffer(make([]byte, 0, maxOutputLineBytes), maxOutputLineBytes)
-	for scanner.Scan() {
-		buf.Write(scanner.Text())
+func (m *Manager) buildEnvPrefix(agent *AgentProcess) string {
+	vars := agentEnvVars(agent)
+	if len(vars) == 0 {
+		return ""
 	}
+	return strings.Join(vars, " ") + " "
+}
+
+func (m *Manager) pollTmuxOutput(name, session string, buf *RingBuffer, ctx context.Context) {
+	const pollInterval = 3 * time.Second
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			output := m.captureTmuxPane(session)
+			if output != "" {
+				for _, line := range strings.Split(output, "\n") {
+					trimmed := strings.TrimRight(line, " \t")
+					if trimmed != "" {
+						buf.Write(trimmed)
+					}
+				}
+			}
+		}
+	}
+}
+
+func (m *Manager) captureTmuxPane(session string) string {
+	cmd := exec.Command("tmux", "capture-pane", "-t", session, "-p",
+		"-S", fmt.Sprintf("-%d", tmuxCaptureLines))
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
 }
 
 func (m *Manager) Stop(name string) error {
@@ -185,6 +244,9 @@ func (m *Manager) Stop(name string) error {
 		agent.cancel()
 	}
 
+	cmd := exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, "C-c", "")
+	_ = cmd.Run()
+
 	agent.State = StateStopped
 	m.logger.Info("agent stopped", "name", name)
 
@@ -200,20 +262,31 @@ func (m *Manager) SendKick(name string, message string) error {
 		return fmt.Errorf("agent %s not found", name)
 	}
 
-	if agent.State != StateRunning || agent.stdin == nil {
+	if agent.State != StateRunning {
 		return fmt.Errorf("agent %s not running", name)
 	}
 
+	if !m.tmuxSessionExists(agent.tmuxSession) {
+		return fmt.Errorf("tmux session %s not found", agent.tmuxSession)
+	}
+
 	if agent.Config.ClearOnKick {
-		if _, err := fmt.Fprintf(agent.stdin, "/clear\n"); err != nil {
+		clearCmd := exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, "/clear", "Enter")
+		if err := clearCmd.Run(); err != nil {
 			return fmt.Errorf("sending /clear to %s: %w", name, err)
 		}
 		m.logger.Info("clear sent before kick", "name", name)
 		time.Sleep(clearBeforeKickDelay)
 	}
 
-	if _, err := fmt.Fprintf(agent.stdin, "%s\n", message); err != nil {
-		return fmt.Errorf("sending kick to %s: %w", name, err)
+	escaped := strings.ReplaceAll(message, "'", "'\\''")
+	sendCmd := exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, "-l", escaped)
+	if err := sendCmd.Run(); err != nil {
+		return fmt.Errorf("sending kick text to %s: %w", name, err)
+	}
+	enterCmd := exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, "Enter")
+	if err := enterCmd.Run(); err != nil {
+		return fmt.Errorf("sending enter to %s: %w", name, err)
 	}
 
 	now := time.Now()
@@ -278,24 +351,8 @@ func (a *AgentProcess) snapshot() AgentProcess {
 		BackendOverride: a.BackendOverride,
 		RestartCount:    a.RestartCount,
 		KickHistory:     history,
+		tmuxSession:     a.tmuxSession,
 	}
-}
-
-func (m *Manager) watchProcess(name string, cmd *exec.Cmd, ctx context.Context) {
-	err := cmd.Wait()
-
-	m.mu.Lock()
-	agent, ok := m.agents[name]
-	if ok && agent.State == StateRunning {
-		if err != nil {
-			agent.State = StateFailed
-			m.logger.Warn("agent process exited with error", "name", name, "error", err)
-		} else {
-			agent.State = StateStopped
-			m.logger.Info("agent process exited cleanly", "name", name)
-		}
-	}
-	m.mu.Unlock()
 }
 
 func backendBinary(backend string) (string, error) {
@@ -345,8 +402,9 @@ func (m *Manager) Pause(name string) error {
 	}
 
 	agent.Paused = true
-	if agent.State == StateRunning && agent.cancel != nil {
-		agent.cancel()
+	if agent.State == StateRunning {
+		cmd := exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, "C-c", "")
+		_ = cmd.Run()
 	}
 	agent.State = StatePaused
 	m.logger.Info("agent paused", "name", name)
@@ -364,7 +422,10 @@ func (m *Manager) Resume(ctx context.Context, name string) error {
 
 	agent.Paused = false
 	if agent.State == StatePaused {
-		return m.startLocked(ctx, agent)
+		if err := m.ensureTmuxSession(agent); err != nil {
+			return err
+		}
+		return m.launchInTmux(ctx, agent)
 	}
 	return nil
 }
@@ -378,13 +439,24 @@ func (m *Manager) Restart(ctx context.Context, name string) error {
 		return fmt.Errorf("agent %s not found", name)
 	}
 
-	if agent.State == StateRunning && agent.cancel != nil {
-		agent.cancel()
+	if agent.State == StateRunning {
+		cmd := exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, "C-c", "")
+		_ = cmd.Run()
+		if agent.cancel != nil {
+			agent.cancel()
+		}
 	}
+
+	killCmd := exec.Command("tmux", "kill-session", "-t", agent.tmuxSession)
+	_ = killCmd.Run()
 
 	agent.RestartCount++
 	m.logger.Info("agent restarting", "name", name, "restart_count", agent.RestartCount)
-	return m.startLocked(ctx, agent)
+
+	if err := m.ensureTmuxSession(agent); err != nil {
+		return err
+	}
+	return m.launchInTmux(ctx, agent)
 }
 
 func (m *Manager) ResetRestartCount(name string) error {
@@ -498,6 +570,17 @@ func (m *Manager) GetOutput(name string, lines int) ([]string, error) {
 		return nil, fmt.Errorf("agent %s not found", name)
 	}
 
+	if m.tmuxSessionExists(agent.tmuxSession) {
+		output := m.captureTmuxPane(agent.tmuxSession)
+		if output != "" {
+			allLines := strings.Split(output, "\n")
+			if len(allLines) > lines {
+				allLines = allLines[len(allLines)-lines:]
+			}
+			return allLines, nil
+		}
+	}
+
 	if agent.OutputBuffer == nil {
 		return nil, nil
 	}
@@ -514,4 +597,15 @@ func (m *Manager) IsPaused(name string) bool {
 		return false
 	}
 	return agent.Paused
+}
+
+func (m *Manager) TmuxSession(name string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return ""
+	}
+	return agent.tmuxSession
 }
