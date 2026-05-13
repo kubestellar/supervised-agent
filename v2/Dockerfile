@@ -9,7 +9,11 @@ ARG CLAUDE_CODE_VERSION=latest
 
 RUN apk add --no-cache git ca-certificates bash curl \
  && npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
+ && npm install -g @github/copilot \
  && npm cache clean --force
+
+ENV HOME=/data/home
+RUN mkdir -p /data/home
 
 COPY --from=builder /hive /usr/local/bin/hive
 EXPOSE 3001
