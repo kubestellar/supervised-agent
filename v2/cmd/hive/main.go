@@ -51,16 +51,30 @@ func main() {
 		cancel()
 	}()
 
-	ghToken := cfg.GitHub.Token
-	if ghToken == "" {
-		ghToken = os.Getenv("HIVE_GITHUB_TOKEN")
+	var ghClient *github.Client
+	if cfg.GitHub.AppID != 0 {
+		keyFile := cfg.GitHub.KeyFile
+		if keyFile == "" {
+			keyFile = "/secrets/gh-app-key.pem"
+		}
+		appAuth, err := github.NewAppAuth(cfg.GitHub.AppID, cfg.GitHub.InstallationID, keyFile, logger)
+		if err != nil {
+			logger.Error("failed to init GitHub App auth", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("using GitHub App authentication", "app_id", cfg.GitHub.AppID)
+		ghClient = github.NewClientFromApp(appAuth, cfg.Project.Org, cfg.Project.Repos, logger)
+	} else {
+		ghToken := cfg.GitHub.Token
+		if ghToken == "" {
+			ghToken = os.Getenv("HIVE_GITHUB_TOKEN")
+		}
+		if ghToken == "" {
+			logger.Error("no GitHub token configured (set github.token or github.app_id in config)")
+			os.Exit(1)
+		}
+		ghClient = github.NewClient(ghToken, cfg.Project.Org, cfg.Project.Repos, logger)
 	}
-	if ghToken == "" {
-		logger.Error("no GitHub token configured (set github.token in config or HIVE_GITHUB_TOKEN env)")
-		os.Exit(1)
-	}
-
-	ghClient := github.NewClient(ghToken, cfg.Project.Org, cfg.Project.Repos, logger)
 	gov := governor.New(cfg.Governor, cfg.EnabledAgents(), logger)
 	sched := scheduler.New(cfg, logger)
 	notifier := notify.New(cfg.Notifications, logger)
