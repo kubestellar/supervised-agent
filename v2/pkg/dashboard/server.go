@@ -48,24 +48,33 @@ type StatusPayload struct {
 }
 
 type FrontendAgent struct {
-	Name            string `json:"name"`
-	State           string `json:"state"`
-	Busy            string `json:"busy"`
-	Paused          bool   `json:"paused"`
-	OffByCadence    bool   `json:"offByCadence"`
-	NeedsLogin      bool   `json:"needsLogin"`
-	CLI             string `json:"cli"`
-	Model           string `json:"model"`
-	Cadence         string `json:"cadence"`
-	PinnedCli       bool   `json:"pinnedCli"`
-	PinnedModel     bool   `json:"pinnedModel"`
-	PinnedBoth      bool   `json:"pinnedBoth"`
-	LastKick        string `json:"lastKick,omitempty"`
-	NextKick        string `json:"nextKick,omitempty"`
-	Restarts        int    `json:"restarts"`
-	LiveSummary     string `json:"liveSummary,omitempty"`
+	Name             string `json:"name"`
+	Session          string `json:"session"`
+	State            string `json:"state"`
+	Busy             string `json:"busy"`
+	Paused           bool   `json:"paused"`
+	OffByCadence     bool   `json:"offByCadence"`
+	NeedsLogin       bool   `json:"needsLogin"`
+	CLI              string `json:"cli"`
+	Model            string `json:"model"`
+	Cadence          string `json:"cadence"`
+	Doing            string `json:"doing"`
+	PinnedCli        bool   `json:"pinnedCli"`
+	PinnedModel      bool   `json:"pinnedModel"`
+	PinnedBoth       bool   `json:"pinnedBoth"`
+	Pinned           bool   `json:"pinned"`
+	LastKick         string `json:"lastKick,omitempty"`
+	NextKick         string `json:"nextKick,omitempty"`
+	Restarts         int    `json:"restarts"`
+	LiveSummary      string `json:"liveSummary,omitempty"`
 	StructuredStatus string `json:"structuredStatus,omitempty"`
-	GovReason       string `json:"govReason,omitempty"`
+	StatusEvidence   string `json:"statusEvidence,omitempty"`
+	SummaryUpdated   string `json:"summaryUpdated,omitempty"`
+	GovBackend       string `json:"govBackend"`
+	GovModel         string `json:"govModel"`
+	GovCostWeight    int    `json:"govCostWeight"`
+	GovReason        string `json:"govReason,omitempty"`
+	StatsConfig      []any  `json:"statsConfig"`
 }
 
 type FrontendGovernor struct {
@@ -121,12 +130,17 @@ type FrontendBeads struct {
 }
 
 type FrontendBudget struct {
-	WeeklyBudget   int64   `json:"BUDGET_WEEKLY"`
-	Used           int64   `json:"BUDGET_USED"`
-	PctUsed        float64 `json:"BUDGET_PCT_USED"`
-	ProjectedPct   float64 `json:"PROJECTED_PCT"`
-	BurnRateHourly float64 `json:"BURN_RATE_HOURLY"`
-	HoursRemaining float64 `json:"HOURS_REMAINING"`
+	WeeklyBudget    int64   `json:"BUDGET_WEEKLY"`
+	Used            int64   `json:"BUDGET_USED"`
+	Remaining       int64   `json:"BUDGET_REMAINING"`
+	PctUsed         float64 `json:"BUDGET_PCT_USED"`
+	BurnRateHourly  float64 `json:"BURN_RATE_HOURLY"`
+	BurnRateInstant float64 `json:"BURN_RATE_INSTANT"`
+	HoursElapsed    float64 `json:"HOURS_ELAPSED"`
+	HoursRemaining  float64 `json:"HOURS_REMAINING"`
+	ProjectedWeekly int64   `json:"PROJECTED_WEEKLY"`
+	ProjectedPct    float64 `json:"PROJECTED_PCT"`
+	LastUpdated     string  `json:"LAST_UPDATED"`
 }
 
 type FrontendCadence struct {
@@ -138,8 +152,10 @@ type FrontendCadence struct {
 }
 
 type FrontendHold struct {
-	Total int   `json:"total"`
-	Items []any `json:"items"`
+	Issues int   `json:"issues"`
+	PRs    int   `json:"prs"`
+	Total  int   `json:"total"`
+	Items  []any `json:"items"`
 }
 
 const sseRetryMs = 3000

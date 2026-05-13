@@ -54,6 +54,43 @@ type ModeConfig struct {
 	Cadences  map[string]string `yaml:"cadences"`
 }
 
+// UnmarshalYAML implements custom unmarshaling for ModeConfig.
+// The YAML format has threshold and agent cadences as sibling keys:
+//
+//	idle:
+//	  threshold: 0
+//	  scanner: 15m
+//	  reviewer: 15m
+//
+// This method separates "threshold" into the Threshold field and collects
+// all other keys into the Cadences map.
+func (m *ModeConfig) UnmarshalYAML(value *yaml.Node) error {
+	var raw map[string]string
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+
+	m.Cadences = make(map[string]string)
+
+	const thresholdKey = "threshold"
+	if v, ok := raw[thresholdKey]; ok {
+		var t int
+		if _, err := fmt.Sscanf(v, "%d", &t); err != nil {
+			return fmt.Errorf("invalid threshold value %q: %w", v, err)
+		}
+		m.Threshold = t
+	}
+
+	for k, v := range raw {
+		if k == thresholdKey {
+			continue
+		}
+		m.Cadences[k] = v
+	}
+
+	return nil
+}
+
 type GitHubConfig struct {
 	AppID          int64  `yaml:"app_id"`
 	InstallationID int64  `yaml:"installation_id"`

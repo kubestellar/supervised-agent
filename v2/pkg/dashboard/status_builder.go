@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"strings"
 	"time"
 
 	"github.com/kubestellar/hive/v2/pkg/agent"
@@ -24,13 +25,13 @@ func BuildFrontendStatus(
 ) *StatusPayload {
 	payload := &StatusPayload{
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
-		Agents:       buildAgents(agentStatuses, cfg),
+		Agents:       buildAgents(agentStatuses, cfg, govState),
 		Governor:     buildGovernor(govState, cfg),
 		Tokens:       buildTokens(tokenCollector),
 		Repos:        buildRepos(cfg, actionable),
 		Beads:        buildBeads(beadStores),
 		Health:       buildHealth(),
-		Budget:       buildBudget(gov),
+		Budget:       buildBudget(gov, tokenCollector),
 		CadenceMatrix: buildCadenceMatrix(cfg),
 		GHRateLimits: map[string]any{"core": map[string]any{}, "alerts": []any{}, "pullbacks": []any{}},
 		AgentMetrics: map[string]any{},
@@ -40,7 +41,7 @@ func BuildFrontendStatus(
 	return payload
 }
 
-func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config) []FrontendAgent {
+func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, govState governor.State) []FrontendAgent {
 	agents := make([]FrontendAgent, 0, len(statuses))
 	for name, proc := range statuses {
 		cli := proc.Config.Backend
@@ -59,32 +60,87 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config) []
 
 		lastKick := ""
 		if proc.LastKick != nil {
-			lastKick = proc.LastKick.Format(time.RFC3339)
+			lastKick = formatHumanTime(*proc.LastKick)
 		}
 
 		cadence := lookupCadence(name, cfg)
+		nextKick := computeNextKick(proc.LastKick, cadence)
+
+		pinnedCli := proc.PinnedCLI != ""
+		pinnedModel := proc.PinnedModel != ""
 
 		a := FrontendAgent{
-			Name:        name,
-			State:       string(proc.State),
-			Busy:        busy,
-			Paused:      proc.Paused,
-			CLI:         cli,
-			Model:       model,
-			Cadence:     cadence,
-			PinnedCli:   proc.PinnedCLI != "",
-			PinnedModel: proc.PinnedModel != "",
-			PinnedBoth:  proc.PinnedCLI != "" && proc.PinnedModel != "",
-			LastKick:    lastKick,
-			Restarts:    proc.RestartCount,
+			Name:          name,
+			Session:       name,
+			State:         string(proc.State),
+			Busy:          busy,
+			Paused:        proc.Paused,
+			CLI:           cli,
+			Model:         model,
+			Cadence:       cadence,
+			PinnedCli:     pinnedCli,
+			PinnedModel:   pinnedModel,
+			PinnedBoth:    pinnedCli && pinnedModel,
+			Pinned:        pinnedCli || pinnedModel,
+			LastKick:      lastKick,
+			NextKick:      nextKick,
+			Restarts:      proc.RestartCount,
+			GovBackend:    cli,
+			GovModel:      model,
+			GovCostWeight: 0,
+			StatsConfig:   []any{},
 		}
 		agents = append(agents, a)
 	}
 	return agents
 }
 
+func formatHumanTime(t time.Time) string {
+	local := t.Local()
+	return local.Format("1/2 3:04 PM")
+}
+
+func computeNextKick(lastKick *time.Time, cadence string) string {
+	if cadence == "" || cadence == "off" || cadence == "pause" {
+		return ""
+	}
+	base := time.Now()
+	if lastKick != nil {
+		base = *lastKick
+	}
+	d := parseCadenceDuration(cadence)
+	if d == 0 {
+		return ""
+	}
+	next := base.Add(d)
+	return formatHumanTime(next)
+}
+
+func parseCadenceDuration(cadence string) time.Duration {
+	cadence = strings.TrimSpace(cadence)
+	if cadence == "" || cadence == "off" || cadence == "pause" {
+		return 0
+	}
+	d, err := time.ParseDuration(cadence)
+	if err == nil {
+		return d
+	}
+	// Handle shorthand like "15m", "1h", "2m" — already valid for ParseDuration
+	// Handle "5min" style
+	cadence = strings.Replace(cadence, "min", "m", 1)
+	d, err = time.ParseDuration(cadence)
+	if err == nil {
+		return d
+	}
+	return 0
+}
+
 func lookupCadence(agentName string, cfg *config.Config) string {
-	for _, mode := range cfg.Governor.Modes {
+	return lookupCadenceForMode(agentName, "idle", cfg)
+}
+
+func lookupCadenceForMode(agentName, modeName string, cfg *config.Config) string {
+	if mode, ok := cfg.Governor.Modes[modeName]; ok {
 		if c, ok := mode.Cadences[agentName]; ok {
 			return c
 		}
@@ -117,7 +173,7 @@ func buildGovernor(state governor.State, cfg *config.Config) FrontendGovernor {
 
 	return FrontendGovernor{
 		Active:     true,
-		Mode:       string(state.Mode),
+		Mode:       strings.ToLower(string(state.Mode)),
 		Issues:     state.QueueIssues,
 		PRs:        state.QueuePRs,
 		Thresholds: thresholds,
@@ -222,16 +278,51 @@ func buildHealth() map[string]any {
 	}
 }
 
-func buildBudget(gov *governor.Governor) FrontendBudget {
+func buildBudget(gov *governor.Governor, tokenCollector *tokens.Collector) FrontendBudget {
 	budget := gov.GetBudget()
+
+	var totalTokens int64
+	var hoursElapsed float64
+	if tokenCollector != nil {
+		if summary := tokenCollector.Summary(); summary != nil {
+			totalTokens = summary.TotalTokens
+		}
+	}
+
+	used := totalTokens
+	if budget.CurrentSpend > 0 {
+		used = budget.CurrentSpend
+	}
+
 	fb := FrontendBudget{
 		WeeklyBudget: budget.WeeklyLimit,
-		Used:         budget.CurrentSpend,
+		Used:         used,
+		LastUpdated:  time.Now().UTC().Format(time.RFC3339),
 	}
+
 	if budget.WeeklyLimit > 0 {
 		const pctMultiplier = 100.0
-		fb.PctUsed = float64(budget.CurrentSpend) / float64(budget.WeeklyLimit) * pctMultiplier
+		remaining := budget.WeeklyLimit - used
+		if remaining < 0 {
+			remaining = 0
+		}
+		fb.Remaining = remaining
+		fb.PctUsed = float64(used) / float64(budget.WeeklyLimit) * pctMultiplier
+
+		if hoursElapsed > 0 {
+			burnRate := float64(used) / hoursElapsed
+			fb.BurnRateHourly = burnRate
+			fb.BurnRateInstant = burnRate
+			const hoursPerWeek = 168.0
+			fb.ProjectedWeekly = int64(burnRate * hoursPerWeek)
+			fb.ProjectedPct = float64(fb.ProjectedWeekly) / float64(budget.WeeklyLimit) * pctMultiplier
+			if burnRate > 0 {
+				fb.HoursRemaining = float64(remaining) / burnRate
+			}
+		}
+		fb.HoursElapsed = hoursElapsed
 	}
+
 	return fb
 }
 
@@ -270,11 +361,19 @@ func buildHold(actionable *github.ActionableResult) FrontendHold {
 		return FrontendHold{Items: []any{}}
 	}
 	items := make([]any, 0, len(actionable.Hold.Items))
+	var holdIssues, holdPRs int
 	for _, item := range actionable.Hold.Items {
 		items = append(items, item)
+		if item.Type == "pr" {
+			holdPRs++
+		} else {
+			holdIssues++
+		}
 	}
 	return FrontendHold{
-		Total: actionable.Hold.Total,
-		Items: items,
+		Issues: holdIssues,
+		PRs:    holdPRs,
+		Total:  actionable.Hold.Total,
+		Items:  items,
 	}
 }
