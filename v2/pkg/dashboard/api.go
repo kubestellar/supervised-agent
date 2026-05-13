@@ -94,6 +94,16 @@ func (s *Server) RegisterAPI(deps *Dependencies) {
 	s.mux.HandleFunc("DELETE /api/nous/principles/{id}", s.handleNousDeletePrinciple)
 }
 
+var (
+	versionHash  = "unknown"
+	versionShort = "unknown"
+)
+
+func SetGitVersion(hash, short string) {
+	versionHash = hash
+	versionShort = short
+}
+
 func jsonResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
@@ -127,9 +137,11 @@ func decodeBody(r *http.Request, v interface{}) error {
 // --- Core status endpoints ---
 
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, map[string]string{
+	jsonResponse(w, map[string]interface{}{
 		"version": "2.0.0",
 		"go":      "1.25",
+		"hash":    versionHash,
+		"short":   versionShort,
 	})
 }
 

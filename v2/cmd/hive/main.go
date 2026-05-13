@@ -24,9 +24,15 @@ import (
 	"github.com/kubestellar/hive/v2/pkg/tokens"
 )
 
+var (
+	gitHash  = "unknown"
+	gitShort = "unknown"
+)
+
 func main() {
 	configPath := flag.String("config", "/etc/hive/hive.yaml", "path to hive.yaml config file")
 	flag.Parse()
+	dashboard.SetGitVersion(gitHash, gitShort)
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)

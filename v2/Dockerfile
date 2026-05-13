@@ -1,7 +1,10 @@
 FROM golang:1.25-alpine AS builder
+RUN apk add --no-cache git
 WORKDIR /src
 COPY v2/ .
-RUN CGO_ENABLED=0 go build -o /hive ./cmd/hive
+ARG GIT_HASH=unknown
+ARG GIT_SHORT=unknown
+RUN CGO_ENABLED=0 go build -ldflags "-X main.gitHash=${GIT_HASH} -X main.gitShort=${GIT_SHORT}" -o /hive ./cmd/hive
 
 FROM node:22-alpine
 

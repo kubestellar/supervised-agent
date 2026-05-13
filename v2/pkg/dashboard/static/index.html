@@ -1880,9 +1880,14 @@
         body: JSON.stringify({ groups })
       }).catch(() => {});
       const lastData = window._lastStatus || {};
+      if (lastData.agents) {
+        applyPinOverrides(lastData.agents);
+        renderAgents(lastData.agents);
+      }
       if (lastData.governor) {
         renderGovernor(lastData.governor, lastData.cadenceMatrix || [], lastData);
       }
+      renderDebugSection();
     }
 
     function _sidebarRenderAgent(a) {
@@ -4176,10 +4181,12 @@ function burnAreaChart() {
         agentRows += `<div style="${rowStyle}"><span>${esc(a.name)}</span><span style="color:${stateColor};font-weight:600">${a.state}</span></div>`;
       }
 
-      const ghCoreUsed = ghRate.core?.used || 0;
-      const ghCoreLimit = ghRate.core?.limit || 5000;
+      const ghCoreLimit = ghRate.core?.limit || 0;
+      const ghCoreRemaining = ghRate.core?.remaining || 0;
+      const ghCoreUsed = ghCoreLimit > 0 ? ghCoreLimit - ghCoreRemaining : 0;
       const ghCorePct = ghCoreLimit > 0 ? Math.round((ghCoreUsed / ghCoreLimit) * 100) : 0;
-      const ghResetAt = ghRate.core?.reset ? new Date(ghRate.core.reset * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+      const ghResetRaw = ghRate.core?.reset;
+      const ghResetAt = ghResetRaw ? new Date(typeof ghResetRaw === 'number' ? ghResetRaw * 1000 : ghResetRaw).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
       const ghIdentity = ghRate.identity || {};
       const ghIdentityLabel = ghIdentity.label || 'unknown';
       const ghIdentityType = ghIdentity.type || 'unknown';

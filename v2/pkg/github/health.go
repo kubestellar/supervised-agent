@@ -101,10 +101,11 @@ func (c *Client) checkWorkflow(ctx context.Context, repo, workflowName string) i
 		return healthStatusNotFound
 	}
 
-	if runs.WorkflowRuns[0].GetConclusion() == "success" {
-		return healthStatusSuccess
+	conclusion := runs.WorkflowRuns[0].GetConclusion()
+	if conclusion == "failure" {
+		return healthStatusFailure
 	}
-	return healthStatusFailure
+	return healthStatusSuccess
 }
 
 func (c *Client) brewCheck(ctx context.Context, primaryRepo string) int {
@@ -220,6 +221,7 @@ func (c *Client) perfCheck(ctx context.Context, repo string) int {
 		if result == healthStatusFailure {
 			return healthStatusFailure
 		}
+		// Not-found workflows are ignored (not treated as failure)
 	}
 	return healthStatusSuccess
 }
