@@ -62,6 +62,7 @@ app.use('/api', createProxyMiddleware({
   target: GO_API_URL,
   changeOrigin: true,
   ws: true,
+  pathRewrite: (path) => `/api${path}`,
   on: {
     error(err, req, res) {
       console.error(`[proxy] ${req.method} ${req.url} → ${err.message}`);
