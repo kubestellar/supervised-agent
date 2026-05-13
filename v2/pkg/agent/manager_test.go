@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 	// This keeps the process alive until stdin is closed or the context cancels.
 	const stubScript = "#!/bin/sh\nexec cat\n"
 
-	for _, name := range []string{"claude", "copilot", "gemini", "goose"} {
+	for _, name := range []string{"claude", "copilot", "gemini", "goose", "bob"} {
 		path := fmt.Sprintf("%s/%s", dir, name)
 		if err := os.WriteFile(path, []byte(stubScript), 0o755); err != nil {
 			fmt.Fprintf(os.Stderr, "TestMain: writing stub %s: %v\n", name, err)
@@ -332,7 +332,7 @@ func TestBackendBinary_EmptyBackendReturnsError(t *testing.T) {
 
 func TestBackendBinary_KnownBackendsResolveToStubs(t *testing.T) {
 	// TestMain installed stubs for all known backends in stubBinDir.
-	knownBackends := []string{"claude", "copilot", "gemini", "goose"}
+	knownBackends := []string{"claude", "copilot", "gemini", "goose", "bob"}
 
 	for _, backend := range knownBackends {
 		t.Run(backend, func(t *testing.T) {

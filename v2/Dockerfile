@@ -13,7 +13,22 @@ ARG CLAUDE_CODE_VERSION=latest
 RUN apk add --no-cache git ca-certificates bash curl tzdata tmux libuv \
  && npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
  && npm install -g @github/copilot \
+ && npm install -g @google/gemini-cli \
  && npm cache clean --force
+
+# IBM Bob Shell (curl installer)
+RUN curl -fsSL https://bob.ibm.com/download/bobshell.sh | bash
+
+# Goose CLI (Rust binary — not available via npm)
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then GOOSE_ARCH=x86_64; \
+    elif [ "$ARCH" = "aarch64" ]; then GOOSE_ARCH=aarch64; \
+    else GOOSE_ARCH=x86_64; fi && \
+    curl -sL -o /tmp/goose.tar.bz2 \
+      "https://github.com/block/goose/releases/latest/download/goose-${GOOSE_ARCH}-unknown-linux-musl.tar.bz2" && \
+    tar -xjf /tmp/goose.tar.bz2 -C /usr/local/bin/ && \
+    rm /tmp/goose.tar.bz2 && \
+    chmod +x /usr/local/bin/goose
 
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then TTYD_ARCH=x86_64; \

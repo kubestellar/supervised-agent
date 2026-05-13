@@ -161,6 +161,14 @@ func (m *Manager) launchInTmux(ctx context.Context, agent *AgentProcess) error {
 		launchCmd = fmt.Sprintf("%s --model %s --dangerously-skip-permissions", binary, model)
 	case "copilot":
 		launchCmd = fmt.Sprintf("%s --model %s", binary, model)
+	case "gemini":
+		launchCmd = fmt.Sprintf("%s --model %s", binary, model)
+	case "goose":
+		if model != "" {
+			launchCmd = fmt.Sprintf("%s --model %s", binary, model)
+		}
+	case "bob":
+		launchCmd = binary
 	default:
 		launchCmd = binary
 	}
@@ -361,6 +369,7 @@ func backendBinary(backend string) (string, error) {
 		"copilot": "copilot",
 		"gemini":  "gemini",
 		"goose":   "goose",
+		"bob":     "bob",
 	}
 
 	binary, ok := binaries[backend]
