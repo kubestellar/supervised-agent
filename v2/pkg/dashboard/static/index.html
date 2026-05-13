@@ -5453,19 +5453,23 @@ function burnAreaChart() {
 
     const SECONDS_PER_MIN = 60;
     const SECONDS_PER_HOUR = 3600;
+    const SECONDS_PER_DAY = 86400;
     function cadenceToHuman(sec) {
       const s = sec || 0;
       if (s === 0) return '0';
+      if (s >= SECONDS_PER_DAY && s % SECONDS_PER_DAY === 0) return `${s / SECONDS_PER_DAY}d`;
       if (s >= SECONDS_PER_HOUR && s % SECONDS_PER_HOUR === 0) return `${s / SECONDS_PER_HOUR}h`;
-      return `${Math.round(s / SECONDS_PER_MIN)}m`;
+      if (s >= SECONDS_PER_MIN && s % SECONDS_PER_MIN === 0) return `${s / SECONDS_PER_MIN}m`;
+      return `${s}s`;
     }
     function cadenceFromHuman(val) {
       const str = String(val).trim().toLowerCase();
       if (!str || str === '0') return 0;
-      const match = str.match(/^(\d+(?:\.\d+)?)\s*(h|m|s)?$/);
+      const match = str.match(/^(\d+(?:\.\d+)?)\s*(d|h|m|s)?$/);
       if (!match) return 0;
       const num = parseFloat(match[1]);
       const unit = match[2] || 'm';
+      if (unit === 'd') return Math.round(num * SECONDS_PER_DAY);
       if (unit === 'h') return Math.round(num * SECONDS_PER_HOUR);
       if (unit === 's') return Math.round(num);
       return Math.round(num * SECONDS_PER_MIN);
