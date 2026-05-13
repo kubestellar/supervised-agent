@@ -1385,7 +1385,7 @@
     </div>
   </div>
 </div>
-<div class="gh-auth-alert" id="gh-auth-alert">GitHub CLI authentication failed (401). Agents cannot use <code>gh</code> commands. Run <code>gh auth login</code> on the dev server to fix.</div>
+<div class="gh-auth-alert" id="gh-auth-alert">GitHub API authentication failed. Check GitHub App key or token configuration.</div>
   <div class="gh-rate-alert" id="gh-rate-alert"></div>
 
   <!-- Light sidebar (hidden by default) -->
@@ -2675,7 +2675,11 @@
     function renderCadenceMatrix(matrix, currentMode, modes) {
       if (!matrix || !matrix.length) return '';
       const agents = window._lastAgents || [];
-      const agentOrder = matrix.map(r => r.agent);
+      const { sorted: sortedAgents } = _sortAgentsBySidebar(agents);
+      const sidebarOrder = sortedAgents.map(a => a.name);
+      const matrixNames = matrix.map(r => r.agent);
+      const agentOrder = sidebarOrder.filter(n => matrixNames.includes(n));
+      for (const n of matrixNames) { if (!agentOrder.includes(n)) agentOrder.push(n); }
       const rows = agentOrder.map(aname => {
         const row = matrix.find(r => r.agent === aname);
         if (!row) return '';

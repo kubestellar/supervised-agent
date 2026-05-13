@@ -68,7 +68,7 @@ governor:
   eval_interval_s: 300
   modes:
     surge:
-      threshold: 20
+      threshold: 30
       supervisor: 5m
       scanner: 15m
       reviewer: pause
@@ -77,7 +77,7 @@ governor:
       sec-check: 2m
       strategist: pause
     busy:
-      threshold: 10
+      threshold: 16
       supervisor: 5m
       scanner: 15m
       reviewer: 1h
@@ -86,7 +86,7 @@ governor:
       sec-check: 2m
       strategist: pause
     quiet:
-      threshold: 2
+      threshold: 5
       supervisor: 5m
       scanner: 15m
       reviewer: 45m

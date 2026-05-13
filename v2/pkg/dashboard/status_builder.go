@@ -110,7 +110,7 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, go
 
 func formatHumanTime(t time.Time) string {
 	local := t.Local()
-	return local.Format("1/2 3:04 PM")
+	return local.Format("1/2 3:04 PM MST")
 }
 
 func computeNextKick(lastKick *time.Time, cadence string) string {
@@ -367,7 +367,7 @@ func buildCadenceMatrix(cfg *config.Config, agentStatuses map[string]*agent.Agen
 			if cadence == "" || cadence == "pause" {
 				cadence = "off"
 			}
-			if paused {
+			if paused && cadence != "off" {
 				cadence = "paused"
 			}
 			switch modeName {

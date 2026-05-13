@@ -466,6 +466,7 @@ func (s *Server) handleGHAuth(w http.ResponseWriter, r *http.Request) {
 		authType = "app"
 	}
 	jsonResponse(w, map[string]interface{}{
+		"ok":              true,
 		"type":            authType,
 		"app_id":          cfg.AppID,
 		"installation_id": cfg.InstallationID,
@@ -762,7 +763,14 @@ func (s *Server) handleGovernorRepos(w http.ResponseWriter, r *http.Request) {
 // --- Sidebar endpoints ---
 
 func (s *Server) handleSidebarGet(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, s.sidebar)
+	s.sidebarMu.RLock()
+	sb := s.sidebar
+	s.sidebarMu.RUnlock()
+	if sb == nil {
+		jsonResponse(w, map[string]interface{}{"sidebar": nil})
+		return
+	}
+	jsonResponse(w, map[string]interface{}{"sidebar": sb})
 }
 
 func (s *Server) handleSidebarSet(w http.ResponseWriter, r *http.Request) {
