@@ -317,9 +317,26 @@ func (s *Server) handlePin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Value string `json:"value"`
 	}
-	if err := decodeBody(r, &body); err != nil || body.Value == "" {
-		jsonError(w, "value is required", http.StatusBadRequest)
-		return
+	_ = decodeBody(r, &body)
+
+	if body.Value == "" {
+		proc, getErr := s.deps.AgentMgr.GetStatus(name)
+		if getErr != nil || proc == nil {
+			jsonError(w, "agent not found", http.StatusBadRequest)
+			return
+		}
+		switch dimension {
+		case "cli":
+			body.Value = proc.Config.Backend
+			if proc.BackendOverride != "" {
+				body.Value = proc.BackendOverride
+			}
+		case "model":
+			body.Value = proc.Config.Model
+			if proc.ModelOverride != "" {
+				body.Value = proc.ModelOverride
+			}
+		}
 	}
 
 	var err error

@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -43,8 +44,16 @@ func BuildFrontendStatus(
 
 func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, govState governor.State) []FrontendAgent {
 	currentMode := strings.ToLower(string(govState.Mode))
+
+	names := make([]string, 0, len(statuses))
+	for name := range statuses {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
 	agents := make([]FrontendAgent, 0, len(statuses))
-	for name, proc := range statuses {
+	for _, name := range names {
+		proc := statuses[name]
 		cli := proc.Config.Backend
 		if proc.BackendOverride != "" {
 			cli = proc.BackendOverride
@@ -175,12 +184,19 @@ func buildGovernor(state governor.State, cfg *config.Config) FrontendGovernor {
 		thresholds.Surge = m.Threshold
 	}
 
+	nextKick := ""
+	if cfg.Governor.EvalIntervalS > 0 {
+		next := time.Now().Add(time.Duration(cfg.Governor.EvalIntervalS) * time.Second)
+		nextKick = formatHumanTime(next)
+	}
+
 	return FrontendGovernor{
 		Active:     true,
 		Mode:       strings.ToLower(string(state.Mode)),
 		Issues:     state.QueueIssues,
 		PRs:        state.QueuePRs,
 		Thresholds: thresholds,
+		NextKick:   nextKick,
 	}
 }
 
