@@ -542,17 +542,57 @@ func (s *Server) handleAgentConfigGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cli := agentCfg.Backend
+	if proc.BackendOverride != "" {
+		cli = proc.BackendOverride
+	}
+	model := agentCfg.Model
+	if proc.ModelOverride != "" {
+		model = proc.ModelOverride
+	}
+
+	launchCmd := fmt.Sprintf("%s --model %s", cli, model)
+	if cli == "claude" {
+		launchCmd = fmt.Sprintf("claude --model %s --dangerously-skip-permissions", model)
+	} else if cli == "copilot" {
+		launchCmd = fmt.Sprintf("copilot --model %s --allow-all", model)
+	}
+
+	cadences := map[string]string{}
+	for modeName, modeCfg := range s.deps.Config.Governor.Modes {
+		if c, ok := modeCfg.Cadences[name]; ok {
+			cadences[modeName] = c
+		}
+	}
+
+	var lastPrompt string
+	if len(proc.KickHistory) > 0 {
+		lastPrompt = proc.KickHistory[len(proc.KickHistory)-1].Snippet
+	}
+
 	jsonResponse(w, map[string]interface{}{
-		"name":             name,
-		"config":           agentCfg,
-		"state":            proc.State,
-		"paused":           proc.Paused,
-		"pinned_cli":       proc.PinnedCLI,
-		"pinned_model":     proc.PinnedModel,
-		"model_override":   proc.ModelOverride,
-		"backend_override": proc.BackendOverride,
-		"restart_count":    proc.RestartCount,
-		"kick_history":     proc.KickHistory,
+		"name": name,
+		"general": map[string]interface{}{
+			"displayName":     name,
+			"launchCmd":       launchCmd,
+			"clearOnKick":     agentCfg.ClearOnKick,
+			"cliPinned":       proc.PinnedCLI != "",
+			"cliPinValue":     cli,
+			"model":           model,
+			"staleTimeout":    1200,
+			"restartStrategy": "immediate",
+		},
+		"cadences":     cadences,
+		"pipeline":     map[string]interface{}{},
+		"hooks":        map[string]interface{}{},
+		"restrictions": map[string]interface{}{"agent": []any{}, "global": []any{}, "policy": []any{}},
+		"stats":        []any{},
+		"prompt":       lastPrompt,
+		"state":        proc.State,
+		"paused":       proc.Paused,
+		"pinned_cli":   proc.PinnedCLI,
+		"pinned_model": proc.PinnedModel,
+		"kick_history": proc.KickHistory,
 	})
 }
 

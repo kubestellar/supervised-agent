@@ -4651,7 +4651,7 @@ function burnAreaChart() {
     // ── Configuration Dialog ──────────────────────────────────────────
     let _configState = { type: null, agent: null, tab: null, data: {}, dirty: {} };
 
-    const AGENT_CONFIG_TABS = ['General', 'Cadences', 'Pipeline', 'Hooks', 'Restrictions', 'Stats', 'Template', 'Last Prompt'];
+    const AGENT_CONFIG_TABS = ['General', 'Cadences', 'Pipeline', 'Hooks', 'Restrictions', 'Stats', 'Prompt Template', 'Last Prompt'];
     const GOVERNOR_CONFIG_TABS = ['Agents', 'Thresholds', 'Labels', 'Repos', 'Budget', 'Notifications', 'Health', 'Sensing'];
     const PIPELINE_STAGES = ['resolve-beads', 'track-prs', 'stale-check', 'repo-scan', 'coverage-gate', 'prompt-compose', 'budget-check', 'api-collect', 'final-compose'];
     const RESTART_STRATEGIES = ['immediate', 'backoff', 'none'];
@@ -4723,7 +4723,7 @@ function burnAreaChart() {
         case 'Hooks': return renderAgentHooks(d.hooks || {});
         case 'Restrictions': return renderAgentRestrictions(d.restrictions || {});
         case 'Stats': return renderAgentStatsTab(d.stats || []);
-        case 'Template': return renderAgentPromptTemplate();
+        case 'Prompt Template': return renderAgentPromptTemplate();
         case 'Last Prompt': return renderAgentLastPrompt(d.prompt || '');
         default: return '';
       }
