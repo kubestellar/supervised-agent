@@ -356,7 +356,8 @@
     body.light-mode.oc-agent-focused .token-usage,
     body.light-mode.oc-agent-focused .repos,
     body.light-mode.oc-agent-focused #beads-section,
-    body.light-mode.oc-agent-focused #nous-section { display: none; }
+    body.light-mode.oc-agent-focused #nous-section,
+    body.light-mode.oc-agent-focused #knowledge-section { display: none; }
     body.light-mode.oc-strategy-focused #nous-section { display: block; }
     body.light-mode.oc-agent-focused .agent-card.oc-hidden { display: none; }
 
@@ -1330,6 +1331,63 @@
     .nous-trust-step .step-label { font-weight: 600; display: block; margin-bottom: 2px; }
     .nous-trust-step .step-desc { color: var(--muted); font-size: 0.65rem; }
 
+    /* Knowledge Panel */
+    .kb-layout { display: grid; grid-template-columns: 240px 1fr; gap: 16px; min-height: 320px; }
+    .kb-sidebar { display: flex; flex-direction: column; gap: 10px; }
+    .kb-layer-list { display: flex; flex-direction: column; gap: 4px; }
+    .kb-layer-btn { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--fg); font-size: 0.78rem; cursor: pointer; transition: all 0.15s; }
+    .kb-layer-btn:hover { border-color: var(--accent); }
+    .kb-layer-btn.active { background: rgba(88,166,255,0.12); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .kb-layer-count { font-size: 0.7rem; color: var(--muted); padding: 2px 6px; background: var(--bg); border-radius: 4px; }
+    .kb-search-box { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); font-size: 0.78rem; }
+    .kb-search-box:focus { outline: none; border-color: var(--accent); }
+    .kb-search-box::placeholder { color: var(--muted); }
+    .kb-filter-row { display: flex; gap: 4px; flex-wrap: wrap; }
+    .kb-filter-pill { padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.68rem; cursor: pointer; background: var(--bg); color: var(--muted); transition: all 0.15s; }
+    .kb-filter-pill:hover { border-color: var(--accent); }
+    .kb-filter-pill.active { background: rgba(88,166,255,0.12); border-color: var(--accent); color: var(--accent); }
+    .kb-main { display: flex; flex-direction: column; gap: 10px; }
+    .kb-fact-list { display: flex; flex-direction: column; gap: 6px; max-height: 500px; overflow-y: auto; }
+    .kb-fact-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); cursor: pointer; transition: all 0.15s; }
+    .kb-fact-item:hover { border-color: var(--accent); background: rgba(88,166,255,0.04); }
+    .kb-fact-item.selected { border-color: var(--accent); background: rgba(88,166,255,0.08); }
+    .kb-fact-meta { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 50px; }
+    .kb-fact-conf { font-size: 0.7rem; font-weight: 600; }
+    .kb-fact-conf-bar { width: 40px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .kb-fact-conf-fill { height: 100%; border-radius: 2px; }
+    .kb-fact-body { flex: 1; min-width: 0; }
+    .kb-fact-title { font-size: 0.82rem; font-weight: 600; color: var(--fg); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .kb-fact-snippet { font-size: 0.72rem; color: var(--muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .kb-fact-tags { display: flex; gap: 4px; margin-top: 4px; }
+    .kb-type-badge { font-size: 0.62rem; padding: 1px 6px; border-radius: 3px; font-weight: 600; text-transform: uppercase; }
+    .kb-type-pattern { background: #dbeafe; color: #1d4ed8; }
+    .kb-type-gotcha { background: #fef3c7; color: #92400e; }
+    .kb-type-regression { background: #fee2e2; color: #991b1b; }
+    .kb-type-decision { background: #e0e7ff; color: #3730a3; }
+    .kb-type-test_scaffold { background: #d1fae5; color: #065f46; }
+    .kb-type-integration { background: #ede9fe; color: #5b21b6; }
+    .kb-type-coverage_rule { background: #fce7f3; color: #9d174d; }
+    .kb-layer-badge { font-size: 0.62rem; padding: 1px 6px; border-radius: 3px; }
+    .kb-layer-personal { background: #dbeafe; color: #1d4ed8; }
+    .kb-layer-project { background: #d1fae5; color: #065f46; }
+    .kb-layer-org { background: #fef3c7; color: #92400e; }
+    .kb-layer-community { background: #ede9fe; color: #5b21b6; }
+    .kb-detail { border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 16px; }
+    .kb-detail-title { font-size: 1rem; font-weight: 700; color: var(--fg); margin-bottom: 8px; }
+    .kb-detail-body { font-size: 0.8rem; color: var(--fg); line-height: 1.6; margin-bottom: 12px; white-space: pre-wrap; }
+    .kb-detail-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.72rem; color: var(--muted); }
+    .kb-detail-label { font-weight: 600; color: var(--fg); }
+    .kb-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
+    .kb-stat { text-align: center; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+    .kb-stat .val { font-size: 1.2rem; font-weight: 700; color: var(--fg); }
+    .kb-stat .lbl { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
+    .kb-health-item { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; padding: 4px 0; }
+    .kb-health-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .kb-empty { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 0.82rem; }
+    .kb-empty-icon { font-size: 2rem; margin-bottom: 8px; }
+    .kb-disabled { text-align: center; padding: 40px 20px; color: var(--muted); }
+    @media (max-width: 768px) { .kb-layout { grid-template-columns: 1fr; } }
+
     /* Right info sidebar */
     #hive-info-sidebar {
       position: fixed; right: 0; top: 0; width: 220px; height: 100vh;
@@ -1416,6 +1474,7 @@
       <div class="oc-nav-label">Resources</div>
       <a class="oc-nav-item" data-section="repos-section" onclick="ocNavigate('repos-section')">📦 Repos</a>
       <a class="oc-nav-item" data-section="beads-section" onclick="ocNavigate('beads-section')">🔮 Beads</a>
+      <a class="oc-nav-item" data-section="knowledge-section" onclick="ocNavigate('knowledge-section')">📚 Knowledge</a>
     </div>
     <div class="oc-sidebar-footer">
     </div>
@@ -1468,6 +1527,11 @@
     <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 8px;">🧪 Strategy Lab <span id="nous-mode-badge" style="font-size:0.75rem;padding:2px 8px;border-radius:9999px;margin-left:8px"></span> <button onclick="openNousConfig()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--muted);margin-left:6px;padding:2px" title="Strategy Lab Configuration">⚙️</button></h2>
     <div id="nous-panel"></div>
     <div id="nous-config-overlay" class="nous-config-overlay" style="display:none"></div>
+  </div>
+
+  <div id="knowledge-section" style="margin-top: 16px; margin-bottom: 24px;">
+    <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 8px;">📚 Knowledge Base <span id="kb-status-badge" style="font-size:0.7rem;padding:2px 8px;border-radius:9999px;margin-left:8px"></span></h2>
+    <div id="knowledge-panel"></div>
   </div>
 
   <div id="debug-section" style="margin-top: 16px; margin-bottom: 24px;">
@@ -2162,6 +2226,7 @@
         }
       }
 
+      html += `<a class="oc-nav-item" data-section="knowledge-section" onclick="ocNavigate('knowledge-section')">📚 Knowledge</a>`;
       html += `<a class="oc-nav-item" data-section="nous-section" onclick="ocNavigate('nous-section')">🧪 Strategy Lab</a>`;
       html += `<div id="nous-sidebar-config" style="padding:2px 8px 6px 24px;font-size:0.65rem;color:var(--muted);line-height:1.5;display:none">`;
       html += `<div><span id="nous-sb-scope" style="font-weight:600"></span> · <span id="nous-sb-mode"></span></div>`;
@@ -4066,6 +4131,227 @@ function burnAreaChart() {
 
     fetchNousStatus();
     setInterval(fetchNousStatus, NOUS_POLL_MS);
+
+    // ── Knowledge Base ──
+    let _kbCache = null;
+    let _kbSelectedLayer = 'all';
+    let _kbSelectedType = '';
+    let _kbSearchQuery = '';
+    let _kbSelectedFact = null;
+    let _kbFacts = [];
+    const KB_POLL_MS = 30000;
+    const KB_LAYER_ICONS = { personal: '🔒', project: '📁', org: '🏢', community: '🌍' };
+    const KB_LAYER_LABELS = { personal: 'Personal', project: 'Project', org: 'Org', community: 'Community' };
+    const KB_FACT_TYPES = ['pattern', 'gotcha', 'regression', 'decision', 'test_scaffold', 'integration', 'coverage_rule'];
+
+    function confColor(c) {
+      if (c >= 0.9) return '#16a34a';
+      if (c >= 0.7) return '#d97706';
+      return '#dc2626';
+    }
+
+    async function fetchKnowledgeStats() {
+      try {
+        const r = await fetch('/api/knowledge/stats');
+        if (!r.ok) return;
+        _kbCache = await r.json();
+        renderKnowledge();
+      } catch (e) { /* knowledge unavailable */ }
+    }
+
+    async function kbSearch() {
+      const query = _kbSearchQuery;
+      const layer = _kbSelectedLayer;
+      const typeFilter = _kbSelectedType;
+      let url;
+      if (query) {
+        url = '/api/knowledge/search?q=' + encodeURIComponent(query) + '&limit=50';
+        if (typeFilter) url += '&type=' + encodeURIComponent(typeFilter);
+      } else if (layer && layer !== 'all') {
+        url = '/api/knowledge/' + encodeURIComponent(layer);
+        if (typeFilter) url += '?type=' + encodeURIComponent(typeFilter);
+      } else {
+        url = '/api/knowledge';
+        const params = [];
+        if (typeFilter) params.push('type=' + encodeURIComponent(typeFilter));
+        if (params.length) url += '?' + params.join('&');
+      }
+      try {
+        const r = await fetch(url);
+        if (!r.ok) { _kbFacts = []; renderKnowledgeFacts(); return; }
+        const data = await r.json();
+        _kbFacts = Array.isArray(data) ? data : (data.facts || []);
+        _kbSelectedFact = null;
+        renderKnowledgeFacts();
+      } catch (e) { _kbFacts = []; renderKnowledgeFacts(); }
+    }
+
+    async function kbReadFact(slug, layer) {
+      if (!layer) {
+        const match = _kbFacts.find(f => f.slug === slug);
+        layer = match ? match.layer : 'project';
+      }
+      try {
+        const r = await fetch('/api/knowledge/' + encodeURIComponent(layer) + '/' + encodeURIComponent(slug));
+        if (!r.ok) return;
+        _kbSelectedFact = await r.json();
+        renderKnowledgeDetail();
+      } catch (e) { /* ignore */ }
+    }
+
+    function renderKnowledge() {
+      const panel = document.getElementById('knowledge-panel');
+      const badge = document.getElementById('kb-status-badge');
+      if (!panel) return;
+
+      if (!_kbCache || !_kbCache.enabled) {
+        if (badge) { badge.textContent = 'disabled'; badge.style.background = '#6b7280'; badge.style.color = 'white'; }
+        panel.innerHTML = '<div class="kb-disabled"><div style="font-size:2rem;margin-bottom:8px">📚</div><div>Knowledge system not enabled</div><div style="font-size:0.72rem;margin-top:4px;color:var(--muted)">Set <code>knowledge.enabled: true</code> in hive.yaml</div></div>';
+        return;
+      }
+
+      const layers = _kbCache.layers || [];
+      const healthyCount = layers.filter(l => l.healthy).length;
+      if (badge) {
+        badge.textContent = healthyCount + '/' + layers.length + ' layers';
+        badge.style.background = healthyCount === layers.length ? '#16a34a' : (healthyCount > 0 ? '#d97706' : '#dc2626');
+        badge.style.color = 'white';
+      }
+
+      let html = '';
+
+      // Stats row
+      const totalPages = layers.reduce((sum, l) => sum + (l.total_pages || 0), 0);
+      const staleTotal = layers.reduce((sum, l) => sum + (l.stale || 0), 0);
+      const orphanedTotal = layers.reduce((sum, l) => sum + (l.orphaned || 0), 0);
+      html += '<div class="kb-stat-grid" style="margin-bottom:14px">';
+      html += `<div class="kb-stat"><div class="val">${totalPages}</div><div class="lbl">Total Facts</div></div>`;
+      html += `<div class="kb-stat"><div class="val">${healthyCount}/${layers.length}</div><div class="lbl">Layers Online</div></div>`;
+      html += `<div class="kb-stat"><div class="val">${escapeHtml(_kbCache.engine || 'n/a')}</div><div class="lbl">Engine</div></div>`;
+      if (staleTotal > 0) html += `<div class="kb-stat"><div class="val" style="color:#d97706">${staleTotal}</div><div class="lbl">Stale</div></div>`;
+      if (orphanedTotal > 0) html += `<div class="kb-stat"><div class="val" style="color:#dc2626">${orphanedTotal}</div><div class="lbl">Orphaned</div></div>`;
+      html += '</div>';
+
+      // Main layout: sidebar + content
+      html += '<div class="kb-layout">';
+
+      // Left sidebar: layers + search + filters
+      html += '<div class="kb-sidebar">';
+      html += '<div class="kb-layer-list">';
+      html += `<button class="kb-layer-btn${_kbSelectedLayer === 'all' ? ' active' : ''}" onclick="_kbSelectedLayer='all';kbSearch()">📋 All Layers</button>`;
+      for (const l of layers) {
+        const icon = KB_LAYER_ICONS[l.type] || '📄';
+        const label = KB_LAYER_LABELS[l.type] || l.type;
+        const active = _kbSelectedLayer === l.type ? ' active' : '';
+        const count = l.total_pages || 0;
+        const dot = l.healthy ? '🟢' : '🔴';
+        html += `<button class="kb-layer-btn${active}" onclick="_kbSelectedLayer='${escapeHtml(l.type)}';kbSearch()">${icon} ${escapeHtml(label)} ${dot}<span class="kb-layer-count">${count}</span></button>`;
+      }
+      html += '</div>';
+
+      // Search
+      html += `<input type="text" class="kb-search-box" placeholder="Search facts..." value="${escapeHtml(_kbSearchQuery)}" onkeyup="if(event.key==='Enter'){_kbSearchQuery=this.value;kbSearch()}" onchange="_kbSearchQuery=this.value">`;
+
+      // Type filter pills
+      html += '<div class="kb-filter-row">';
+      html += `<span class="kb-filter-pill${_kbSelectedType === '' ? ' active' : ''}" onclick="_kbSelectedType='';kbSearch()">All</span>`;
+      for (const t of KB_FACT_TYPES) {
+        const active = _kbSelectedType === t ? ' active' : '';
+        html += `<span class="kb-filter-pill${active}" onclick="_kbSelectedType='${t}';kbSearch()">${escapeHtml(t)}</span>`;
+      }
+      html += '</div>';
+
+      // Health
+      html += '<div style="margin-top:8px;font-size:0.72rem;color:var(--muted)">';
+      for (const l of layers) {
+        const dot = l.healthy ? '#16a34a' : '#dc2626';
+        html += `<div class="kb-health-item"><span class="kb-health-dot" style="background:${dot}"></span>${escapeHtml(KB_LAYER_LABELS[l.type] || l.type)}: ${l.healthy ? 'healthy' : 'unreachable'}</div>`;
+      }
+      html += '</div>';
+
+      html += '</div>'; // kb-sidebar
+
+      // Right: fact list + detail
+      html += '<div class="kb-main">';
+      html += '<div id="kb-fact-list" class="kb-fact-list"></div>';
+      html += '<div id="kb-fact-detail"></div>';
+      html += '</div>';
+
+      html += '</div>'; // kb-layout
+      panel.innerHTML = html;
+      kbSearch();
+    }
+
+    function renderKnowledgeFacts() {
+      const el = document.getElementById('kb-fact-list');
+      if (!el) return;
+
+      if (_kbFacts.length === 0) {
+        el.innerHTML = '<div class="kb-empty"><div class="kb-empty-icon">🔍</div>No facts found. Try a different search or layer.</div>';
+        return;
+      }
+
+      let html = '';
+      for (const f of _kbFacts) {
+        const conf = typeof f.confidence === 'number' ? f.confidence : 0;
+        const confPct = Math.round(conf * 100);
+        const typeClass = 'kb-type-' + (f.type || 'pattern');
+        const layerClass = 'kb-layer-' + (f.layer || 'project');
+        const selected = _kbSelectedFact && _kbSelectedFact.slug === f.slug ? ' selected' : '';
+        html += `<div class="kb-fact-item${selected}" onclick="kbReadFact('${escapeHtml(f.slug || '')}')">`;
+        html += '<div class="kb-fact-meta">';
+        html += `<span class="kb-fact-conf" style="color:${confColor(conf)}">${confPct}%</span>`;
+        html += `<div class="kb-fact-conf-bar"><div class="kb-fact-conf-fill" style="width:${confPct}%;background:${confColor(conf)}"></div></div>`;
+        html += '</div>';
+        html += '<div class="kb-fact-body">';
+        html += `<div class="kb-fact-title">${escapeHtml(f.title || f.slug || 'Untitled')}</div>`;
+        html += `<div class="kb-fact-snippet">${escapeHtml(f.body || '')}</div>`;
+        html += '<div class="kb-fact-tags">';
+        html += `<span class="kb-type-badge ${typeClass}">${escapeHtml(f.type || 'unknown')}</span>`;
+        html += `<span class="kb-layer-badge ${layerClass}">${escapeHtml(f.layer || '')}</span>`;
+        if (f.status) html += `<span class="kb-layer-badge" style="background:var(--bg);color:var(--muted)">${escapeHtml(f.status)}</span>`;
+        html += '</div></div></div>';
+      }
+      el.innerHTML = html;
+    }
+
+    function renderKnowledgeDetail() {
+      const el = document.getElementById('kb-fact-detail');
+      if (!el || !_kbSelectedFact) { if (el) el.innerHTML = ''; return; }
+      const f = _kbSelectedFact;
+      const conf = typeof f.confidence === 'number' ? f.confidence : 0;
+      const confPct = Math.round(conf * 100);
+      const typeClass = 'kb-type-' + (f.type || 'pattern');
+      const layerClass = 'kb-layer-' + (f.layer || 'project');
+
+      let html = '<div class="kb-detail">';
+      html += `<div class="kb-detail-title">${escapeHtml(f.title || f.slug || 'Untitled')}</div>`;
+      html += '<div style="display:flex;gap:6px;margin-bottom:10px">';
+      html += `<span class="kb-type-badge ${typeClass}">${escapeHtml(f.type || 'unknown')}</span>`;
+      html += `<span class="kb-layer-badge ${layerClass}">${escapeHtml(f.layer || '')}</span>`;
+      if (f.status) html += `<span class="kb-layer-badge" style="background:var(--bg);color:var(--muted)">${escapeHtml(f.status)}</span>`;
+      html += '</div>';
+      html += `<div class="kb-detail-body">${escapeHtml(f.body || 'No content')}</div>`;
+      html += '<div class="kb-detail-meta">';
+      html += `<div><span class="kb-detail-label">Confidence:</span> <span style="color:${confColor(conf)};font-weight:600">${confPct}%</span></div>`;
+      html += `<div><span class="kb-detail-label">Slug:</span> ${escapeHtml(f.slug || '')}</div>`;
+      if (f.tags && f.tags.length) html += `<div><span class="kb-detail-label">Tags:</span> ${f.tags.map(t => escapeHtml(t)).join(', ')}</div>`;
+      html += '</div></div>';
+      el.innerHTML = html;
+
+      // Highlight selected fact in list
+      document.querySelectorAll('.kb-fact-item').forEach(item => item.classList.remove('selected'));
+      const items = document.querySelectorAll('.kb-fact-item');
+      for (const item of items) {
+        if (item.querySelector('.kb-fact-title')?.textContent === (f.title || f.slug)) {
+          item.classList.add('selected');
+          break;
+        }
+      }
+    }
+
+    fetchKnowledgeStats();
+    setInterval(fetchKnowledgeStats, KB_POLL_MS);
 
     function render(data) {
       if (!data || data.error) return;
