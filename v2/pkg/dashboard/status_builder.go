@@ -42,6 +42,7 @@ func BuildFrontendStatus(
 }
 
 func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, govState governor.State) []FrontendAgent {
+	currentMode := strings.ToLower(string(govState.Mode))
 	agents := make([]FrontendAgent, 0, len(statuses))
 	for name, proc := range statuses {
 		cli := proc.Config.Backend
@@ -63,7 +64,10 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, go
 			lastKick = formatHumanTime(*proc.LastKick)
 		}
 
-		cadence := lookupCadence(name, cfg)
+		cadence := lookupCadenceForMode(name, currentMode, cfg)
+		if cadence == "" {
+			cadence = lookupCadence(name, cfg)
+		}
 		nextKick := computeNextKick(proc.LastKick, cadence)
 
 		pinnedCli := proc.PinnedCLI != ""
