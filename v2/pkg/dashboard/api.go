@@ -578,10 +578,16 @@ func (s *Server) handleAgentConfigGet(w http.ResponseWriter, r *http.Request) {
 		launchCmd = fmt.Sprintf("copilot --model %s --allow-all", model)
 	}
 
-	cadences := map[string]string{}
+	// Cadences as seconds (int) — frontend expects numbers, not duration strings
+	cadences := map[string]int64{}
 	for modeName, modeCfg := range s.deps.Config.Governor.Modes {
 		if c, ok := modeCfg.Cadences[name]; ok {
-			cadences[modeName] = c
+			if c == "pause" || c == "off" || c == "0" {
+				cadences[modeName] = 0
+			} else {
+				d := parseCadenceDuration(c)
+				cadences[modeName] = int64(d.Seconds())
+			}
 		}
 	}
 
@@ -589,6 +595,15 @@ func (s *Server) handleAgentConfigGet(w http.ResponseWriter, r *http.Request) {
 	if len(proc.KickHistory) > 0 {
 		lastPrompt = proc.KickHistory[len(proc.KickHistory)-1].Snippet
 	}
+
+	// Read restrictions from agent work dir files
+	restrictions := s.loadAgentRestrictions(name)
+
+	// Read prompt template from CLAUDE.md
+	promptTemplate := s.loadPromptTemplate(name)
+
+	// Read stat sources from config
+	stats := s.loadAgentStats(name)
 
 	jsonResponse(w, map[string]interface{}{
 		"name": name,
@@ -604,16 +619,108 @@ func (s *Server) handleAgentConfigGet(w http.ResponseWriter, r *http.Request) {
 		},
 		"cadences":     cadences,
 		"pipeline":     map[string]interface{}{},
-		"hooks":        map[string]interface{}{},
-		"restrictions": map[string]interface{}{"agent": []any{}, "global": []any{}, "policy": []any{}},
-		"stats":        []any{},
+		"hooks":        map[string]interface{}{"preKick": []any{}, "postIdle": []any{}},
+		"restrictions": restrictions,
+		"stats":        stats,
 		"prompt":       lastPrompt,
+		"promptTemplate": promptTemplate,
 		"state":        proc.State,
 		"paused":       proc.Paused,
 		"pinned_cli":   proc.PinnedCLI,
 		"pinned_model": proc.PinnedModel,
 		"kick_history": proc.KickHistory,
 	})
+}
+
+type restriction struct {
+	Pattern string `json:"pattern"`
+	Reason  string `json:"reason"`
+	Source  string `json:"source"`
+}
+
+func (s *Server) loadAgentRestrictions(name string) map[string]interface{} {
+	result := map[string]interface{}{
+		"agent":  []any{},
+		"global": []any{},
+		"policy": []any{},
+	}
+
+	// Read global restrictions from /data/restrictions.conf (one pattern per line)
+	globalRestrictions := []any{}
+	if data, err := os.ReadFile("/data/restrictions.conf"); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "|", 2)
+			r := restriction{Pattern: parts[0], Source: "global"}
+			if len(parts) > 1 {
+				r.Reason = parts[1]
+			}
+			globalRestrictions = append(globalRestrictions, r)
+		}
+	}
+	result["global"] = globalRestrictions
+
+	// Read agent-specific restrictions
+	agentRestrictions := []any{}
+	agentRestFile := fmt.Sprintf("/data/agents/%s/restrictions.conf", name)
+	if data, err := os.ReadFile(agentRestFile); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "|", 2)
+			r := restriction{Pattern: parts[0], Source: "agent"}
+			if len(parts) > 1 {
+				r.Reason = parts[1]
+			}
+			agentRestrictions = append(agentRestrictions, r)
+		}
+	}
+	result["agent"] = agentRestrictions
+
+	// Read policy restrictions from CLAUDE.md
+	policyRestrictions := []any{}
+	claudeMdPath := fmt.Sprintf("/data/agents/%s/CLAUDE.md", name)
+	if data, err := os.ReadFile(claudeMdPath); err == nil {
+		content := string(data)
+		for _, line := range strings.Split(content, "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "NEVER ") || strings.HasPrefix(line, "Do not ") || strings.HasPrefix(line, "ALWAYS ") {
+				policyRestrictions = append(policyRestrictions, restriction{
+					Pattern: line,
+					Source:  "policy",
+				})
+			}
+		}
+	}
+	result["policy"] = policyRestrictions
+
+	return result
+}
+
+func (s *Server) loadPromptTemplate(name string) string {
+	// Try agent's CLAUDE.md first
+	claudeMdPath := fmt.Sprintf("/data/agents/%s/CLAUDE.md", name)
+	if data, err := os.ReadFile(claudeMdPath); err == nil {
+		return string(data)
+	}
+	return ""
+}
+
+func (s *Server) loadAgentStats(name string) []any {
+	// Check for agent stats config file
+	statsFile := fmt.Sprintf("/data/agents/%s/stats.json", name)
+	if data, err := os.ReadFile(statsFile); err == nil {
+		var stats []any
+		if json.Unmarshal(data, &stats) == nil {
+			return stats
+		}
+	}
+	return []any{}
 }
 
 func (s *Server) handleAgentConfigGeneral(w http.ResponseWriter, r *http.Request) {

@@ -393,6 +393,7 @@ func (a *AgentProcess) snapshot() AgentProcess {
 		RestartCount:    a.RestartCount,
 		KickHistory:     history,
 		tmuxSession:     a.tmuxSession,
+		OutputBuffer:    a.OutputBuffer,
 	}
 }
 

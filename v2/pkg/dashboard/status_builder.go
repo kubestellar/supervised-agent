@@ -91,9 +91,9 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, go
 		pinnedCli := proc.PinnedCLI != ""
 		pinnedModel := proc.PinnedModel != ""
 
+		const summaryLines = 20
 		var liveSummary string
 		if proc.OutputBuffer != nil {
-			const summaryLines = 20
 			lines := proc.OutputBuffer.Last(summaryLines)
 			liveSummary = strings.Join(lines, "\n")
 		}
