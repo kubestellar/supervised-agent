@@ -4232,6 +4232,13 @@ function burnAreaChart() {
       if (orphanedTotal > 0) html += `<div class="kb-stat"><div class="val" style="color:#dc2626">${orphanedTotal}</div><div class="lbl">Orphaned</div></div>`;
       html += '</div>';
 
+      // Action buttons
+      html += '<div style="display:flex;gap:8px;margin-bottom:14px">';
+      html += '<button class="nous-btn" style="background:var(--accent);color:white" onclick="kbOpenCreate()">+ New Fact</button>';
+      html += '<button class="nous-btn" style="background:var(--card);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenImport()">📥 Import</button>';
+      html += '<button class="nous-btn" style="background:var(--card);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenSubscriptions()">🔗 Subscriptions</button>';
+      html += '</div>';
+
       // Main layout: sidebar + content
       html += '<div class="kb-layout">';
 
@@ -4336,7 +4343,20 @@ function burnAreaChart() {
       html += `<div><span class="kb-detail-label">Confidence:</span> <span style="color:${confColor(conf)};font-weight:600">${confPct}%</span></div>`;
       html += `<div><span class="kb-detail-label">Slug:</span> ${escapeHtml(f.slug || '')}</div>`;
       if (f.tags && f.tags.length) html += `<div><span class="kb-detail-label">Tags:</span> ${f.tags.map(t => escapeHtml(t)).join(', ')}</div>`;
-      html += '</div></div>';
+      html += '</div>';
+
+      // Action buttons
+      html += '<div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">';
+      html += `<button class="nous-btn" style="background:#2563eb;color:white;font-size:0.72rem;padding:5px 10px" onclick="kbOpenEdit()">✏️ Edit</button>`;
+      const promoteTargets = { personal: 'project', project: 'org', org: 'community' };
+      const promoteTo = promoteTargets[f.layer];
+      if (promoteTo) {
+        html += `<button class="nous-btn" style="background:#7c3aed;color:white;font-size:0.72rem;padding:5px 10px" onclick="kbPromote('${escapeHtml(f.slug)}','${escapeHtml(f.layer)}','${promoteTo}')">⬆ Promote to ${promoteTo}</button>`;
+      }
+      html += `<button class="nous-btn" style="background:#dc2626;color:white;font-size:0.72rem;padding:5px 10px" onclick="kbDelete('${escapeHtml(f.slug)}','${escapeHtml(f.layer)}')">🗑 Delete</button>`;
+      html += '</div>';
+
+      html += '</div>';
       el.innerHTML = html;
 
       // Highlight selected fact in list
@@ -4348,6 +4368,348 @@ function burnAreaChart() {
           break;
         }
       }
+    }
+
+    // ── Knowledge modals and actions ──
+
+    function kbShowModal(title, bodyHtml) {
+      let overlay = document.getElementById('kb-modal-overlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'kb-modal-overlay';
+        overlay.className = 'nous-config-overlay';
+        document.body.appendChild(overlay);
+      }
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `<div class="nous-config-dialog" style="width:600px">
+        <h2 style="font-size:1rem;margin:0 0 16px 0;display:flex;align-items:center;justify-content:space-between">
+          ${title}
+          <button onclick="kbCloseModal()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted)">✕</button>
+        </h2>
+        ${bodyHtml}
+      </div>`;
+    }
+
+    function kbCloseModal() {
+      const overlay = document.getElementById('kb-modal-overlay');
+      if (overlay) overlay.style.display = 'none';
+    }
+
+    function kbOpenCreate() {
+      const layers = (_kbCache || {}).layers || [];
+      let layerOpts = '';
+      for (const l of layers) {
+        const sel = l.type === 'project' ? ' selected' : '';
+        layerOpts += `<option value="${escapeHtml(l.type)}"${sel}>${escapeHtml(KB_LAYER_LABELS[l.type] || l.type)}</option>`;
+      }
+      if (!layerOpts) layerOpts = '<option value="project">Project</option>';
+
+      let typeOpts = '';
+      for (const t of KB_FACT_TYPES) {
+        typeOpts += `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`;
+      }
+
+      const html = `
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <label style="font-size:0.78rem;color:var(--muted)">Title
+            <input id="kb-create-title" type="text" class="kb-search-box" style="margin-top:4px" placeholder="Guard .join() against undefined">
+          </label>
+          <label style="font-size:0.78rem;color:var(--muted)">Body
+            <textarea id="kb-create-body" rows="6" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.8rem;font-family:inherit;resize:vertical" placeholder="Always use (arr || []).join(',') — hooks can return undefined when endpoints fail."></textarea>
+          </label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+            <label style="font-size:0.78rem;color:var(--muted)">Layer
+              <select id="kb-create-layer" style="width:100%;margin-top:4px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.78rem">${layerOpts}</select>
+            </label>
+            <label style="font-size:0.78rem;color:var(--muted)">Type
+              <select id="kb-create-type" style="width:100%;margin-top:4px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.78rem">${typeOpts}</select>
+            </label>
+            <label style="font-size:0.78rem;color:var(--muted)">Confidence
+              <input id="kb-create-conf" type="number" min="0" max="1" step="0.1" value="0.7" style="width:100%;margin-top:4px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.78rem">
+            </label>
+          </div>
+          <label style="font-size:0.78rem;color:var(--muted)">Tags (comma-separated)
+            <input id="kb-create-tags" type="text" class="kb-search-box" style="margin-top:4px" placeholder="react, testing, hooks">
+          </label>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+            <button class="nous-btn nous-config-btn-cancel" onclick="kbCloseModal()">Cancel</button>
+            <button class="nous-btn" style="background:var(--accent);color:white" onclick="kbSubmitCreate()">Create Fact</button>
+          </div>
+        </div>`;
+      kbShowModal('New Fact', html);
+    }
+
+    async function kbSubmitCreate() {
+      const title = document.getElementById('kb-create-title')?.value?.trim();
+      const body = document.getElementById('kb-create-body')?.value?.trim();
+      const layer = document.getElementById('kb-create-layer')?.value;
+      const type = document.getElementById('kb-create-type')?.value;
+      const conf = parseFloat(document.getElementById('kb-create-conf')?.value || '0.7');
+      const tagsRaw = document.getElementById('kb-create-tags')?.value || '';
+      const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+
+      if (!title || !body) { alert('Title and body are required'); return; }
+
+      try {
+        const r = await fetch('/api/knowledge/create', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, body, layer, type, confidence: conf, tags }),
+        });
+        if (!r.ok) { const e = await r.json(); alert(e.error || 'Failed to create'); return; }
+        kbCloseModal();
+        fetchKnowledgeStats();
+        kbSearch();
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    function kbOpenEdit() {
+      if (!_kbSelectedFact) return;
+      const f = _kbSelectedFact;
+
+      let typeOpts = '';
+      for (const t of KB_FACT_TYPES) {
+        const sel = t === f.type ? ' selected' : '';
+        typeOpts += `<option value="${escapeHtml(t)}"${sel}>${escapeHtml(t)}</option>`;
+      }
+
+      const html = `
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <label style="font-size:0.78rem;color:var(--muted)">Title
+            <input id="kb-edit-title" type="text" class="kb-search-box" style="margin-top:4px" value="${escapeHtml(f.title || '')}">
+          </label>
+          <label style="font-size:0.78rem;color:var(--muted)">Body
+            <textarea id="kb-edit-body" rows="8" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.8rem;font-family:inherit;resize:vertical">${escapeHtml(f.body || '')}</textarea>
+          </label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+            <label style="font-size:0.78rem;color:var(--muted)">Type
+              <select id="kb-edit-type" style="width:100%;margin-top:4px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.78rem">${typeOpts}</select>
+            </label>
+            <label style="font-size:0.78rem;color:var(--muted)">Status
+              <select id="kb-edit-status" style="width:100%;margin-top:4px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.78rem">
+                <option value="draft"${f.status === 'draft' ? ' selected' : ''}>Draft</option>
+                <option value="verified"${f.status === 'verified' ? ' selected' : ''}>Verified</option>
+                <option value="stale"${f.status === 'stale' ? ' selected' : ''}>Stale</option>
+                <option value="archived"${f.status === 'archived' ? ' selected' : ''}>Archived</option>
+              </select>
+            </label>
+            <label style="font-size:0.78rem;color:var(--muted)">Confidence
+              <input id="kb-edit-conf" type="number" min="0" max="1" step="0.1" value="${f.confidence || 0.7}" style="width:100%;margin-top:4px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.78rem">
+            </label>
+          </div>
+          <label style="font-size:0.78rem;color:var(--muted)">Tags (comma-separated)
+            <input id="kb-edit-tags" type="text" class="kb-search-box" style="margin-top:4px" value="${escapeHtml((f.tags || []).join(', '))}">
+          </label>
+          <div style="font-size:0.7rem;color:var(--muted)">Layer: ${escapeHtml(f.layer || '')} · Slug: ${escapeHtml(f.slug || '')}</div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+            <button class="nous-btn nous-config-btn-cancel" onclick="kbCloseModal()">Cancel</button>
+            <button class="nous-btn" style="background:#2563eb;color:white" onclick="kbSubmitEdit()">Save Changes</button>
+          </div>
+        </div>`;
+      kbShowModal('Edit Fact', html);
+    }
+
+    async function kbSubmitEdit() {
+      if (!_kbSelectedFact) return;
+      const f = _kbSelectedFact;
+      const title = document.getElementById('kb-edit-title')?.value?.trim();
+      const body = document.getElementById('kb-edit-body')?.value?.trim();
+      const type = document.getElementById('kb-edit-type')?.value;
+      const status = document.getElementById('kb-edit-status')?.value;
+      const conf = parseFloat(document.getElementById('kb-edit-conf')?.value || '0.7');
+      const tagsRaw = document.getElementById('kb-edit-tags')?.value || '';
+      const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+
+      try {
+        const r = await fetch('/api/knowledge/' + encodeURIComponent(f.layer) + '/' + encodeURIComponent(f.slug), {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, body, type, status, confidence: conf, tags }),
+        });
+        if (!r.ok) { const e = await r.json(); alert(e.error || 'Failed to update'); return; }
+        kbCloseModal();
+        kbReadFact(f.slug, f.layer);
+        kbSearch();
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    async function kbDelete(slug, layer) {
+      if (!confirm('Delete fact "' + slug + '" from ' + layer + '?')) return;
+      try {
+        const r = await fetch('/api/knowledge/' + encodeURIComponent(layer) + '/' + encodeURIComponent(slug), { method: 'DELETE' });
+        if (!r.ok) { const e = await r.json(); alert(e.error || 'Failed to delete'); return; }
+        _kbSelectedFact = null;
+        const detail = document.getElementById('kb-fact-detail');
+        if (detail) detail.innerHTML = '';
+        fetchKnowledgeStats();
+        kbSearch();
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    async function kbPromote(slug, fromLayer, toLayer) {
+      const reason = prompt('Reason for promoting to ' + toLayer + ':', 'Useful for the broader team');
+      if (reason === null) return;
+      try {
+        const r = await fetch('/api/knowledge/promote', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, from_layer: fromLayer, to_layer: toLayer, reason, promoter: 'dashboard' }),
+        });
+        if (!r.ok) { const e = await r.json(); alert(e.error || 'Failed to promote'); return; }
+        alert('Fact promoted to ' + toLayer);
+        fetchKnowledgeStats();
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    function kbOpenImport() {
+      const layers = (_kbCache || {}).layers || [];
+      let layerOpts = '';
+      for (const l of layers) {
+        const sel = l.type === 'project' ? ' selected' : '';
+        layerOpts += `<option value="${escapeHtml(l.type)}"${sel}>${escapeHtml(KB_LAYER_LABELS[l.type] || l.type)}</option>`;
+      }
+      if (!layerOpts) layerOpts = '<option value="project">Project</option>';
+
+      const html = `
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <p style="font-size:0.78rem;color:var(--muted);margin:0">Paste markdown or JSON content. Markdown headings (# or ##) become separate facts. JSON should be an array of {title, body, type, tags} objects.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <label style="font-size:0.78rem;color:var(--muted)">Layer
+              <select id="kb-import-layer" style="width:100%;margin-top:4px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.78rem">${layerOpts}</select>
+            </label>
+            <label style="font-size:0.78rem;color:var(--muted)">Format
+              <select id="kb-import-format" style="width:100%;margin-top:4px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.78rem">
+                <option value="markdown" selected>Markdown</option>
+                <option value="json">JSON</option>
+              </select>
+            </label>
+          </div>
+          <label style="font-size:0.78rem;color:var(--muted)">Content
+            <textarea id="kb-import-content" rows="12" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.78rem;font-family:'SF Mono','Fira Code',monospace;resize:vertical" placeholder="# Guard .join() against undefined\n\nAlways use (arr || []).join(',')..."></textarea>
+          </label>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+            <label style="font-size:0.72rem;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:4px">
+              <span>or load from file:</span>
+              <input type="file" accept=".md,.json,.txt" style="font-size:0.72rem" onchange="kbLoadFile(this)">
+            </label>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+            <button class="nous-btn nous-config-btn-cancel" onclick="kbCloseModal()">Cancel</button>
+            <button class="nous-btn" style="background:var(--accent);color:white" onclick="kbSubmitImport()">Import</button>
+          </div>
+        </div>`;
+      kbShowModal('📥 Import Facts', html);
+    }
+
+    function kbLoadFile(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const textarea = document.getElementById('kb-import-content');
+        if (textarea) textarea.value = e.target.result;
+        const formatSel = document.getElementById('kb-import-format');
+        if (formatSel && file.name.endsWith('.json')) formatSel.value = 'json';
+      };
+      reader.readAsText(file);
+    }
+
+    async function kbSubmitImport() {
+      const content = document.getElementById('kb-import-content')?.value?.trim();
+      const layer = document.getElementById('kb-import-layer')?.value;
+      const format = document.getElementById('kb-import-format')?.value;
+
+      if (!content) { alert('Content is required'); return; }
+
+      try {
+        const r = await fetch('/api/knowledge/import', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, layer, format }),
+        });
+        const data = await r.json();
+        if (!r.ok) { alert(data.error || 'Failed to import'); return; }
+        kbCloseModal();
+        alert('Imported ' + (data.imported || 0) + ' facts to ' + layer);
+        fetchKnowledgeStats();
+        kbSearch();
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    function kbOpenSubscriptions() {
+      kbShowModal('🔗 Subscriptions', '<div id="kb-subs-content"><div style="text-align:center;padding:20px;color:var(--muted)">Loading...</div></div>');
+      kbLoadSubscriptions();
+    }
+
+    async function kbLoadSubscriptions() {
+      const el = document.getElementById('kb-subs-content');
+      if (!el) return;
+
+      try {
+        const r = await fetch('/api/knowledge/subscriptions');
+        const subs = await r.json();
+
+        let html = '';
+        if (subs && subs.length > 0) {
+          html += '<div style="margin-bottom:14px">';
+          for (const s of subs) {
+            html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px">`;
+            html += `<div><div style="font-size:0.82rem;font-weight:600;color:var(--fg)">${escapeHtml(s.name || s.url)}</div>`;
+            html += `<div style="font-size:0.7rem;color:var(--muted)">${escapeHtml(s.url)} · ${escapeHtml(s.layer || 'org')}</div></div>`;
+            html += `<button class="nous-btn" style="background:#dc2626;color:white;font-size:0.7rem;padding:4px 8px" onclick="kbRemoveSub('${escapeHtml(s.url)}')">Remove</button>`;
+            html += '</div>';
+          }
+          html += '</div>';
+        } else {
+          html += '<div style="text-align:center;padding:16px;color:var(--muted);font-size:0.78rem">No subscriptions yet. Add an org or community wiki endpoint.</div>';
+        }
+
+        html += '<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px">';
+        html += '<div style="font-size:0.82rem;font-weight:600;color:var(--fg);margin-bottom:8px">Add Subscription</div>';
+        html += '<div style="display:flex;flex-direction:column;gap:8px">';
+        html += '<input id="kb-sub-url" type="text" class="kb-search-box" placeholder="https://wiki.example.com/mcp">';
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+        html += `<input id="kb-sub-name" type="text" class="kb-search-box" placeholder="Display name">`;
+        html += `<select id="kb-sub-layer" style="padding:7px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.78rem">
+          <option value="org">Org</option>
+          <option value="community">Community</option>
+        </select>`;
+        html += '</div>';
+        html += '<div style="display:flex;justify-content:flex-end">';
+        html += '<button class="nous-btn" style="background:var(--accent);color:white" onclick="kbAddSub()">Add</button>';
+        html += '</div></div></div>';
+
+        el.innerHTML = html;
+      } catch (e) {
+        el.innerHTML = '<div style="color:#dc2626;padding:12px">Failed to load subscriptions: ' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    async function kbAddSub() {
+      const url = document.getElementById('kb-sub-url')?.value?.trim();
+      const name = document.getElementById('kb-sub-name')?.value?.trim();
+      const layer = document.getElementById('kb-sub-layer')?.value;
+
+      if (!url) { alert('URL is required'); return; }
+
+      try {
+        const r = await fetch('/api/knowledge/subscriptions', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, name: name || url, layer }),
+        });
+        if (!r.ok) { const e = await r.json(); alert(e.error || 'Failed to add'); return; }
+        kbLoadSubscriptions();
+        fetchKnowledgeStats();
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    async function kbRemoveSub(url) {
+      if (!confirm('Remove subscription to ' + url + '?')) return;
+      try {
+        const r = await fetch('/api/knowledge/subscriptions', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        if (!r.ok) { const e = await r.json(); alert(e.error || 'Failed to remove'); return; }
+        kbLoadSubscriptions();
+        fetchKnowledgeStats();
+      } catch (e) { alert('Error: ' + e.message); }
     }
 
     fetchKnowledgeStats();

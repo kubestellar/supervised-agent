@@ -2,15 +2,29 @@ package knowledge
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
+	"strings"
+	"time"
 )
 
 // KnowledgeAPI provides a unified interface for dashboard endpoints to query
 // across all configured wiki layers.
 type KnowledgeAPI struct {
-	layers []layerClient
-	config KnowledgeConfig
-	logger *slog.Logger
+	layers        []layerClient
+	config        KnowledgeConfig
+	promoter      *Promoter
+	subscriptions []Subscription
+	logger        *slog.Logger
+}
+
+// Subscription represents a user-added wiki endpoint.
+type Subscription struct {
+	URL   string    `json:"url"`
+	Layer LayerType `json:"layer"`
+	Name  string    `json:"name"`
+	Added time.Time `json:"added"`
 }
 
 // NewKnowledgeAPI creates a dashboard-facing API from the full knowledge config.
@@ -27,10 +41,13 @@ func NewKnowledgeAPI(layers []LayerConfig, config KnowledgeConfig, logger *slog.
 		})
 	}
 
+	promoter := NewPromoter(layers, config.Curator, logger)
+
 	return &KnowledgeAPI{
-		layers: clients,
-		config: config,
-		logger: logger,
+		layers:   clients,
+		config:   config,
+		promoter: promoter,
+		logger:   logger,
 	}
 }
 
@@ -165,4 +182,270 @@ func (k *KnowledgeAPI) Stats(ctx context.Context) map[string]interface{} {
 	result["layers"] = layerStats
 
 	return result
+}
+
+// CreateFactRequest is the payload for creating a new fact.
+type CreateFactRequest struct {
+	Title      string   `json:"title"`
+	Body       string   `json:"body"`
+	Type       string   `json:"type"`
+	Tags       []string `json:"tags"`
+	Layer      string   `json:"layer"`
+	Confidence float64  `json:"confidence"`
+}
+
+// CreateFact ingests a new fact into the specified layer.
+func (k *KnowledgeAPI) CreateFact(ctx context.Context, req CreateFactRequest) error {
+	layer := LayerType(req.Layer)
+	client := k.clientForLayer(layer)
+	if client == nil {
+		return fmt.Errorf("layer %s has no configured endpoint", req.Layer)
+	}
+
+	fact := ExtractedFact{
+		Title:      req.Title,
+		Body:       req.Body,
+		Type:       FactType(req.Type),
+		Confidence: req.Confidence,
+		Tags:       req.Tags,
+		SourcePR:   "manual",
+		SourceDate: time.Now(),
+	}
+
+	if err := client.IngestFacts(ctx, []ExtractedFact{fact}); err != nil {
+		return fmt.Errorf("ingesting fact: %w", err)
+	}
+
+	k.logger.Info("fact created", "title", req.Title, "layer", req.Layer, "type", req.Type)
+	return nil
+}
+
+// UpdateFactRequest is the payload for updating an existing fact.
+type UpdateFactRequest struct {
+	Title      string   `json:"title"`
+	Body       string   `json:"body"`
+	Type       string   `json:"type"`
+	Tags       []string `json:"tags"`
+	Status     string   `json:"status"`
+	Confidence float64  `json:"confidence"`
+}
+
+// UpdateFact modifies an existing fact in the specified layer.
+func (k *KnowledgeAPI) UpdateFact(ctx context.Context, layer LayerType, slug string, req UpdateFactRequest) error {
+	client := k.clientForLayer(layer)
+	if client == nil {
+		return fmt.Errorf("layer %s has no configured endpoint", layer)
+	}
+
+	update := pageUpdateRequest{
+		Title:      req.Title,
+		Body:       req.Body,
+		Type:       req.Type,
+		Confidence: req.Confidence,
+		Tags:       req.Tags,
+		Status:     req.Status,
+	}
+
+	if err := client.UpdatePage(ctx, slug, update); err != nil {
+		return fmt.Errorf("updating fact %s: %w", slug, err)
+	}
+
+	k.logger.Info("fact updated", "slug", slug, "layer", layer)
+	return nil
+}
+
+// DeleteFact removes a fact from the specified layer.
+func (k *KnowledgeAPI) DeleteFact(ctx context.Context, layer LayerType, slug string) error {
+	client := k.clientForLayer(layer)
+	if client == nil {
+		return fmt.Errorf("layer %s has no configured endpoint", layer)
+	}
+
+	if err := client.DeletePage(ctx, slug); err != nil {
+		return fmt.Errorf("deleting fact %s: %w", slug, err)
+	}
+
+	k.logger.Info("fact deleted", "slug", slug, "layer", layer)
+	return nil
+}
+
+// PromoteFact promotes a fact from one layer to another (upward only).
+func (k *KnowledgeAPI) PromoteFact(ctx context.Context, req PromoteRequest) PromoteResult {
+	return k.promoter.Promote(ctx, req)
+}
+
+// ImportFacts parses markdown or JSON content and ingests extracted facts.
+func (k *KnowledgeAPI) ImportFacts(ctx context.Context, layer LayerType, content string, format string) (int, error) {
+	client := k.clientForLayer(layer)
+	if client == nil {
+		return 0, fmt.Errorf("layer %s has no configured endpoint", layer)
+	}
+
+	var facts []ExtractedFact
+
+	switch format {
+	case "json":
+		if err := parseJSONFacts(content, &facts); err != nil {
+			return 0, fmt.Errorf("parsing JSON: %w", err)
+		}
+	case "markdown", "md":
+		facts = parseMarkdownFacts(content)
+	default:
+		facts = parseMarkdownFacts(content)
+	}
+
+	if len(facts) == 0 {
+		return 0, nil
+	}
+
+	if err := client.IngestFacts(ctx, facts); err != nil {
+		return 0, fmt.Errorf("ingesting imported facts: %w", err)
+	}
+
+	k.logger.Info("facts imported", "count", len(facts), "layer", layer, "format", format)
+	return len(facts), nil
+}
+
+// Subscriptions returns the current list of subscribed wiki endpoints.
+func (k *KnowledgeAPI) Subscriptions() []Subscription {
+	subs := make([]Subscription, len(k.subscriptions))
+	copy(subs, k.subscriptions)
+	return subs
+}
+
+// AddSubscription adds a new wiki endpoint and connects a client for it.
+func (k *KnowledgeAPI) AddSubscription(sub Subscription) error {
+	for _, existing := range k.subscriptions {
+		if existing.URL == sub.URL {
+			return fmt.Errorf("subscription already exists: %s", sub.URL)
+		}
+	}
+
+	sub.Added = time.Now()
+	k.subscriptions = append(k.subscriptions, sub)
+
+	k.layers = append(k.layers, layerClient{
+		layerType: sub.Layer,
+		client:    NewClient(sub.URL, k.logger),
+	})
+
+	k.logger.Info("subscription added", "url", sub.URL, "layer", sub.Layer, "name", sub.Name)
+	return nil
+}
+
+// RemoveSubscription disconnects a wiki endpoint by URL.
+func (k *KnowledgeAPI) RemoveSubscription(url string) error {
+	found := false
+	newSubs := make([]Subscription, 0, len(k.subscriptions))
+	for _, s := range k.subscriptions {
+		if s.URL == url {
+			found = true
+			continue
+		}
+		newSubs = append(newSubs, s)
+	}
+	if !found {
+		return fmt.Errorf("subscription not found: %s", url)
+	}
+	k.subscriptions = newSubs
+
+	newLayers := make([]layerClient, 0, len(k.layers))
+	for _, lc := range k.layers {
+		if lc.client.baseURL == url {
+			continue
+		}
+		newLayers = append(newLayers, lc)
+	}
+	k.layers = newLayers
+
+	k.logger.Info("subscription removed", "url", url)
+	return nil
+}
+
+// Layers returns the configured layer types for the frontend.
+func (k *KnowledgeAPI) Layers() []LayerType {
+	seen := make(map[LayerType]bool)
+	var result []LayerType
+	for _, lc := range k.layers {
+		if !seen[lc.layerType] {
+			seen[lc.layerType] = true
+			result = append(result, lc.layerType)
+		}
+	}
+	return result
+}
+
+func (k *KnowledgeAPI) clientForLayer(layer LayerType) *Client {
+	for _, lc := range k.layers {
+		if lc.layerType == layer {
+			return lc.client
+		}
+	}
+	return nil
+}
+
+func parseJSONFacts(content string, facts *[]ExtractedFact) error {
+	return json.Unmarshal([]byte(content), facts)
+}
+
+func parseMarkdownFacts(content string) []ExtractedFact {
+	var facts []ExtractedFact
+	lines := strings.Split(content, "\n")
+
+	var current *ExtractedFact
+	var bodyLines []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, "# ") || strings.HasPrefix(trimmed, "## ") {
+			if current != nil && current.Title != "" {
+				current.Body = strings.TrimSpace(strings.Join(bodyLines, "\n"))
+				facts = append(facts, *current)
+			}
+			title := strings.TrimLeft(trimmed, "# ")
+			current = &ExtractedFact{
+				Title:      title,
+				Type:       FactPattern,
+				Confidence: 0.6,
+				SourcePR:   "import",
+				SourceDate: time.Now(),
+			}
+			bodyLines = nil
+			continue
+		}
+
+		if strings.HasPrefix(trimmed, "- **") && strings.Contains(trimmed, "**") {
+			if current != nil && current.Title != "" {
+				current.Body = strings.TrimSpace(strings.Join(bodyLines, "\n"))
+				facts = append(facts, *current)
+			}
+			title := trimmed[4:]
+			if idx := strings.Index(title, "**"); idx > 0 {
+				body := strings.TrimSpace(title[idx+2:])
+				title = title[:idx]
+				current = &ExtractedFact{
+					Title:      title,
+					Body:       body,
+					Type:       FactPattern,
+					Confidence: 0.6,
+					SourcePR:   "import",
+					SourceDate: time.Now(),
+				}
+				bodyLines = nil
+			}
+			continue
+		}
+
+		if current != nil && trimmed != "" {
+			bodyLines = append(bodyLines, trimmed)
+		}
+	}
+
+	if current != nil && current.Title != "" {
+		current.Body = strings.TrimSpace(strings.Join(bodyLines, "\n"))
+		facts = append(facts, *current)
+	}
+
+	return facts
 }

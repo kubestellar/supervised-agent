@@ -75,6 +75,14 @@ func (s *Server) RegisterAPI(deps *Dependencies) {
 	s.mux.HandleFunc("GET /api/knowledge/search", s.handleKnowledgeSearch)
 	s.mux.HandleFunc("GET /api/knowledge/health", s.handleKnowledgeHealth)
 	s.mux.HandleFunc("GET /api/knowledge/stats", s.handleKnowledgeStats)
+	s.mux.HandleFunc("POST /api/knowledge/create", s.handleKnowledgeCreate)
+	s.mux.HandleFunc("POST /api/knowledge/import", s.handleKnowledgeImport)
+	s.mux.HandleFunc("POST /api/knowledge/promote", s.handleKnowledgePromote)
+	s.mux.HandleFunc("GET /api/knowledge/subscriptions", s.handleKnowledgeSubsList)
+	s.mux.HandleFunc("POST /api/knowledge/subscriptions", s.handleKnowledgeSubsAdd)
+	s.mux.HandleFunc("DELETE /api/knowledge/subscriptions", s.handleKnowledgeSubsRemove)
+	s.mux.HandleFunc("PUT /api/knowledge/{layer}/{slug}", s.handleKnowledgeUpdate)
+	s.mux.HandleFunc("DELETE /api/knowledge/{layer}/{slug}", s.handleKnowledgeDelete)
 	s.mux.HandleFunc("GET /api/knowledge/{layer}", s.handleKnowledgeLayer)
 	s.mux.HandleFunc("GET /api/knowledge/{layer}/{slug}", s.handleKnowledgeFact)
 
@@ -962,6 +970,202 @@ func (s *Server) handleKnowledgeFact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, fact)
+}
+
+func (s *Server) handleKnowledgeCreate(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req knowledge.CreateFactRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Title == "" || req.Body == "" {
+		jsonError(w, "title and body are required", http.StatusBadRequest)
+		return
+	}
+	if req.Layer == "" {
+		req.Layer = "project"
+	}
+	if req.Type == "" {
+		req.Type = "pattern"
+	}
+	const defaultConfidence = 0.7
+	if req.Confidence <= 0 {
+		req.Confidence = defaultConfidence
+	}
+
+	if err := s.deps.Knowledge.CreateFact(s.deps.Ctx, req); err != nil {
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]interface{}{"ok": true, "title": req.Title, "layer": req.Layer})
+}
+
+func (s *Server) handleKnowledgeUpdate(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	layer := r.PathValue("layer")
+	slug := r.PathValue("slug")
+
+	var req knowledge.UpdateFactRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.deps.Knowledge.UpdateFact(s.deps.Ctx, knowledge.LayerType(layer), slug, req); err != nil {
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]interface{}{"ok": true, "slug": slug, "layer": layer})
+}
+
+func (s *Server) handleKnowledgeDelete(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	layer := r.PathValue("layer")
+	slug := r.PathValue("slug")
+
+	if err := s.deps.Knowledge.DeleteFact(s.deps.Ctx, knowledge.LayerType(layer), slug); err != nil {
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]interface{}{"ok": true, "deleted": slug})
+}
+
+func (s *Server) handleKnowledgePromote(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req knowledge.PromoteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Slug == "" || req.FromLayer == "" || req.ToLayer == "" {
+		jsonError(w, "slug, from_layer, and to_layer are required", http.StatusBadRequest)
+		return
+	}
+	if req.Promoter == "" {
+		req.Promoter = "dashboard"
+	}
+
+	result := s.deps.Knowledge.PromoteFact(s.deps.Ctx, req)
+	if !result.Success {
+		jsonError(w, result.Error, http.StatusBadRequest)
+		return
+	}
+	jsonResponse(w, result)
+}
+
+func (s *Server) handleKnowledgeImport(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		Content string `json:"content"`
+		Format  string `json:"format"`
+		Layer   string `json:"layer"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Content == "" {
+		jsonError(w, "content is required", http.StatusBadRequest)
+		return
+	}
+	if req.Layer == "" {
+		req.Layer = "project"
+	}
+	if req.Format == "" {
+		req.Format = "markdown"
+	}
+
+	count, err := s.deps.Knowledge.ImportFacts(s.deps.Ctx, knowledge.LayerType(req.Layer), req.Content, req.Format)
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, map[string]interface{}{"ok": true, "imported": count, "layer": req.Layer, "format": req.Format})
+}
+
+func (s *Server) handleKnowledgeSubsList(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonResponse(w, []interface{}{})
+		return
+	}
+	jsonResponse(w, s.deps.Knowledge.Subscriptions())
+}
+
+func (s *Server) handleKnowledgeSubsAdd(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	var sub knowledge.Subscription
+	if err := json.NewDecoder(r.Body).Decode(&sub); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if sub.URL == "" {
+		jsonError(w, "url is required", http.StatusBadRequest)
+		return
+	}
+	if sub.Layer == "" {
+		sub.Layer = knowledge.LayerOrg
+	}
+
+	if err := s.deps.Knowledge.AddSubscription(sub); err != nil {
+		jsonError(w, err.Error(), http.StatusConflict)
+		return
+	}
+	jsonResponse(w, map[string]interface{}{"ok": true, "subscription": sub})
+}
+
+func (s *Server) handleKnowledgeSubsRemove(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.URL == "" {
+		jsonError(w, "url is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.deps.Knowledge.RemoveSubscription(req.URL); err != nil {
+		jsonError(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	jsonResponse(w, map[string]interface{}{"ok": true, "removed": req.URL})
 }
 
 // --- Chat endpoint ---

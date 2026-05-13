@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -132,6 +133,76 @@ func (c *Client) ListPages(ctx context.Context, typeFilter string) ([]searchResu
 func (c *Client) Healthy(ctx context.Context) bool {
 	err := c.get(ctx, "/api/stats", nil, &statsResponse{})
 	return err == nil
+}
+
+// IngestFacts sends facts to the wiki for storage.
+func (c *Client) IngestFacts(ctx context.Context, facts []ExtractedFact) error {
+	return c.postJSON(ctx, "/api/ingest", facts)
+}
+
+// UpdatePage updates an existing wiki page by slug.
+func (c *Client) UpdatePage(ctx context.Context, slug string, page pageUpdateRequest) error {
+	return c.postJSON(ctx, "/api/pages/"+slug, page)
+}
+
+// DeletePage removes a wiki page by slug.
+func (c *Client) DeletePage(ctx context.Context, slug string) error {
+	reqCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodDelete, c.baseURL+"/api/pages/"+slug, nil)
+	if err != nil {
+		return fmt.Errorf("creating delete request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("delete request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("delete returned HTTP %d: %s", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
+type pageUpdateRequest struct {
+	Title      string   `json:"title"`
+	Body       string   `json:"body"`
+	Type       string   `json:"type"`
+	Confidence float64  `json:"confidence"`
+	Tags       []string `json:"tags"`
+	Status     string   `json:"status"`
+}
+
+func (c *Client) postJSON(ctx context.Context, path string, payload any) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshaling payload: %w", err)
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, c.baseURL+path, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("HTTP request to %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("HTTP %d from %s: %s", resp.StatusCode, path, string(body))
+	}
+	return nil
 }
 
 func (c *Client) get(ctx context.Context, path string, params url.Values, dest any) error {
