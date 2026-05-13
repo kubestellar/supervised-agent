@@ -1879,6 +1879,10 @@
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ groups })
       }).catch(() => {});
+      const lastData = window._lastStatus || {};
+      if (lastData.governor) {
+        renderGovernor(lastData.governor, lastData.cadenceMatrix || [], lastData);
+      }
     }
 
     function _sidebarRenderAgent(a) {
