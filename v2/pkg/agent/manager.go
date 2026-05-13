@@ -160,7 +160,7 @@ func (m *Manager) launchInTmux(ctx context.Context, agent *AgentProcess) error {
 	case "claude":
 		launchCmd = fmt.Sprintf("%s --model %s --dangerously-skip-permissions", binary, model)
 	case "copilot":
-		launchCmd = fmt.Sprintf("%s --model %s --yolo", binary, model)
+		launchCmd = fmt.Sprintf("%s --model %s --allow-all", binary, model)
 	case "gemini":
 		launchCmd = fmt.Sprintf("%s --model %s", binary, model)
 	case "goose":
