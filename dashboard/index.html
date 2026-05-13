@@ -1577,7 +1577,7 @@
       if (children) children.classList.toggle('collapsed');
     }
 
-    const STRATEGY_AGENT_NAMES = ['strategist', 'analyst', 'guardian'];
+    const STRATEGY_AGENT_NAMES = ['strategist'];
     function ocUpdateFocusedState() {
       const isFocused = !!_ocSelectedAgent && getLayout() === 'light';
       document.body.classList.toggle('oc-agent-focused', isFocused);
@@ -1854,9 +1854,7 @@
       reviewer: 'Post-merge quality gate — monitors CI health, code coverage, GA4 errors, and produces adoption digests',
       architect: 'Designs RFCs for cross-cutting changes — produces phase plans that scanner implements',
       outreach: 'Drives CNCF ecosystem engagement — ADOPTERS outreach, ACMM badges, community PRs',
-      strategist: 'Designs governor experiments — proposes cadence/model/threshold changes with falsifiable hypotheses',
-      analyst: 'Evaluates experiment outcomes — extracts principles, maintains confidence scores, proposes permanent changes',
-      guardian: 'Fast-fail monitor — checks experiment bounds every tick, auto-reverts overlay on any violation',
+      strategist: 'Nous agent — 3-stage protocol: (1) guardian fast-fail check, (2) experiment design via run_campaign.py, (3) principle sync and recommendations',
     };
 
     // ── Sidebar layout: drag-and-drop + groups ──────────────────────────────
@@ -2463,8 +2461,6 @@
       architect: 'architect',
       outreach: 'outreach',
       strategist: 'strategist',
-      analyst: 'analyst',
-      guardian: 'guardian',
     };
     const TTYD_PORT = 7681;
 

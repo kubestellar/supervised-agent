@@ -31,8 +31,6 @@ agents:
     - architect
     - outreach
     - strategist
-    - analyst
-    - guardian
     - sec-check
   beads_base: "/home/dev"
   workdir: "/home/dev/kubestellar-console"
