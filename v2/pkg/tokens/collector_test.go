@@ -48,7 +48,7 @@ func TestCollectFromDir_MultipleFiles(t *testing.T) {
 		`{"role":"assistant","message":"done"}`,
 	}, "\n") + "\n"
 
-	// session-b: reviewer agent (has "review" keyword), model gpt-3.5
+	// session-b: ci-maintainer agent (has "review" keyword), model gpt-3.5
 	sessionB := strings.Join([]string{
 		`{"role":"user","message":"review the latest ci coverage"}`,
 		`{"model":"gpt-3.5","input_tokens":200,"output_tokens":80}`,
@@ -76,8 +76,8 @@ func TestCollectFromDir_MultipleFiles(t *testing.T) {
 	if _, ok := agg.ByAgent["scanner"]; !ok {
 		t.Error("ByAgent missing 'scanner'")
 	}
-	if _, ok := agg.ByAgent["reviewer"]; !ok {
-		t.Error("ByAgent missing 'reviewer'")
+	if _, ok := agg.ByAgent["ci-maintainer"]; !ok {
+		t.Error("ByAgent missing 'ci-maintainer'")
 	}
 
 	// Both models should appear in ByModel
@@ -327,11 +327,11 @@ func TestParseSessionFile_AgentDetectedFromFirstUserMessage(t *testing.T) {
 func TestParseSessionFile_UsesFirstUserMessageNotLater(t *testing.T) {
 	dir := t.TempDir()
 
-	// First user message triggers "scanner"; second mentions "reviewer" — agent must be scanner
+	// First user message triggers "scanner"; second mentions "ci-maintainer" — agent must be scanner
 	content := strings.Join([]string{
 		`{"role":"user","message":"scanner triage open bugs"}`,
 		`{"role":"assistant","message":"ok"}`,
-		`{"role":"user","message":"now do a reviewer review"}`,
+		`{"role":"user","message":"now do a ci-maintainer review"}`,
 		`{"model":"gpt-4","input_tokens":10,"output_tokens":5}`,
 	}, "\n") + "\n"
 	path := writeFile(t, dir, "session.jsonl", content)
@@ -477,7 +477,7 @@ func TestDefaultAgentDetector_Reviewer(t *testing.T) {
 		msg     string
 		keyword string
 	}{
-		{"please use the reviewer for this PR", "reviewer"},
+		{"please use the ci-maintainer for this PR", "ci-maintainer"},
 		{"review the pull request", "review"},
 		{"check ci status", "ci"},
 		{"measure coverage now", "coverage"},
@@ -487,8 +487,8 @@ func TestDefaultAgentDetector_Reviewer(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.keyword, func(t *testing.T) {
 			got := DefaultAgentDetector(tc.msg)
-			if got != "reviewer" {
-				t.Errorf("DefaultAgentDetector(%q) = %q, want 'reviewer'", tc.msg, got)
+			if got != "ci-maintainer" {
+				t.Errorf("DefaultAgentDetector(%q) = %q, want 'ci-maintainer'", tc.msg, got)
 			}
 		})
 	}
@@ -598,7 +598,7 @@ func TestDefaultAgentDetector_CaseInsensitive(t *testing.T) {
 		agent string
 	}{
 		{"SCANNER triage", "scanner"},
-		{"REVIEWER review", "reviewer"},
+		{"REVIEWER review", "ci-maintainer"},
 		{"ARCHITECT rfc", "architect"},
 		{"OUTREACH adopters", "outreach"},
 		{"SUPERVISOR sweep", "supervisor"},

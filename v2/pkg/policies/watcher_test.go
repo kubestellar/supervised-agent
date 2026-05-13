@@ -26,7 +26,7 @@ func TestPolicyFileToAgent(t *testing.T) {
 	}{
 		// Recognized suffixes are stripped
 		{"scanner-CLAUDE.md", "scanner"},
-		{"reviewer-policy.md", "reviewer"},
+		{"ci-maintainer-policy.md", "ci-maintainer"},
 		{"architect_policy.md", "architect"},
 		{"outreach-claude.md", "outreach"},
 
@@ -83,7 +83,7 @@ func TestLoadPolicies_BasicMapping(t *testing.T) {
 
 	// Write three policy files using different supported suffix styles.
 	writeTempFile(t, root, "scanner-CLAUDE.md", "scanner policy content")
-	writeTempFile(t, root, "reviewer-policy.md", "reviewer policy content")
+	writeTempFile(t, root, "ci-maintainer-policy.md", "ci-maintainer policy content")
 	writeTempFile(t, root, "architect_policy.md", "architect policy content")
 	writeTempFile(t, root, "plain.md", "plain content")
 
@@ -94,7 +94,7 @@ func TestLoadPolicies_BasicMapping(t *testing.T) {
 
 	want := map[string]string{
 		"scanner":   "scanner policy content",
-		"reviewer":  "reviewer policy content",
+		"ci-maintainer":  "ci-maintainer policy content",
 		"architect": "architect policy content",
 		"plain":     "plain content",
 	}
@@ -468,7 +468,7 @@ func setupBareRepo(t *testing.T) (bareURL string, workDir string) {
 		t.Fatalf("mkdir policies: %v", err)
 	}
 	writeFile(t, policiesDir, "scanner-CLAUDE.md", "scanner policy v1")
-	writeFile(t, policiesDir, "reviewer-policy.md", "reviewer policy v1")
+	writeFile(t, policiesDir, "ci-maintainer-policy.md", "ci-maintainer policy v1")
 
 	runGit(t, workDir, "add", ".")
 	runGit(t, workDir, "commit", "-m", "initial policies")
@@ -532,7 +532,7 @@ func TestStart_FreshClone(t *testing.T) {
 	// Both policy files written in setupBareRepo must be present.
 	for agent, want := range map[string]string{
 		"scanner":  "scanner policy v1",
-		"reviewer": "reviewer policy v1",
+		"ci-maintainer": "ci-maintainer policy v1",
 	} {
 		data, ok := w.GetPolicy(agent)
 		if !ok {

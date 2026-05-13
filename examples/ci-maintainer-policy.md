@@ -1,8 +1,8 @@
-# Example: reviewer policy (second agent alongside a scanner)
+# Example: ci-maintainer policy (second agent alongside a scanner)
 
 Companion to [`scanner-policy.md`](scanner-policy.md). Demonstrates the patterns that kick in once you run **more than one** supervised agent on the same project: lane boundary, workflow offload, peer supervision.
 
-Copy this into the reviewer instance's memory dir (for Claude Code: `~/.claude/projects/<slug>/memory/reviewer-policy.md`), adjust repo names + cadence, and reference it from your `AGENT_LOOP_PROMPT`.
+Copy this into the ci-maintainer instance's memory dir (for Claude Code: `~/.claude/projects/<slug>/memory/ci-maintainer-policy.md`), adjust repo names + cadence, and reference it from your `AGENT_LOOP_PROMPT`.
 
 ---
 
@@ -19,12 +19,12 @@ Never rely on in-context memory across iterations; the operator edits policy out
 
 ## Step 0.5 — beads sync (same shared ledger as scanner)
 
-Identical to scanner's Step 0.5, with one difference: `--actor reviewer` on every `bd` call.
+Identical to scanner's Step 0.5, with one difference: `--actor ci-maintainer` on every `bd` call.
 
 ```bash
 (cd ~/agent-ledger && bd ready --json)
 (cd ~/agent-ledger && bd list --status=in_progress --actor=scanner --json)   # what peer is on
-(cd ~/agent-ledger && bd list --status=in_progress --actor=reviewer --json)  # your own
+(cd ~/agent-ledger && bd list --status=in_progress --actor=ci-maintainer --json)  # your own
 ```
 
 Also do a stale-claim sweep on your own `in_progress` beads (>20 min old + no linked PR → reset to `open`).
@@ -40,15 +40,15 @@ Example split (from a real KubeStellar deployment):
 | Lane | Owner | Work types |
 |---|---|---|
 | Inbound triage | scanner | New GitHub issues/PRs, Copilot review comments, contributor PR reviews, fix-agent dispatch |
-| Post-merge state | reviewer | CI workflow health, invariant regressions, coverage ratchets, metrics digests, UX proposals, workflow offload |
+| Post-merge state | ci-maintainer | CI workflow health, invariant regressions, coverage ratchets, metrics digests, UX proposals, workflow offload |
 
-**When reviewer finds something in scanner's lane**:
-- Do NOT `bd create --actor reviewer` for it.
+**When ci-maintainer finds something in scanner's lane**:
+- Do NOT `bd create --actor ci-maintainer` for it.
 - Option A (preferred): skip and log `Lane transfer: <observation> — belongs to scanner, not filing here`.
-- Option B (if the observation needs durable tracking): `bd create --actor scanner --set-metadata lane_transfer=reviewer-to-scanner discovered_at=<iso>` — filing on scanner's behalf.
+- Option B (if the observation needs durable tracking): `bd create --actor scanner --set-metadata lane_transfer=ci-maintainer-to-scanner discovered_at=<iso>` — filing on scanner's behalf.
 - Never `bd update --claim` something in scanner's lane.
 
-Same rule in reverse: scanner files `--actor reviewer` with `lane_transfer=scanner-to-reviewer` for anything it notices in reviewer's lane.
+Same rule in reverse: scanner files `--actor ci-maintainer` with `lane_transfer=scanner-to-ci-maintainer` for anything it notices in ci-maintainer's lane.
 
 **Shared ledger, separate narratives**: both agents write to the same beads ledger, but each writes its findings to its own heartbeat log. Don't cross-pollute logs.
 
@@ -106,13 +106,13 @@ Never claim a stuck scanner bead. File the regression; don't do the work.
 
 ---
 
-## Regression checks (the actual work reviewer does)
+## Regression checks (the actual work ci-maintainer does)
 
 These are examples; adapt to your project. For each: first ask "is there a workflow?" per the prime directive. Run the check here only when there isn't one.
 
 ### A. Code-quality ratchet
 
-Coverage, null-safety, lint-error count, bundle size, a11y score. Pick one or more. For each, record a high-water mark as bead metadata on a singleton bead (`--external-ref reviewer-ratchet-<metric>`), and regress against it.
+Coverage, null-safety, lint-error count, bundle size, a11y score. Pick one or more. For each, record a high-water mark as bead metadata on a singleton bead (`--external-ref ci-maintainer-ratchet-<metric>`), and regress against it.
 
 ### B. Health endpoints (static + CI, not live)
 
@@ -130,11 +130,11 @@ Query `/repos/<org>/<repo>/releases --jq '[.[] | select(.draft == false)]'` — 
 
 ### D. Metrics digest (if you have analytics)
 
-Full adoption digest (audience / engagement / content / sources / conversions / trend chart) appended to the heartbeat log each iteration. See `scanner-policy.md`'s "Optional: adoption / site-health digest" — same pattern, but owned by reviewer (not scanner) once you split the work.
+Full adoption digest (audience / engagement / content / sources / conversions / trend chart) appended to the heartbeat log each iteration. See `scanner-policy.md`'s "Optional: adoption / site-health digest" — same pattern, but owned by ci-maintainer (not scanner) once you split the work.
 
 ### E. UX proposals (judgment-only, not offloadable without an agentic workflow)
 
-One concrete hypothesis per iteration, based on the metrics digest + current codebase. File as `--type feature --priority 3 --actor reviewer --external-ref ux-<date>-<slug>`. Do not implement — that's scanner's lane.
+One concrete hypothesis per iteration, based on the metrics digest + current codebase. File as `--type feature --priority 3 --actor ci-maintainer --external-ref ux-<date>-<slug>`. Do not implement — that's scanner's lane.
 
 ### F. Peer supervision — watching the watcher (crucial pattern for multi-agent)
 
@@ -158,7 +158,7 @@ Thresholds (tune to your scanner cadence — these assume 15m scanner):
 
 **Never claim a stuck scanner bead.** File the meta bead flagging the problem; don't do scanner's work.
 
-**F.2 Untracked inbound** — cross-reference recent GitHub issues against the ledger by `external_ref`. Any issue open >15m that isn't tracked in beads → scanner missed it → file on scanner's behalf with `--actor scanner --set-metadata lane_transfer=reviewer-to-scanner`.
+**F.2 Untracked inbound** — cross-reference recent GitHub issues against the ledger by `external_ref`. Any issue open >15m that isn't tracked in beads → scanner missed it → file on scanner's behalf with `--actor scanner --set-metadata lane_transfer=ci-maintainer-to-scanner`.
 
 **F.3 Scanner heartbeat freshness** — if scanner's heartbeat log mtime is >2× its cadence old, flag as technical stall. (The systemd healthcheck already catches this, but belt-and-suspenders.)
 
@@ -195,9 +195,9 @@ On every iteration, for every open issue labeled `workflow-failure`:
 
 Without this rule, recovered workflows leave zombie issues that inflate the queue. Seen a workflow-failure issue stay open for hours after the workflow started succeeding again? That's the gap this closes.
 
-**Blame (act on scanner-to-reviewer workflow-failure lane transfers the SAME iteration)**:
+**Blame (act on scanner-to-ci-maintainer workflow-failure lane transfers the SAME iteration)**:
 
-When you find a bead with `lane_transfer=scanner-to-reviewer` referencing a workflow failure, you **must** on the same iteration:
+When you find a bead with `lane_transfer=scanner-to-ci-maintainer` referencing a workflow failure, you **must** on the same iteration:
 
 1. Identify the failing run.
 2. Find PRs merged to main between the last-successful-run timestamp and the first-failed-run timestamp.
@@ -207,13 +207,13 @@ When you find a bead with `lane_transfer=scanner-to-reviewer` referencing a work
 
 **Never leave a workflow-failure bead in `open` state across iterations without at least an attempted blame.** That's the policy gap that lets real regressions sit idle.
 
-**Pattern generalizes**: any agent can audit a peer's queue via `bd list --actor=<peer> --status=<x>`. Reviewer watches scanner; scanner could watch reviewer for missed regression filings; etc. Don't overdo it — one supervision pairing usually suffices.
+**Pattern generalizes**: any agent can audit a peer's queue via `bd list --actor=<peer> --status=<x>`. Reviewer watches scanner; scanner could watch ci-maintainer for missed regression filings; etc. Don't overdo it — one supervision pairing usually suffices.
 
 ---
 
 ## Log format
 
-Append one block per firing to your reviewer heartbeat log:
+Append one block per firing to your ci-maintainer heartbeat log:
 
 ```
 ---

@@ -188,7 +188,7 @@ func DefaultAgentDetector(firstMsg string) string {
 	lower := strings.ToLower(firstMsg)
 	agents := map[string][]string{
 		"scanner":    {"scanner", "triage", "issue", "bug"},
-		"reviewer":   {"reviewer", "review", "ci", "coverage", "ga4"},
+		"ci-maintainer":   {"ci-maintainer", "review", "ci", "coverage", "ga4"},
 		"architect":  {"architect", "rfc", "refactor"},
 		"outreach":   {"outreach", "adopters", "community"},
 		"supervisor": {"supervisor", "sweep", "monitor"},

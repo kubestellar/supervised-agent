@@ -137,7 +137,7 @@ type ModeConfig struct {
 //	idle:
 //	  threshold: 0
 //	  scanner: 15m
-//	  reviewer: 15m
+//	  ci-maintainer: 15m
 //
 // This method separates "threshold" into the Threshold field and collects
 // all other keys into the Cadences map.

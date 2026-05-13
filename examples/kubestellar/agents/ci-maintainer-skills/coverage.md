@@ -33,5 +33,5 @@ Send simple ntfy: `"Coverage <X>% ✓"`. No further action needed.
 - **Target the biggest gaps first**: sort by uncovered lines, pick 2–5 files with the worst coverage.
 - File a bead if coverage has been below 91% for >2 consecutive passes:
   ```bash
-  cd ~/reviewer-beads && bd create --title "coverage-gap: Test coverage below 91% for <N> consecutive passes. Current: <X>%." --type bug --priority 2
+  cd ~/ci-maintainer-beads && bd create --title "coverage-gap: Test coverage below 91% for <N> consecutive passes. Current: <X>%." --type bug --priority 2
   ```

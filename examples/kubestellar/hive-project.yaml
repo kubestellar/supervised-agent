@@ -26,7 +26,7 @@ agents:
   enabled:
     - supervisor
     - scanner
-    - reviewer
+    - ci-maintainer
     - architect
     - outreach
     - strategist
@@ -199,7 +199,7 @@ pipeline:
       category: monitor
       script: copilot-comment-checker.sh
       output: /var/run/hive-metrics/copilot-comments.json
-      consumers: [reviewer]
+      consumers: [ci-maintainer]
       phase: pre-kick
       depends: [enumerator]
 
@@ -215,7 +215,7 @@ pipeline:
       category: monitor
       script: ga4-anomaly-detector.sh
       output: /var/run/hive-metrics/ga4-anomalies.json
-      consumers: [reviewer]
+      consumers: [ci-maintainer]
       phase: pre-kick
       depends: []
 

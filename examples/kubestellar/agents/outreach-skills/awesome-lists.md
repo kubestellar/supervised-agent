@@ -45,7 +45,7 @@ After opening PRs on external repos, monitor them for review comments and addres
    ```bash
    unset GITHUB_TOKEN && gh pr view <N> --repo <owner/repo> --json reviews,comments,state
    ```
-4. If there are unaddressed comments from CodeRabbit, Copilot, or human reviewers:
+4. If there are unaddressed comments from CodeRabbit, Copilot, or human ci-maintainers:
    - Read the feedback carefully
    - Make the requested changes in a new commit on the same branch
    - Push the update

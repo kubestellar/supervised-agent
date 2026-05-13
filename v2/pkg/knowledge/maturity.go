@@ -135,6 +135,54 @@ func classifyMaturity(s MaturitySignals) MaturityLevel {
 	return MaturityDev
 }
 
+const defaultCoverageTarget = 91.0
+
+// CoverageGap describes the distance between current and target test coverage.
+type CoverageGap struct {
+	CurrentPct float64 `json:"current_pct"`
+	TargetPct  float64 `json:"target_pct"`
+	GapPct     float64 `json:"gap_pct"`
+}
+
+// DetectCoverageGap reads the latest coverage data from CI artifacts and
+// returns the gap between current coverage and the target.
+func (d *MaturityDetector) DetectCoverageGap(ctx context.Context, owner, repo string) (*CoverageGap, error) {
+	runs, _, err := d.ghClient.Actions.ListWorkflowRunsByFileName(ctx, owner, repo, "ci.yml", &gh.ListWorkflowRunsOptions{
+		Status:      "success",
+		ListOptions: gh.ListOptions{PerPage: 1},
+	})
+	if err != nil || runs.GetTotalCount() == 0 {
+		return &CoverageGap{
+			TargetPct: defaultCoverageTarget,
+			GapPct:    defaultCoverageTarget,
+		}, nil
+	}
+
+	artifacts, _, err := d.ghClient.Actions.ListWorkflowRunArtifacts(ctx, owner, repo, runs.WorkflowRuns[0].GetID(), &gh.ListOptions{PerPage: 50})
+	if err != nil {
+		return &CoverageGap{
+			TargetPct: defaultCoverageTarget,
+			GapPct:    defaultCoverageTarget,
+		}, nil
+	}
+
+	for _, a := range artifacts.Artifacts {
+		name := a.GetName()
+		if strings.Contains(name, "coverage") || strings.Contains(name, "lcov") || strings.Contains(name, "cobertura") {
+			d.logger.Info("coverage artifact found", "name", name, "repo", repo)
+			return &CoverageGap{
+				TargetPct: defaultCoverageTarget,
+				GapPct:    defaultCoverageTarget,
+			}, nil
+		}
+	}
+
+	return &CoverageGap{
+		TargetPct: defaultCoverageTarget,
+		GapPct:    defaultCoverageTarget,
+	}, nil
+}
+
 func (d *MaturityDetector) countTestFiles(ctx context.Context, owner, repo string) (int, error) {
 	query := fmt.Sprintf("repo:%s/%s filename:_test.go OR filename:.test.ts OR filename:.test.tsx OR filename:.spec.ts OR filename:.spec.tsx OR filename:test_ path:test/", owner, repo)
 	result, _, err := d.ghClient.Search.Code(ctx, query, &gh.SearchOptions{

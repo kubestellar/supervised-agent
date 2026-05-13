@@ -60,7 +60,7 @@ When started with `hive supervisor` or when the session is named `supervisor`, i
 3. **Read your beads**: `cd /home/dev/supervisor-beads && bd list --json` and `bd ready --json`
 4. **Read policy files** from `/home/dev/.claude/projects/-Users-andan02/memory/`:
    - Read `${HIVE_REPO}/examples/kubestellar/agents/scanner-CLAUDE.md` — scanner rules
-   - `project_reviewer_policy.md` — reviewer rules
+   - `project_ci-maintainer_policy.md` — ci-maintainer rules
    - `MEMORY.md` — full memory index
 5. **Read kick-agents.sh** — `/tmp/hive/bin/kick-agents.sh` — memorize the full startup messages (PULL_INSTRUCTIONS, BEADS_RESTORE, BEADS_SYNC, and each agent's MSG). You MUST include these in every work order.
 6. **Run `hive status`** — verify all 5 sessions are running, all on correct CLI backend (copilot on this host), and check governor state.
@@ -75,7 +75,7 @@ When started with `hive supervisor` or when the session is named `supervisor`, i
 Beads is the coordination ledger. If any agent's beads DB is broken, that agent flies blind and skips work tracking. **Check ALL 5 beads DBs on every monitoring pass.**
 
 ```bash
-for agent in scanner reviewer architect outreach supervisor; do
+for agent in scanner ci-maintainer architect outreach supervisor; do
   printf "%-12s " "$agent"
   cd /home/dev/${agent}-beads 2>/dev/null && bd status 2>&1 | grep "Total Issues" || echo "BROKEN"
 done
@@ -120,7 +120,7 @@ You (Opus 4.6, supervisor tmux session — EXECUTOR MODE, operator-driven)
   │
   ├─► scanner (Opus 4.6)  — inbound GitHub triage, fix dispatch, PR merge
   ├─► architect    (Opus 4.6)  — multi-file refactor planning, architecture review
-  ├─► reviewer     (Sonnet 4.6) — post-merge review, CI health, coverage, CodeQL
+  ├─► ci-maintainer     (Sonnet 4.6) — post-merge review, CI health, coverage, CodeQL
   ├─► outreach     (Sonnet 4.6) — ADOPTERS PRs, ecosystem integration
   └─► Agent tool   (Sonnet 4.6) — background fix agents spawned as needed
 ```
@@ -183,7 +183,7 @@ The `hive` command is the correct way to manage agents. NEVER manually kill proc
 ```bash
 hive status                          # Live dashboard — agents, backends, governor, repos, beads
 hive switch <agent> <backend>        # Switch agent CLI backend (copilot, claude, gemini, goose)
-hive kick [all|scanner|reviewer|architect|outreach]  # Kick agents with FULL startup messages
+hive kick [all|scanner|ci-maintainer|architect|outreach]  # Kick agents with FULL startup messages
 hive attach <agent>                  # Watch agent live (Ctrl+B D to leave)
 hive logs <agent>                    # View agent logs
 hive stop [all|agent]                # Stop agent
@@ -200,7 +200,7 @@ hive stop [all|agent]                # Stop agent
 | `supervisor` | `claude-opus-4-6` (this session) |
 | `scanner` | `claude-opus-4-6` |
 | `architect` | `claude-opus-4-6` |
-| `reviewer` | `claude-sonnet-4-6` |
+| `ci-maintainer` | `claude-sonnet-4-6` |
 | `outreach` | `claude-sonnet-4-6` |
 | Agent tool subagents | `claude-sonnet-4-6` (default from global settings) |
 
@@ -304,7 +304,7 @@ Agent(subagent_type="general-purpose",
       run_in_background=true)
 ```
 
-**Use `tmux send-keys`** to direct the persistent sessions (scanner, reviewer, outreach).
+**Use `tmux send-keys`** to direct the persistent sessions (scanner, ci-maintainer, outreach).
 
 **Bundle related issues** into one agent when they share a root cause or same component file.
 
@@ -335,7 +335,7 @@ tmux send-keys -t scanner Enter
 
 ## Reviewer Session — What It Does
 
-The `reviewer` session (Sonnet 4.6) handles post-merge work:
+The `ci-maintainer` session (Sonnet 4.6) handles post-merge work:
 - Coverage ratchet ≥91% check
 - OAuth code presence (static grep)
 - CI workflow health sweep (all workflows on ${PROJECT_PRIMARY_REPO})
@@ -365,12 +365,12 @@ The `reviewer` session (Sonnet 4.6) handles post-merge work:
 
 Reviewer is NOT a /loop — send it work orders when needed:
 ```bash
-tmux send-keys -t reviewer "Run a full reviewer pass: check coverage, CI health, release freshness, post-merge diff on PRs #N #N #N. Write results to reviewer_log.md."
-tmux send-keys -t reviewer Enter
-tmux send-keys -t reviewer Enter
+tmux send-keys -t ci-maintainer "Run a full ci-maintainer pass: check coverage, CI health, release freshness, post-merge diff on PRs #N #N #N. Write results to ci-maintainer_log.md."
+tmux send-keys -t ci-maintainer Enter
+tmux send-keys -t ci-maintainer Enter
 ```
 
-If reviewer is idle and merges happened recently, kick it with the list of merged PR numbers.
+If ci-maintainer is idle and merges happened recently, kick it with the list of merged PR numbers.
 
 ## Outreach Session — What It Does
 

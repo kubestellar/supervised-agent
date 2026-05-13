@@ -673,7 +673,7 @@ agents:
   scanner:
     backend: claude
     clear_on_kick: true
-  reviewer:
+  ci-maintainer:
     backend: claude
     clear_on_kick: false
 `
@@ -685,7 +685,7 @@ agents:
 	if !cfg.Agents["scanner"].ClearOnKick {
 		t.Error("scanner.ClearOnKick should be true")
 	}
-	if cfg.Agents["reviewer"].ClearOnKick {
-		t.Error("reviewer.ClearOnKick should be false")
+	if cfg.Agents["ci-maintainer"].ClearOnKick {
+		t.Error("ci-maintainer.ClearOnKick should be false")
 	}
 }

@@ -26,9 +26,10 @@ type Lane string
 
 const (
 	LaneScanner   Lane = "scanner"
-	LaneReviewer  Lane = "reviewer"
+	LaneCIMaintainer  Lane = "ci-maintainer"
 	LaneArchitect Lane = "architect"
 	LaneOutreach  Lane = "outreach"
+	LaneTester    Lane = "tester"
 )
 
 type Classification struct {
@@ -48,13 +49,18 @@ var architectKeywords = []string{
 	"breaking change", "protocol", "api design",
 }
 
-var reviewerKeywords = []string{
+var ciMaintainerKeywords = []string{
 	"workflow-failure", "ci-failure", "nightly", "coverage",
 	"regression", "ga4", "analytics",
 }
 
 var outreachKeywords = []string{
 	"adopters", "outreach", "community", "engagement",
+}
+
+var testerKeywords = []string{
+	"test-gap", "test-strategy", "test-coverage", "test-scaffold",
+	"untested", "missing-tests",
 }
 
 func Classify(issue github.Issue) Classification {
@@ -81,14 +87,19 @@ func classifyLane(titleLower, labelsStr string) Lane {
 			return LaneArchitect
 		}
 	}
-	for _, kw := range reviewerKeywords {
+	for _, kw := range ciMaintainerKeywords {
 		if strings.Contains(titleLower, kw) || strings.Contains(labelsStr, kw) {
-			return LaneReviewer
+			return LaneCIMaintainer
 		}
 	}
 	for _, kw := range outreachKeywords {
 		if strings.Contains(titleLower, kw) || strings.Contains(labelsStr, kw) {
 			return LaneOutreach
+		}
+	}
+	for _, kw := range testerKeywords {
+		if strings.Contains(titleLower, kw) || strings.Contains(labelsStr, kw) {
+			return LaneTester
 		}
 	}
 	return LaneScanner

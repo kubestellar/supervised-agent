@@ -29,11 +29,17 @@ agents:
     model: claude-sonnet-4-6
     beads_dir: /data/beads/scanner
     clear_on_kick: true                   # Send /clear before each kick to reset context
-  reviewer:
+  ci-maintainer:
     enabled: true
     backend: claude
     model: claude-sonnet-4-6
-    beads_dir: /data/beads/reviewer
+    beads_dir: /data/beads/ci-maintainer
+    clear_on_kick: true
+  tester:
+    enabled: true
+    backend: claude
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/tester
     clear_on_kick: true
   architect:
     enabled: false                        # Disabled by default — enable for design work
@@ -67,22 +73,26 @@ governor:
     surge:
       threshold: 20                       # Queue depth >= 20 triggers SURGE
       scanner: 15m
-      reviewer: pause                     # "pause" means don't kick this agent
+      ci-maintainer: pause                # "pause" means don't kick this agent
+      tester: pause                       # coverage isn't urgent during fire-fighting
       architect: pause
     busy:
       threshold: 10
       scanner: 15m
-      reviewer: 1h
+      ci-maintainer: 1h
+      tester: 2h
       architect: pause
     quiet:
       threshold: 2
       scanner: 15m
-      reviewer: 45m
+      ci-maintainer: 45m
+      tester: 45m
       architect: pause
     idle:
       threshold: 0
       scanner: 15m
-      reviewer: 15m
+      ci-maintainer: 15m
+      tester: 30m                         # most active when nothing else is happening
       architect: 30m
 
 # GitHub authentication — use ONE of these methods

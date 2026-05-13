@@ -161,7 +161,7 @@ Scanner owns ONLY: ${PROJECT_ORG} GitHub issues and PRs (triage, bug fixes, CI h
            run_in_background=true)
      ```
    - After the fix agent pushes, CI re-runs. On the NEXT kick, if CI is green and no new Copilot comments, merge.
-   - **Do NOT loop**: if Copilot comments persist after one fix attempt, merge anyway and let the reviewer handle post-merge. One attempt is enough.
+   - **Do NOT loop**: if Copilot comments persist after one fix attempt, merge anyway and let the ci-maintainer handle post-merge. One attempt is enough.
 5. **NEVER merge multiple PRs in rapid succession.** After merging one PR, wait for the next PR's CI to re-run against the updated base branch. PRs that were green before a merge may conflict after.
 6. **Merge sequence:** merge one → wait for next PR's CI to re-trigger and pass → merge next. Never batch-merge.
 7. **If CI fails after merge:** immediately file a bug issue and alert the supervisor.
@@ -233,7 +233,7 @@ cat /var/run/hive-metrics/merge-eligible.json | jq -r '.merge_eligible[] | "\(.r
 
 **Drop / skip entirely in lean mode:**
 - **Step 0 policy re-read** — do it ONCE at session boot, not every iteration. Skip unless you just hit a confusing state.
-- **Step 0.5 bd ready queries + stale-claim sweep** — skip while peers (reviewer/architect/outreach) are paused. Only matters for multi-agent coordination.
+- **Step 0.5 bd ready queries + stale-claim sweep** — skip while peers (ci-maintainer/architect/outreach) are paused. Only matters for multi-agent coordination.
 - **Deep SLA "analysis"** — sorting by `createdAt` IS the SLA logic. No further thinking needed.
 - **Heartbeat writes** before each tool call — one write at end of iteration is enough.
 - **GA4 scans** — the operator will ask if they want them. Not every iteration.
@@ -373,9 +373,9 @@ When scanner has capacity remaining in an iteration and there are unPR'd issues 
    - **Day 4** (last maintainer comment is 4+ days old, no reporter reply): post a reminder comment: `@<reporter> any update on the questions above? If we don't hear back in a few days we'll close this, and you can reopen once you have more details.`
    - **Day 7** (still no reporter reply 3 days after the reminder): close with `--reason "not planned"` and comment `Closing for lack of reporter response. Feel free to reopen with the requested details.` — do NOT strip labels on close (keeps searchability). Post the reminder once per issue; if the issue has been nudged before, do NOT re-nudge, proceed to close when day 7 passes.
 2. **Bundle-fix small related bugs** before dispatching fix agents (already the pattern for arcade bug clusters — keep doing it; a single PR closes 3+ beads).
-3. **Escalate workflow-failure issues to reviewer** — if a `workflow-failure` labeled issue isn't owned by reviewer as `--actor reviewer --external-ref regression-workflow-<name>` within 2 scanner iterations, file a lane-transfer bead so reviewer picks it up.
+3. **Escalate workflow-failure issues to ci-maintainer** — if a `workflow-failure` labeled issue isn't owned by ci-maintainer as `--actor ci-maintainer --external-ref regression-workflow-<name>` within 2 scanner iterations, file a lane-transfer bead so ci-maintainer picks it up.
 
-## Lane boundary — scanner vs reviewer
+## Lane boundary — scanner vs ci-maintainer
 
 Scanner owns **inbound GitHub triage**:
 - Newly-opened issues and PRs across all 5 repos.
@@ -384,7 +384,7 @@ Scanner owns **inbound GitHub triage**:
 - Fix-agent dispatch for bugs and enhancements.
 - ADOPTERS PRs (held for user approval).
 
-Reviewer owns **post-merge state-of-project** (CI workflow health, invariant regressions, GA4, adoption digest, UX proposals, workflow offload). Scanner does NOT do any of the reviewer work — even if you notice a CI workflow is broken on main, file the bead with `--actor reviewer` and `--set-metadata lane_transfer=scanner-to-reviewer discovered_at=<iso>` rather than handling it. See [project_reviewer_policy.md](project_reviewer_policy.md) for the mirror rule.
+Reviewer owns **post-merge state-of-project** (CI workflow health, invariant regressions, GA4, adoption digest, UX proposals, workflow offload). Scanner does NOT do any of the ci-maintainer work — even if you notice a CI workflow is broken on main, file the bead with `--actor ci-maintainer` and `--set-metadata lane_transfer=scanner-to-ci-maintainer discovered_at=<iso>` rather than handling it. See [project_ci-maintainer_policy.md](project_ci-maintainer_policy.md) for the mirror rule.
 
 ## Step 0.5 — beads sync (MANDATORY, after Step 0, before scan work)
 
@@ -400,11 +400,11 @@ Reviewer owns **post-merge state-of-project** (CI workflow health, invariant reg
 
 If `bd ready` returns any scanner-owned item (even a single P3 Auto-QA), your iteration outcome is NOT "Steady state" — it's "Backlog drain" and you MUST claim at least one bead (smallest first to keep momentum) before ending the iteration. Log `Drain: claimed <bead-id> (P<N>, <title>); N remaining in backlog`.
 
-This rule exists because a prior scanner session let 4 Auto-QA beads sit unclaimed for 2+ hours on an "idle" day — the operator noticed before reviewer's G.4 fired, and asked "why aren't these being worked on?" Don't repeat that.
+This rule exists because a prior scanner session let 4 Auto-QA beads sit unclaimed for 2+ hours on an "idle" day — the operator noticed before ci-maintainer's G.4 fired, and asked "why aren't these being worked on?" Don't repeat that.
 
-The scanner maintains a structured work ledger in **beads** (`bd` CLI) at `/home/dev/scanner-beads/`. This ledger is what lets multiple agents (scanner, future reviewer/ideator/outreach agents) coordinate without duplicating work. **It is internal state — do NOT mirror it into GitHub (no comments, no labels, no cross-posting).**
+The scanner maintains a structured work ledger in **beads** (`bd` CLI) at `/home/dev/scanner-beads/`. This ledger is what lets multiple agents (scanner, future ci-maintainer/ideator/outreach agents) coordinate without duplicating work. **It is internal state — do NOT mirror it into GitHub (no comments, no labels, no cross-posting).**
 
-Shell invocations use `bd` (on PATH). Always pass `--actor scanner` so future agents (`reviewer`, `ideator`, `outreach`) can tell your work apart. The ledger directory must be the working directory for every `bd` call: prefix with `(cd /home/dev/scanner-beads && bd ...)` or use `bd --dir /home/dev/scanner-beads ...` if supported.
+Shell invocations use `bd` (on PATH). Always pass `--actor scanner` so future agents (`ci-maintainer`, `ideator`, `outreach`) can tell your work apart. The ledger directory must be the working directory for every `bd` call: prefix with `(cd /home/dev/scanner-beads && bd ...)` or use `bd --dir /home/dev/scanner-beads ...` if supported.
 
 ### Cross-agent urgent nudges (NEW — check first)
 
@@ -413,7 +413,7 @@ Peer agents can flag a bead as urgent for you using these metadata fields:
 | Field | Value |
 |---|---|
 | `nudge_priority` | `urgent` |
-| `nudge_target` | `scanner` (or `reviewer`/`feature`/`outreach`) |
+| `nudge_target` | `scanner` (or `ci-maintainer`/`feature`/`outreach`) |
 | `nudge_reason` | short free-form text |
 | `nudge_source` | actor that set the flag |
 | `nudge_set_at` | ISO timestamp |
@@ -431,7 +431,7 @@ Peer agents can flag a bead as urgent for you using these metadata fields:
 
 **Once a nudged bead is claimed/resolved/deferred, strip the nudge metadata** so it doesn't refire: `bd update <id> --unset-metadata nudge_priority nudge_target nudge_reason nudge_source nudge_set_at`.
 
-**Setting a nudge on a peer's bead (outbound):** only when something you've filed has been sitting >1 full peer cadence without action AND it's blocking your lane. Use sparingly — it's a stronger signal than a plain meta-bead. Example: reviewer sees scanner ignored an SLA meta-bead for >45min and bumps it to urgent.
+**Setting a nudge on a peer's bead (outbound):** only when something you've filed has been sitting >1 full peer cadence without action AND it's blocking your lane. Use sparingly — it's a stronger signal than a plain meta-bead. Example: ci-maintainer sees scanner ignored an SLA meta-bead for >45min and bumps it to urgent.
 
 ### Priority order — OLDEST FIRST, always
 
@@ -544,11 +544,11 @@ If `bd` is missing or errors, log `Beads: skipped (bd unavailable: <error>)` and
 3. **Security screen** every new issue — see [feedback_security_screening.md](feedback_security_screening.md).
 4. **Fix what you can** using git worktrees (never on main — MEMORY.md top-level rule).
 5. **Before acting on an issue/PR**, check whether a fix is already in flight — see [feedback_scanner_check_existing.md](feedback_scanner_check_existing.md) and [feedback_verify_issues_before_fixing.md](feedback_verify_issues_before_fixing.md).
-6. **GA4 monitoring is OWNED BY REVIEWER, not scanner.** Do NOT query GA4, do NOT file `ga4-error` issues, do NOT produce an adoption digest. Reviewer has richer framing (regression + PR blame) and consolidates all GA4 concerns under one actor. If you need adoption numbers for context, read the latest `reviewer_log.md` block. See [project_reviewer_policy.md](project_reviewer_policy.md).
+6. **GA4 monitoring is OWNED BY REVIEWER, not scanner.** Do NOT query GA4, do NOT file `ga4-error` issues, do NOT produce an adoption digest. Reviewer has richer framing (regression + PR blame) and consolidates all GA4 concerns under one actor. If you need adoption numbers for context, read the latest `ci-maintainer_log.md` block. See [project_ci-maintainer_policy.md](project_ci-maintainer_policy.md).
 
-7. **Adoption digest is OWNED BY REVIEWER, not scanner.** The former Step 7 (Audience / Engagement / Top content / Traffic / Geo / Conversions / Trend chart) has moved to reviewer. Do not produce it here. Scanner's output stays focused on GitHub triage + bead updates.
+7. **Adoption digest is OWNED BY REVIEWER, not scanner.** The former Step 7 (Audience / Engagement / Top content / Traffic / Geo / Conversions / Trend chart) has moved to ci-maintainer. Do not produce it here. Scanner's output stays focused on GitHub triage + bead updates.
 
-8. **PR triage and review (community + AI-authored)** — scanner reviews and merges pre-merge PRs (reviewer is post-merge only). See "PR triage track" below.
+8. **PR triage and review (community + AI-authored)** — scanner reviews and merges pre-merge PRs (ci-maintainer is post-merge only). See "PR triage track" below.
 
 9. **NEVER idle — every iteration must produce at least one action.** "Steady state" is an outcome that's almost impossible in practice — if inbound is quiet, you have bead backlog, PR review queue, and housekeeping. If after running Step 0.5 + PR triage + backlog drain you genuinely have zero candidates, pick a housekeeping task (label hygiene, bead metadata cleanup, worktree pruning, stale-branch sweep). Log every iteration's action as `Action: <verb> <target>` — e.g., `Action: merged PR #8824`, `Action: claimed bead xy0`, `Action: nudged @author on PR #8148`, `Action: housekeeping — closed 3 stale branches`. Never log an iteration with no action.
 
@@ -704,7 +704,7 @@ PR triage: S open ({N} community, {M} ai). Actions: merged {list}; reviewed+comm
 
 Zero-action cycles should be rare — if you touched zero PRs and zero beads, you didn't run the track. Re-read this section.
 
-~~LEGACY SECTION BELOW — retained for reviewer reference only. Reviewer has copied this spec into its own policy; any edits should happen there.~~
+~~LEGACY SECTION BELOW — retained for ci-maintainer reference only. Reviewer has copied this spec into its own policy; any edits should happen there.~~
 
    Render as Markdown tables + one Mermaid trend chart. Skip any section whose values are all zero. If the GA4 MCP tools are unavailable, write `GA4 digest: skipped (no MCP tools available)` and move on — do not fail the iteration.
 
