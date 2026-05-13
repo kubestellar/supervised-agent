@@ -3,146 +3,288 @@ package github
 import (
 	"context"
 	"strings"
-	"time"
 
 	gh "github.com/google/go-github/v72/github"
 )
 
-type HealthCheckConfig struct {
-	Org   string
-	Repos []string
-}
-
 const (
-	workflowStatusSuccess   = 1
-	workflowStatusFailure   = 0
-	workflowStatusNotFound  = -1
-	ciPassRateMaxPercent     = 100
-	recentRunsLimit         = 10
-	lookbackHours           = 48
+	healthStatusSuccess  = 1
+	healthStatusFailure  = 0
+	healthStatusNotFound = -1
+	ciRunsLimit          = 10
+	pctMultiplier        = 100
 )
 
-var workflowChecks = []struct {
-	Key      string
-	Patterns []string
-	Repo     string
-}{
-	{Key: "ci", Patterns: []string{"Build and Deploy", "CI", "build"}, Repo: "console"},
-	{Key: "brew", Patterns: []string{"brew", "Homebrew"}, Repo: "homebrew-tap"},
-	{Key: "helm", Patterns: []string{"Helm", "helm"}, Repo: "console"},
-	{Key: "nightly", Patterns: []string{"Nightly Test"}, Repo: "console"},
-	{Key: "nightlyCompliance", Patterns: []string{"Nightly Compliance", "Compliance"}},
-	{Key: "nightlyDashboard", Patterns: []string{"Nightly Dashboard", "Dashboard Health"}},
-	{Key: "nightlyGhaw", Patterns: []string{"gh-aw", "Nightly gh-aw"}},
-	{Key: "nightlyPlaywright", Patterns: []string{"Playwright", "Cross-Browser"}},
-	{Key: "nightlyRel", Patterns: []string{"Release", "Nightly Rel"}},
-	{Key: "weekly", Patterns: []string{"Weekly"}, Repo: "console"},
-	{Key: "weeklyRel", Patterns: []string{"Weekly Rel", "Weekly Release"}},
-	{Key: "hourly", Patterns: []string{"Hourly"}, Repo: "console"},
-	{Key: "deploy_vllm_d", Patterns: []string{"vllm-d", "deploy-vllm-d", "vLLM"}},
-	{Key: "deploy_pok_prod", Patterns: []string{"pok-prod", "deploy-pok-prod", "PokProd"}},
-}
-
 func (c *Client) FetchWorkflowHealth(ctx context.Context) map[string]any {
-	health := make(map[string]any, len(workflowChecks))
+	primaryRepo := c.primaryRepo()
 
-	for _, check := range workflowChecks {
-		health[check.Key] = workflowStatusNotFound
+	health := make(map[string]any)
+
+	health["ci"] = c.ciPassRate(ctx, primaryRepo)
+	health["brew"] = c.brewCheck(ctx, primaryRepo)
+	health["helm"] = c.helmCheck(ctx, primaryRepo)
+
+	nightlyWorkflows := map[string]string{
+		"nightly":            "Nightly Test Suite",
+		"nightlyCompliance":  "Nightly Compliance & Perf",
+		"nightlyDashboard":   "Nightly Dashboard Health",
+		"nightlyGhaw":        "Nightly gh-aw Version Check",
+		"nightlyPlaywright":  "Playwright Cross-Browser (Nightly)",
+	}
+	for key, wfName := range nightlyWorkflows {
+		health[key] = c.checkWorkflow(ctx, primaryRepo, wfName)
 	}
 
-	cutoff := time.Now().Add(-lookbackHours * time.Hour)
-
-	for _, repo := range c.repos {
-		runs, err := c.listRecentWorkflowRuns(ctx, repo, cutoff)
-		if err != nil {
-			c.logger.Warn("failed to list workflow runs", "repo", repo, "error", err)
-			continue
-		}
-
-		for _, check := range workflowChecks {
-			if check.Repo != "" && check.Repo != repo {
-				continue
-			}
-			if v, ok := health[check.Key]; ok {
-				if vi, isInt := v.(int); isInt && vi == workflowStatusSuccess {
-					continue
-				}
-			}
-
-			status := matchWorkflowRuns(runs, check.Patterns)
-			if status != workflowStatusNotFound {
-				health[check.Key] = status
-			}
-		}
-	}
-
-	if ciRuns := c.countCIRuns(ctx); ciRuns >= 0 {
-		health["ci"] = ciRuns
-	}
+	health["nightlyRel"] = c.releaseCheck(ctx, primaryRepo, false)
+	health["weeklyRel"] = c.releaseCheck(ctx, primaryRepo, true)
+	health["weekly"] = c.checkWorkflow(ctx, primaryRepo, "Weekly Coverage Review")
+	health["hourly"] = c.perfCheck(ctx, primaryRepo)
+	c.deployChecks(ctx, primaryRepo, health)
 
 	return health
 }
 
-func (c *Client) listRecentWorkflowRuns(ctx context.Context, repo string, since time.Time) ([]*gh.WorkflowRun, error) {
+func (c *Client) primaryRepo() string {
+	if len(c.repos) > 0 {
+		return c.repos[0]
+	}
+	return "console"
+}
+
+func (c *Client) ciPassRate(ctx context.Context, repo string) int {
 	opts := &gh.ListWorkflowRunsOptions{
-		Created:     ">=" + since.Format("2006-01-02"),
-		ListOptions: gh.ListOptions{PerPage: 50},
+		Status:      "completed",
+		ListOptions: gh.ListOptions{PerPage: ciRunsLimit},
 	}
 
 	runs, _, err := c.client.Actions.ListRepositoryWorkflowRuns(ctx, c.org, repo, opts)
-	if err != nil {
-		return nil, err
+	if err != nil || runs == nil || len(runs.WorkflowRuns) == 0 {
+		return healthStatusFailure
 	}
 
-	return runs.WorkflowRuns, nil
-}
-
-func matchWorkflowRuns(runs []*gh.WorkflowRun, patterns []string) int {
-	for _, run := range runs {
-		name := run.GetName()
-		for _, pattern := range patterns {
-			if strings.Contains(strings.ToLower(name), strings.ToLower(pattern)) {
-				if run.GetConclusion() == "success" {
-					return workflowStatusSuccess
-				}
-				return workflowStatusFailure
-			}
-		}
-	}
-	return workflowStatusNotFound
-}
-
-func (c *Client) countCIRuns(ctx context.Context) int {
-	primaryRepo := "console"
-	if len(c.repos) > 0 {
-		primaryRepo = c.repos[0]
-	}
-
-	cutoff := time.Now().Add(-lookbackHours * time.Hour)
-	opts := &gh.ListWorkflowRunsOptions{
-		Created:     ">=" + cutoff.Format("2006-01-02"),
-		ListOptions: gh.ListOptions{PerPage: recentRunsLimit},
-	}
-
-	runs, _, err := c.client.Actions.ListRepositoryWorkflowRuns(ctx, c.org, primaryRepo, opts)
-	if err != nil {
-		return workflowStatusNotFound
-	}
-
-	total := 0
+	total := len(runs.WorkflowRuns)
 	passed := 0
 	for _, run := range runs.WorkflowRuns {
-		name := strings.ToLower(run.GetName())
-		if strings.Contains(name, "build") || strings.Contains(name, "ci") || strings.Contains(name, "deploy") {
-			total++
-			if run.GetConclusion() == "success" {
-				passed++
-			}
+		conclusion := run.GetConclusion()
+		if conclusion == "success" || conclusion == "skipped" {
+			passed++
 		}
 	}
 
 	if total == 0 {
-		return ciPassRateMaxPercent
+		return healthStatusFailure
 	}
-	return passed * ciPassRateMaxPercent / total
+	return passed * pctMultiplier / total
+}
+
+func (c *Client) checkWorkflow(ctx context.Context, repo, workflowName string) int {
+	workflows, _, err := c.client.Actions.ListWorkflows(ctx, c.org, repo, &gh.ListOptions{PerPage: 100})
+	if err != nil || workflows == nil {
+		return healthStatusNotFound
+	}
+
+	var workflowID int64
+	for _, wf := range workflows.Workflows {
+		if wf.GetName() == workflowName {
+			workflowID = wf.GetID()
+			break
+		}
+	}
+	if workflowID == 0 {
+		return healthStatusNotFound
+	}
+
+	runs, _, err := c.client.Actions.ListWorkflowRunsByID(ctx, c.org, repo, workflowID, &gh.ListWorkflowRunsOptions{
+		ListOptions: gh.ListOptions{PerPage: 1},
+	})
+	if err != nil || runs == nil || len(runs.WorkflowRuns) == 0 {
+		return healthStatusNotFound
+	}
+
+	if runs.WorkflowRuns[0].GetConclusion() == "success" {
+		return healthStatusSuccess
+	}
+	return healthStatusFailure
+}
+
+func (c *Client) brewCheck(ctx context.Context, primaryRepo string) int {
+	brewTap := "homebrew-tap"
+	hasTap := false
+	for _, r := range c.repos {
+		if r == brewTap {
+			hasTap = true
+			break
+		}
+	}
+	if !hasTap {
+		return healthStatusNotFound
+	}
+
+	formulaContent, _, _, err := c.client.Repositories.GetContents(ctx, c.org, brewTap, "Formula/kubestellar-console.rb", nil)
+	if err != nil || formulaContent == nil {
+		formulaContent, _, _, err = c.client.Repositories.GetContents(ctx, c.org, brewTap, "Formula/kc-agent.rb", nil)
+		if err != nil || formulaContent == nil {
+			return healthStatusNotFound
+		}
+	}
+
+	content, err := formulaContent.GetContent()
+	if err != nil {
+		return healthStatusNotFound
+	}
+
+	formulaVer := ""
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "version ") {
+			formulaVer = strings.Trim(strings.TrimPrefix(trimmed, "version "), "\"' ")
+			formulaVer = strings.TrimPrefix(formulaVer, "v")
+			break
+		}
+	}
+
+	release, _, err := c.client.Repositories.GetLatestRelease(ctx, c.org, primaryRepo)
+	if err != nil || release == nil {
+		return healthStatusNotFound
+	}
+
+	latestVer := strings.TrimPrefix(release.GetTagName(), "v")
+
+	if formulaVer == latestVer {
+		return healthStatusSuccess
+	}
+	return healthStatusFailure
+}
+
+func (c *Client) helmCheck(ctx context.Context, repo string) int {
+	_, _, _, err := c.client.Repositories.GetContents(ctx, c.org, repo, "deploy/helm/kubestellar-console/Chart.yaml", nil)
+	if err != nil {
+		return healthStatusNotFound
+	}
+	return healthStatusSuccess
+}
+
+func (c *Client) releaseCheck(ctx context.Context, repo string, weekly bool) int {
+	workflows, _, err := c.client.Actions.ListWorkflows(ctx, c.org, repo, &gh.ListOptions{PerPage: 100})
+	if err != nil || workflows == nil {
+		return healthStatusNotFound
+	}
+
+	var workflowID int64
+	for _, wf := range workflows.Workflows {
+		if wf.GetName() == "Release" {
+			workflowID = wf.GetID()
+			break
+		}
+	}
+	if workflowID == 0 {
+		return healthStatusNotFound
+	}
+
+	runs, _, err := c.client.Actions.ListWorkflowRunsByID(ctx, c.org, repo, workflowID, &gh.ListWorkflowRunsOptions{
+		Event:       "schedule",
+		ListOptions: gh.ListOptions{PerPage: ciRunsLimit},
+	})
+	if err != nil || runs == nil || len(runs.WorkflowRuns) == 0 {
+		return healthStatusNotFound
+	}
+
+	for _, run := range runs.WorkflowRuns {
+		createdAt := run.GetCreatedAt().Time
+		isSunday := createdAt.Weekday() == 0
+		if weekly && isSunday {
+			if run.GetConclusion() == "success" {
+				return healthStatusSuccess
+			}
+			return healthStatusFailure
+		}
+		if !weekly && !isSunday {
+			if run.GetConclusion() == "success" {
+				return healthStatusSuccess
+			}
+			return healthStatusFailure
+		}
+	}
+
+	return healthStatusNotFound
+}
+
+func (c *Client) perfCheck(ctx context.Context, repo string) int {
+	perfWorkflows := []string{
+		"Perf — React commits per navigation",
+		"Performance TTFI Gate",
+	}
+
+	for _, wfName := range perfWorkflows {
+		result := c.checkWorkflow(ctx, repo, wfName)
+		if result == healthStatusFailure {
+			return healthStatusFailure
+		}
+	}
+	return healthStatusSuccess
+}
+
+func (c *Client) deployChecks(ctx context.Context, repo string, health map[string]any) {
+	ciWorkflow := "Build and Deploy KC"
+
+	workflows, _, err := c.client.Actions.ListWorkflows(ctx, c.org, repo, &gh.ListOptions{PerPage: 100})
+	if err != nil || workflows == nil {
+		health["deploy_vllm_d"] = healthStatusNotFound
+		health["deploy_pok_prod"] = healthStatusNotFound
+		return
+	}
+
+	var workflowID int64
+	for _, wf := range workflows.Workflows {
+		if wf.GetName() == ciWorkflow {
+			workflowID = wf.GetID()
+			break
+		}
+	}
+	if workflowID == 0 {
+		health["deploy_vllm_d"] = healthStatusNotFound
+		health["deploy_pok_prod"] = healthStatusNotFound
+		return
+	}
+
+	runs, _, err := c.client.Actions.ListWorkflowRunsByID(ctx, c.org, repo, workflowID, &gh.ListWorkflowRunsOptions{
+		Branch:      "main",
+		Event:       "push",
+		ListOptions: gh.ListOptions{PerPage: 1},
+	})
+	if err != nil || runs == nil || len(runs.WorkflowRuns) == 0 {
+		health["deploy_vllm_d"] = healthStatusNotFound
+		health["deploy_pok_prod"] = healthStatusNotFound
+		return
+	}
+
+	runID := runs.WorkflowRuns[0].GetID()
+	jobs, _, err := c.client.Actions.ListWorkflowJobs(ctx, c.org, repo, runID, &gh.ListWorkflowJobsOptions{
+		ListOptions: gh.ListOptions{PerPage: 50},
+	})
+
+	deployJobs := map[string]string{
+		"deploy_vllm_d":    "deploy-vllm-d",
+		"deploy_pok_prod":  "deploy-pok-prod",
+	}
+
+	for key := range deployJobs {
+		health[key] = healthStatusNotFound
+	}
+
+	if err != nil || jobs == nil {
+		return
+	}
+
+	for _, job := range jobs.Jobs {
+		for key, jobName := range deployJobs {
+			if job.GetName() == jobName {
+				if job.GetConclusion() == "success" {
+					health[key] = healthStatusSuccess
+				} else {
+					health[key] = healthStatusFailure
+				}
+			}
+		}
+	}
 }

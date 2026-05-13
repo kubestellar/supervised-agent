@@ -43,7 +43,7 @@ func BuildFrontendStatus(
 		Health:       buildHealth(ghClient, ctx),
 		Budget:       buildBudget(gov, tokenCollector),
 		CadenceMatrix: buildCadenceMatrix(cfg, agentStatuses),
-		GHRateLimits: map[string]any{"core": map[string]any{}, "alerts": []any{}, "pullbacks": []any{}},
+		GHRateLimits: buildGHRateLimits(ghClient, ctx, cfg),
 		AgentMetrics: map[string]any{},
 		Hold:         buildHold(actionable),
 		IssueToMerge: map[string]any{},
@@ -429,4 +429,39 @@ func buildHold(actionable *github.ActionableResult) FrontendHold {
 		Total:  actionable.Hold.Total,
 		Items:  items,
 	}
+}
+
+func buildGHRateLimits(ghClient *github.Client, ctx context.Context, cfg *config.Config) map[string]any {
+	result := map[string]any{
+		"core":      map[string]any{},
+		"alerts":    []any{},
+		"pullbacks": []any{},
+	}
+
+	authType := "token"
+	authLabel := "unknown"
+	if cfg.GitHub.AppID != 0 {
+		authType = "app"
+		authLabel = cfg.Project.Org
+	} else if cfg.GitHub.Token != "" {
+		authType = "token"
+		authLabel = "personal"
+	}
+	result["identity"] = map[string]any{
+		"type":  authType,
+		"label": authLabel,
+	}
+
+	if ghClient != nil && ctx != nil {
+		limits, err := ghClient.RateLimits(ctx)
+		if err == nil && limits != nil {
+			result["core"] = map[string]any{
+				"limit":     limits.Core.Limit,
+				"remaining": limits.Core.Remaining,
+				"reset":     limits.Core.Reset.Format(time.RFC3339),
+			}
+		}
+	}
+
+	return result
 }
