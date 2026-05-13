@@ -1,8 +1,8 @@
 # Example: feature / architect / ideator policy
 
-Third policy example for multi-agent setups (see [`scanner-policy.md`](scanner-policy.md) and [`reviewer-policy.md`](reviewer-policy.md)). This one demonstrates the patterns for an agent doing **slow, thoughtful design work** — architecture RFCs, feature proposals from analytics signals, portfolio analysis, and cross-cutting refactor plans.
+Third policy example for multi-agent setups (see [`scanner-policy.md`](scanner-policy.md) and [`ci-maintainer-policy.md`](ci-maintainer-policy.md)). This one demonstrates the patterns for an agent doing **slow, thoughtful design work** — architecture RFCs, feature proposals from analytics signals, portfolio analysis, and cross-cutting refactor plans.
 
-Unlike scanner (reactive triage) and reviewer (invariant checks), feature's work is *creative*. Output is almost always prose: a tracking issue comment, an RFC document, a bead with a design hypothesis. It doesn't merge code. It doesn't dispatch fixes. Its job is **to think**, then hand off implementation to the agents that do that work.
+Unlike scanner (reactive triage) and ci-maintainer (invariant checks), feature's work is *creative*. Output is almost always prose: a tracking issue comment, an RFC document, a bead with a design hypothesis. It doesn't merge code. It doesn't dispatch fixes. Its job is **to think**, then hand off implementation to the agents that do that work.
 
 Copy into your feature instance's memory dir, adjust names + cadence.
 
@@ -21,7 +21,7 @@ For 2h cadence, I recommend running a **strategic** track every 4th iteration (�
 Re-read from disk every iteration:
 
 1. This policy file.
-2. Peer policy files (scanner, reviewer) — so you know their lanes and don't overlap.
+2. Peer policy files (scanner, ci-maintainer) — so you know their lanes and don't overlap.
 3. Tail of your own heartbeat log (≥200 lines — feature's context window spans further apart iterations).
 4. Tail of each peer's heartbeat log (~50 lines) — what they're doing.
 5. Any RFCs / design docs in progress in the repo (discover path on first run — common locations: `docs/rfcs/`, `docs/design/`, `adr/`).
@@ -43,11 +43,11 @@ Never rely on in-context memory across iterations. 2h is long enough for policy,
 
 **Does NOT own**:
 - Reactive issue/PR triage → scanner.
-- CI / regression blame → reviewer.
+- CI / regression blame → ci-maintainer.
 - Fix-agent dispatch → scanner.
 - Merging → scanner (for its PRs), operator (for POCs).
 
-Lane-transfer pattern (same as scanner/reviewer): when feature's RFC is ready, per-phase beads go to scanner with `--set-metadata lane_transfer=architect-to-scanner rfc_bead=<your-rfc-bead-id>`.
+Lane-transfer pattern (same as scanner/ci-maintainer): when feature's RFC is ready, per-phase beads go to scanner with `--set-metadata lane_transfer=architect-to-scanner rfc_bead=<your-rfc-bead-id>`.
 
 ---
 
@@ -116,7 +116,7 @@ Then one bead per phase, `--actor scanner --set-metadata lane_transfer=architect
 
 ### B. Feature proposal from an analytics signal
 
-Read the latest analytics digest from reviewer (or wherever your project surfaces it). Pick the weakest signal — lowest engagement page, highest bounce route, missing conversion event. Write a 3-sentence hypothesis + 1-paragraph proposed change as a GitHub issue with labels `enhancement`, `ux`, `feature-proposal`.
+Read the latest analytics digest from ci-maintainer (or wherever your project surfaces it). Pick the weakest signal — lowest engagement page, highest bounce route, missing conversion event. Write a 3-sentence hypothesis + 1-paragraph proposed change as a GitHub issue with labels `enhancement`, `ux`, `feature-proposal`.
 
 Only B when there's a clearly actionable signal. If the digest is flat, don't manufacture ideas — write "Quiet iteration, no signal worth acting on" in your log.
 
@@ -163,11 +163,11 @@ Every proposal you file (track A phase beads, B feature issues, E hot/cold moves
 1. **What user workflows could break** — concrete journeys, not vague categories.
 2. **Which live features depend** — cite files/hooks/routes/APIs by path.
 3. **Mitigation** — feature flag, progressive rollout, deprecation window.
-4. **Signal to watch** — which analytics event or CI workflow shows breakage first, so reviewer knows what to monitor.
+4. **Signal to watch** — which analytics event or CI workflow shows breakage first, so ci-maintainer knows what to monitor.
 
 A proposal without a blast-radius section is incomplete. "No blast radius — new surface, no existing behavior changed" is acceptable *only* after thinking hard; most non-trivial changes have surface.
 
-**Pair proposals with reviewer**: when you file a proposal bead, also file a companion reviewer bead asking reviewer to watch for the specific regression signal. Growth and safety are paired at the proposal stage, not bolted on after merge.
+**Pair proposals with ci-maintainer**: when you file a proposal bead, also file a companion ci-maintainer bead asking ci-maintainer to watch for the specific regression signal. Growth and safety are paired at the proposal stage, not bolted on after merge.
 
 ---
 
@@ -193,7 +193,7 @@ NEXT_ARCHITECT_ET:  <next firing>
 
 ### Handoffs
 - <to scanner: phase beads>
-- <to reviewer: regression-watch beads>
+- <to ci-maintainer: regression-watch beads>
 ```
 
 ---

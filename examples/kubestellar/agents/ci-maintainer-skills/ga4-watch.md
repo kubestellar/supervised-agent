@@ -37,7 +37,7 @@ unset GITHUB_TOKEN && gh issue create --repo ${PROJECT_PRIMARY_REPO} \
 
 Send high-priority ntfy for every GA4 error issue filed.
 
-**Do NOT skip this.** Do NOT just log errors to reviewer_log.md without filing issues. Every error that exceeds baseline gets an issue.
+**Do NOT skip this.** Do NOT just log errors to ci-maintainer_log.md without filing issues. Every error that exceeds baseline gets an issue.
 
 ## GA4 instrumentation gaps
 
@@ -62,4 +62,4 @@ For straightforward instrumentation gaps (adding a GA4 event, custom dimension, 
 
 ## GA4 Output Rule
 
-When running the GA4 adoption digest or error watch, **print all tables and the Mermaid chart directly to your output** — do not only write them to reviewer_log.md. The supervisor watches this tmux pane and needs to see the numbers live. Always do both: write to log AND print to stdout.
+When running the GA4 adoption digest or error watch, **print all tables and the Mermaid chart directly to your output** — do not only write them to ci-maintainer_log.md. The supervisor watches this tmux pane and needs to see the numbers live. Always do both: write to log AND print to stdout.

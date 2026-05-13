@@ -106,7 +106,7 @@ func TestBuildKickMessages_SingleScannerAgent(t *testing.T) {
 func TestBuildKickMessages_MultipleAgents(t *testing.T) {
 	s := newScheduler()
 	actionable := emptyActionable()
-	agents := []string{"scanner", "reviewer", "supervisor"}
+	agents := []string{"scanner", "ci-maintainer", "supervisor"}
 	messages := s.BuildKickMessages(actionable, agents)
 	if len(messages) != 3 {
 		t.Fatalf("expected 3 messages, got %d", len(messages))
@@ -137,7 +137,7 @@ func TestBuildKickMessages_GenericAgent(t *testing.T) {
 func TestBuildKickMessages_AgentOrderPreserved(t *testing.T) {
 	s := newScheduler()
 	actionable := emptyActionable()
-	agents := []string{"supervisor", "scanner", "reviewer"}
+	agents := []string{"supervisor", "scanner", "ci-maintainer"}
 	messages := s.BuildKickMessages(actionable, agents)
 	if len(messages) != 3 {
 		t.Fatalf("expected 3 messages, got %d", len(messages))
@@ -402,7 +402,7 @@ func TestScannerMessage_FiltersByLane(t *testing.T) {
 	s := newScheduler()
 	issues := []github.Issue{
 		makeIssue("org/repo", 1, "scanner issue", "scanner", 5, nil, false),
-		makeIssue("org/repo", 2, "reviewer issue", "reviewer", 5, nil, false),
+		makeIssue("org/repo", 2, "ci-maintainer issue", "ci-maintainer", 5, nil, false),
 		makeIssue("org/repo", 3, "outreach issue", "outreach", 5, nil, false),
 	}
 	msg := s.buildScannerMessage(issues, emptyActionable())
@@ -411,7 +411,7 @@ func TestScannerMessage_FiltersByLane(t *testing.T) {
 		t.Errorf("expected scanner-lane issue #1 in scanner message")
 	}
 	if strings.Contains(msg, "org/repo#2") {
-		t.Errorf("unexpected reviewer-lane issue #2 in scanner message")
+		t.Errorf("unexpected ci-maintainer-lane issue #2 in scanner message")
 	}
 	if strings.Contains(msg, "org/repo#3") {
 		t.Errorf("unexpected outreach-lane issue #3 in scanner message")
@@ -522,14 +522,14 @@ func TestScannerMessage_EmptyTierHandled(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// buildReviewerMessage
+// buildCIMaintainerMessage
 // ---------------------------------------------------------------------------
 
 func TestReviewerMessage_Header(t *testing.T) {
 	s := newScheduler()
-	msg := s.buildReviewerMessage(emptyActionable())
-	if !strings.Contains(msg, "[agent:reviewer] [KICK]") {
-		t.Errorf("missing reviewer header")
+	msg := s.buildCIMaintainerMessage(emptyActionable())
+	if !strings.Contains(msg, "[agent:ci-maintainer] [KICK]") {
+		t.Errorf("missing ci-maintainer header")
 	}
 }
 
@@ -540,7 +540,7 @@ func TestReviewerMessage_ContainsQueueCounts(t *testing.T) {
 		PRs:    github.PRResult{Count: 3},
 		Hold:   github.HoldResult{Total: 2},
 	}
-	msg := s.buildReviewerMessage(actionable)
+	msg := s.buildCIMaintainerMessage(actionable)
 	if !strings.Contains(msg, "5 issues") {
 		t.Errorf("missing issue count, message:\n%s", msg)
 	}
@@ -554,18 +554,18 @@ func TestReviewerMessage_ContainsQueueCounts(t *testing.T) {
 
 func TestReviewerMessage_ZeroCounts(t *testing.T) {
 	s := newScheduler()
-	msg := s.buildReviewerMessage(emptyActionable())
+	msg := s.buildCIMaintainerMessage(emptyActionable())
 	if !strings.Contains(msg, "0 issues") {
-		t.Errorf("expected 0 issues in reviewer message:\n%s", msg)
+		t.Errorf("expected 0 issues in ci-maintainer message:\n%s", msg)
 	}
 	if !strings.Contains(msg, "0 PRs") {
-		t.Errorf("expected 0 PRs in reviewer message:\n%s", msg)
+		t.Errorf("expected 0 PRs in ci-maintainer message:\n%s", msg)
 	}
 }
 
 func TestReviewerMessage_HealthCheckLine(t *testing.T) {
 	s := newScheduler()
-	msg := s.buildReviewerMessage(emptyActionable())
+	msg := s.buildCIMaintainerMessage(emptyActionable())
 	if !strings.Contains(msg, "Post-merge health check") {
 		t.Errorf("missing health check instruction line")
 	}
@@ -616,8 +616,8 @@ func TestSupervisorMessage_SLAViolationsZero(t *testing.T) {
 func TestSupervisorMessage_SweepInstructions(t *testing.T) {
 	s := newScheduler()
 	msg := s.buildSupervisorMessage(emptyActionable())
-	if !strings.Contains(msg, "Sweep all agents") {
-		t.Errorf("missing sweep instruction line")
+	if !strings.Contains(msg, "MONITORING PASS") {
+		t.Errorf("missing monitoring pass header")
 	}
 }
 
@@ -704,7 +704,7 @@ func TestGenericMessage_CustomAgentName(t *testing.T) {
 func TestFilterByLane_MatchingLane(t *testing.T) {
 	issues := []github.Issue{
 		makeIssue("org/r", 1, "a", "scanner", 0, nil, false),
-		makeIssue("org/r", 2, "b", "reviewer", 0, nil, false),
+		makeIssue("org/r", 2, "b", "ci-maintainer", 0, nil, false),
 	}
 	result := filterByLane(issues, "scanner")
 	if len(result) != 1 {
@@ -720,7 +720,7 @@ func TestFilterByLane_EmptyLaneAlwaysIncluded(t *testing.T) {
 		makeIssue("org/r", 1, "a", "", 0, nil, false),
 		makeIssue("org/r", 2, "b", "scanner", 0, nil, false),
 	}
-	result := filterByLane(issues, "reviewer")
+	result := filterByLane(issues, "ci-maintainer")
 	// Issue #1 has empty lane → included. Issue #2 has lane "scanner" → excluded.
 	if len(result) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(result))
@@ -734,7 +734,7 @@ func TestFilterByLane_BothMatchingAndEmpty(t *testing.T) {
 	issues := []github.Issue{
 		makeIssue("org/r", 1, "a", "scanner", 0, nil, false),
 		makeIssue("org/r", 2, "b", "", 0, nil, false),
-		makeIssue("org/r", 3, "c", "reviewer", 0, nil, false),
+		makeIssue("org/r", 3, "c", "ci-maintainer", 0, nil, false),
 	}
 	result := filterByLane(issues, "scanner")
 	if len(result) != 2 {
@@ -751,7 +751,7 @@ func TestFilterByLane_BothMatchingAndEmpty(t *testing.T) {
 		t.Errorf("expected issue #2 (empty lane)")
 	}
 	if nums[3] {
-		t.Errorf("unexpected issue #3 (reviewer lane)")
+		t.Errorf("unexpected issue #3 (ci-maintainer lane)")
 	}
 }
 
@@ -764,7 +764,7 @@ func TestFilterByLane_EmptyInput(t *testing.T) {
 
 func TestFilterByLane_NoMatches(t *testing.T) {
 	issues := []github.Issue{
-		makeIssue("org/r", 1, "a", "reviewer", 0, nil, false),
+		makeIssue("org/r", 1, "a", "ci-maintainer", 0, nil, false),
 	}
 	result := filterByLane(issues, "scanner")
 	if len(result) != 0 {
@@ -801,7 +801,7 @@ func TestFilterByLane_AllMatchingLane(t *testing.T) {
 func TestBuildKickMessages_NoIssuesNoPRs(t *testing.T) {
 	s := newScheduler()
 	actionable := emptyActionable()
-	messages := s.BuildKickMessages(actionable, []string{"scanner", "reviewer", "supervisor"})
+	messages := s.BuildKickMessages(actionable, []string{"scanner", "ci-maintainer", "supervisor"})
 	if len(messages) != 3 {
 		t.Fatalf("expected 3 messages even with no issues/PRs, got %d", len(messages))
 	}
@@ -825,7 +825,7 @@ func TestScannerMessage_NoIssues(t *testing.T) {
 
 func TestBuildKickMessages_AllAgentsDueButNoWork(t *testing.T) {
 	s := newScheduler()
-	agents := []string{"scanner", "reviewer", "supervisor", "outreach", "architect"}
+	agents := []string{"scanner", "ci-maintainer", "supervisor", "outreach", "architect"}
 	messages := s.BuildKickMessages(emptyActionable(), agents)
 	if len(messages) != len(agents) {
 		t.Errorf("expected %d messages, got %d", len(agents), len(messages))
@@ -857,7 +857,7 @@ func TestNew_ReturnsScheduler(t *testing.T) {
 
 func TestKickMessage_AgentAndMessageSet(t *testing.T) {
 	s := newScheduler()
-	messages := s.BuildKickMessages(emptyActionable(), []string{"reviewer"})
+	messages := s.BuildKickMessages(emptyActionable(), []string{"ci-maintainer"})
 	if len(messages) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(messages))
 	}
@@ -897,10 +897,10 @@ func TestBuildKickMessages_ScannerHasAuthorizedRepos(t *testing.T) {
 
 func TestBuildKickMessages_ReviewerHasAuthorizedRepos(t *testing.T) {
 	s := newScheduler()
-	messages := s.BuildKickMessages(emptyActionable(), []string{"reviewer"})
+	messages := s.BuildKickMessages(emptyActionable(), []string{"ci-maintainer"})
 	msg := messages[0].Message
 	if !strings.Contains(msg, "AUTHORIZED REPOS") {
-		t.Error("reviewer kick missing AUTHORIZED REPOS section")
+		t.Error("ci-maintainer kick missing AUTHORIZED REPOS section")
 	}
 }
 

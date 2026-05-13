@@ -57,7 +57,7 @@ ssh root@100.x.x.x hostname
 ssh root@100.x.x.x  # or 192.168.4.28 if not on VPN
 
 # Agent home
-mkdir -p ~/.hive-agents/{supervisor,scanner,architect,reviewer,outreach}
+mkdir -p ~/.hive-agents/{supervisor,scanner,architect,ci-maintainer,outreach}
 
 # Clone repos for each mutating agent
 # Replace ${PROJECT_ORG} and repo names with your project's values from hive-project.yaml
@@ -69,7 +69,7 @@ for agent in scanner architect; do
 done
 
 # Reviewer and outreach get read-only clones (primary repo only)
-for agent in reviewer outreach; do
+for agent in ci-maintainer outreach; do
   cd ~/.hive-agents/$agent
   git clone "https://github.com/${PROJECT_PRIMARY_REPO}.git"
 done
@@ -114,13 +114,13 @@ chmod +x ~/.hive-fix-loop/worker.sh
 # Copy CLAUDE.md for each executor into their console dir
 cp scanner-CLAUDE.md ~/.hive-agents/scanner/console/CLAUDE.md
 cp architect-CLAUDE.md ~/.hive-agents/architect/console/CLAUDE.md
-cp reviewer-CLAUDE.md ~/.hive-agents/reviewer/console/CLAUDE.md
+cp ci-maintainer-CLAUDE.md ~/.hive-agents/ci-maintainer/console/CLAUDE.md
 cp outreach-CLAUDE.md ~/.hive-agents/outreach/console/CLAUDE.md
 
 # Copy env files (adjust paths for Linux — /root/ instead of /Users/andan02/)
 # If using systemd:
 sudo mkdir -p /etc/hive
-for agent in supervisor scanner architect reviewer outreach; do
+for agent in supervisor scanner architect ci-maintainer outreach; do
   sudo cp ${agent}.env /etc/hive/ks-${agent}.env
 done
 ```
@@ -130,7 +130,7 @@ done
 ```bash
 cd /path/to/hive
 
-for agent in supervisor scanner architect reviewer outreach; do
+for agent in supervisor scanner architect ci-maintainer outreach; do
   sudo ./install.sh --instance ks-${agent}
 done
 ```
@@ -148,7 +148,7 @@ for f in /etc/hive/ks-*.env; do
 done
 
 # Restart all
-for agent in supervisor scanner architect reviewer outreach; do
+for agent in supervisor scanner architect ci-maintainer outreach; do
   sudo systemctl restart hive@ks-${agent}
 done
 ```
@@ -157,7 +157,7 @@ done
 
 ```bash
 # Check all agents
-for s in ks-supervisor ks-scanner ks-architect ks-reviewer ks-outreach; do
+for s in ks-supervisor ks-scanner ks-architect ks-ci-maintainer ks-outreach; do
   echo "=== $s ==="
   tmux has-session -t "$s" 2>/dev/null && echo "✅ running" || echo "❌ not running"
 done
@@ -173,7 +173,7 @@ tmux new-session -d -s overview \; \
   split-window -v -t 2 \; \
   send-keys -t 0 'tmux attach -t ks-supervisor' Enter \; \
   send-keys -t 1 'tmux attach -t ks-scanner' Enter \; \
-  send-keys -t 2 'tmux attach -t ks-reviewer' Enter \; \
+  send-keys -t 2 'tmux attach -t ks-ci-maintainer' Enter \; \
   send-keys -t 3 'tmux attach -t ks-outreach' Enter
 tmux attach -t overview
 ```
@@ -204,7 +204,7 @@ tmux attach -t overview
 │  │  ├──► ks-architect (Sonnet, EXECUTOR) │                      │
 │  │  │    features, refactoring           │                      │
 │  │  │                                    │                      │
-│  │  ├──► ks-reviewer (Sonnet, EXECUTOR)  │                      │
+│  │  ├──► ks-ci-maintainer (Sonnet, EXECUTOR)  │                      │
 │  │  │    post-merge, CI health           │                      │
 │  │  │                                    │                      │
 │  │  └──► ks-outreach (Sonnet, EXECUTOR)│                      │

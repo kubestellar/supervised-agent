@@ -33,11 +33,11 @@ agents:
     restart_strategy: immediate
     launch_cmd: "/usr/bin/copilot --allow-all --model claude-opus-4.6"
     display_name: scanner
-  reviewer:
+  ci-maintainer:
     enabled: true
     backend: copilot
     model: claude-opus-4.6
-    beads_dir: /data/beads/reviewer
+    beads_dir: /data/beads/ci-maintainer
     clear_on_kick: true
     cli_pinned: true
     stale_timeout: 2400
@@ -84,6 +84,17 @@ agents:
     restart_strategy: immediate
     launch_cmd: "/usr/bin/copilot --allow-all --model claude-opus-4.6"
     display_name: sec-check
+  tester:
+    enabled: true
+    backend: copilot
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/tester
+    clear_on_kick: true
+    cli_pinned: true
+    stale_timeout: 2400
+    restart_strategy: immediate
+    launch_cmd: "agent-launch.sh --backend copilot --model claude-sonnet-4-6"
+    display_name: Tester
   strategist:
     enabled: true
     backend: copilot
@@ -102,37 +113,41 @@ governor:
       threshold: 30
       supervisor: 5m
       scanner: 15m
-      reviewer: pause
+      ci-maintainer: pause
       architect: pause
       outreach: pause
       sec-check: 2m
+      tester: pause
       strategist: pause
     busy:
       threshold: 16
       supervisor: 5m
       scanner: 15m
-      reviewer: 1h
+      ci-maintainer: 1h
       architect: pause
       outreach: pause
       sec-check: 2m
+      tester: 2h
       strategist: pause
     quiet:
       threshold: 5
       supervisor: 5m
       scanner: 15m
-      reviewer: 45m
+      ci-maintainer: 45m
       architect: pause
       outreach: pause
       sec-check: 2m
+      tester: 45m
       strategist: pause
     idle:
       threshold: 0
       supervisor: 5m
       scanner: 15m
-      reviewer: 15m
+      ci-maintainer: 15m
       architect: 2h
       outreach: 2h
       sec-check: 2m
+      tester: 30m
       strategist: pause
   labels:
     exempt:

@@ -182,8 +182,8 @@ func TestClassify_ReviewerLane(t *testing.T) {
 				issue = makeIssue(tc.title)
 			}
 			got := Classify(issue)
-			if got.Lane != LaneReviewer {
-				t.Errorf("%s: want LaneReviewer, got %v", tc.desc, got.Lane)
+			if got.Lane != LaneCIMaintainer {
+				t.Errorf("%s: want LaneCIMaintainer, got %v", tc.desc, got.Lane)
 			}
 		})
 	}
@@ -217,13 +217,13 @@ func TestClassify_DefaultLaneIsScanner(t *testing.T) {
 	}
 }
 
-// Architect keywords win over reviewer keywords (architect is checked first).
+// Architect keywords win over ci-maintainer keywords (architect is checked first).
 func TestClassify_ArchitectBeatsReviewer(t *testing.T) {
-	// "refactor" is architect, "regression" is reviewer — architect wins
+	// "refactor" is architect, "regression" is ci-maintainer — architect wins
 	issue := makeIssue("Refactor regression test helpers")
 	got := Classify(issue)
 	if got.Lane != LaneArchitect {
-		t.Errorf("want LaneArchitect (checked before reviewer), got %v", got.Lane)
+		t.Errorf("want LaneArchitect (checked before ci-maintainer), got %v", got.Lane)
 	}
 }
 
@@ -325,7 +325,7 @@ func TestClassifyAll_LaneFieldSet(t *testing.T) {
 
 	wantLanes := []string{
 		string(LaneArchitect),
-		string(LaneReviewer),
+		string(LaneCIMaintainer),
 		string(LaneOutreach),
 		string(LaneScanner),
 	}

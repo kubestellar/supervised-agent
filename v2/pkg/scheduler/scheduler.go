@@ -78,10 +78,12 @@ func (s *Scheduler) buildAgentMessage(agentName string, issues []github.Issue, a
 	switch agentName {
 	case "scanner":
 		return s.buildScannerMessage(issues, actionable)
-	case "reviewer":
-		return s.buildReviewerMessage(actionable)
+	case "ci-maintainer":
+		return s.buildCIMaintainerMessage(actionable)
 	case "supervisor":
 		return s.buildSupervisorMessage(actionable)
+	case "tester":
+		return s.buildTesterMessage(issues, actionable)
 	default:
 		return s.buildGenericMessage(agentName, issues, actionable)
 	}
@@ -148,9 +150,9 @@ func (s *Scheduler) buildScannerMessage(issues []github.Issue, actionable *githu
 	return b.String()
 }
 
-func (s *Scheduler) buildReviewerMessage(actionable *github.ActionableResult) string {
+func (s *Scheduler) buildCIMaintainerMessage(actionable *github.ActionableResult) string {
 	var b strings.Builder
-	b.WriteString("[agent:reviewer] [KICK]\n")
+	b.WriteString("[agent:ci-maintainer] [KICK]\n")
 	b.WriteString("Post-merge health check. Review CI status, GA4 errors, workflow health.\n")
 	b.WriteString(fmt.Sprintf("Queue: %d issues, %d PRs, %d on hold\n",
 		actionable.Issues.Count, actionable.PRs.Count, actionable.Hold.Total))
@@ -217,6 +219,67 @@ func (s *Scheduler) buildGenericMessage(agentName string, issues []github.Issue,
 		b.WriteString("\n")
 		b.WriteString(knowledgeSection)
 	}
+
+	return b.String()
+}
+
+const defaultCoverageTargetPct = 91.0
+
+func (s *Scheduler) buildTesterMessage(issues []github.Issue, actionable *github.ActionableResult) string {
+	var b strings.Builder
+
+	b.WriteString("[agent:tester] [KICK]\n")
+	b.WriteString("TEST STRATEGIST — build test coverage from current level toward target.\n\n")
+
+	b.WriteString(fmt.Sprintf("COVERAGE TARGET: %.0f%%\n", defaultCoverageTargetPct))
+
+	testerIssues := filterByLane(issues, "tester")
+	if len(testerIssues) > 0 {
+		b.WriteString(fmt.Sprintf("\nTEST-RELATED ISSUES (%d):\n", len(testerIssues)))
+		shown := 0
+		for _, issue := range testerIssues {
+			if shown >= maxIssuesPerKick {
+				break
+			}
+			title := issue.Title
+			const maxTitleLen = 60
+			if len(title) > maxTitleLen {
+				title = title[:maxTitleLen]
+			}
+			b.WriteString(fmt.Sprintf("  %s#%d [%s] %s\n",
+				issue.Repo, issue.Number,
+				strings.Join(issue.Labels, ","),
+				title))
+			shown++
+		}
+	}
+
+	b.WriteString("\nMATURITY-ADAPTIVE INSTRUCTIONS:\n")
+	b.WriteString("  If project has NO tests or CI (Level 1-2, mode=suggest):\n")
+	b.WriteString("    - Propose test scaffolding. Create stub files with TODO bodies.\n")
+	b.WriteString("    - Suggest which test framework to adopt. Open draft PRs.\n")
+	b.WriteString("    - Create shared test utilities (factories, fixtures, helpers).\n")
+	b.WriteString("  If project has CI but coverage is below target (Level 3, mode=gate):\n")
+	b.WriteString("    - Identify the highest-impact untested code paths.\n")
+	b.WriteString("    - Create test PRs that raise coverage above the CI threshold.\n")
+	b.WriteString("    - Focus on integration tests for critical paths.\n")
+	b.WriteString("  If project has full CI + TDD markers (Level 4, mode=tdd):\n")
+	b.WriteString("    - Identify modules without red-green discipline.\n")
+	b.WriteString("    - Create regression tests for recent bug fixes missing them.\n")
+	b.WriteString("    - Enforce test-first for new features.\n")
+
+	if knowledgeSection := s.primeKnowledge(testerIssues); knowledgeSection != "" {
+		b.WriteString("\n")
+		b.WriteString(knowledgeSection)
+	}
+
+	b.WriteString("\nWORKFLOW:\n")
+	b.WriteString("  1. Analyze coverage reports and identify untested modules.\n")
+	b.WriteString("  2. Prioritize: regression-prone code > new features > utilities.\n")
+	b.WriteString("  3. Create test PRs in batches (max 3 concurrent).\n")
+	b.WriteString("  4. Each PR must include: test file, required mocks/factories, coverage delta estimate.\n")
+	b.WriteString("  5. Write test_scaffold and pattern facts to the knowledge wiki for future agents.\n")
+	b.WriteString("⛔ NEVER run gh issue list, gh pr list, gh search issues — the work list above is your ONLY source.\n")
 
 	return b.String()
 }

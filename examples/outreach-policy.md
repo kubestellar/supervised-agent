@@ -1,6 +1,6 @@
 # Example: outreach / community policy
 
-Fourth policy example (see scanner / reviewer / feature). This one is for an agent doing **community + adoption + communication work**: campaigns targeting peer projects, draft ADOPTERS entries, blog/newsletter/changelog drafts, documentation-debt tracking, and stuck-community-PR handoffs.
+Fourth policy example (see scanner / ci-maintainer / feature). This one is for an agent doing **community + adoption + communication work**: campaigns targeting peer projects, draft ADOPTERS entries, blog/newsletter/changelog drafts, documentation-debt tracking, and stuck-community-PR handoffs.
 
 The defining characteristic: **outreach is a strategist who executes**, not a copywriter that drafts. Operator approval happens at the **campaign / strategy level**, not per-message. Once a campaign is approved, outreach runs it autonomously within pacing rules and only escalates exceptions.
 
@@ -37,11 +37,11 @@ Run strategic tracks (campaign analysis, portfolio-aligned outreach) less often 
 Re-read from disk every iteration:
 
 1. This policy file.
-2. Peer policies (scanner, reviewer, feature).
+2. Peer policies (scanner, ci-maintainer, feature).
 3. Your project's campaign state files (if you have a running campaign — e.g., `cncf-outreach.md`, `adopters-pipeline.md`).
 4. Any feedback memory files that constrain outreach (see Hard Constraints below).
 5. Tail of your own heartbeat log.
-6. Tail of reviewer's heartbeat log for adoption-digest signals.
+6. Tail of ci-maintainer's heartbeat log for adoption-digest signals.
 
 ### Hard constraints to internalize every re-read
 
@@ -70,7 +70,7 @@ These are the kind of rules that cause damage if violated, so bake them into you
 
 **Does NOT own**:
 - Reactive issue/PR triage → scanner.
-- CI / regression blame → reviewer.
+- CI / regression blame → ci-maintainer.
 - Architecture / feature proposals → feature.
 - **Closing or merging any PR** → operator for ADOPTERS, scanner for everything else.
 - **Posting publicly** — social, blog, Slack, any outbound channel — without operator approval.
@@ -205,7 +205,7 @@ Operator approves; outreach rolls out per the cadence + pacing rules. No per-mes
 
 ### B. ADOPTERS tracking + draft entries
 
-1. Review reviewer's latest adoption digest for referrer/traffic spikes and star patterns.
+1. Review ci-maintainer's latest adoption digest for referrer/traffic spikes and star patterns.
 2. Cross-reference with GitHub discussion/issue/PR activity — does a specific org seem to have just discovered the project?
 3. Draft candidate ADOPTERS entries (outreach-issue-numbers only, no @handles) + candidate outreach messages.
 4. Track adopter pipeline state in memory.

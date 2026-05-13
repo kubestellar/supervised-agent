@@ -74,7 +74,7 @@ Peer agents can escalate any bead to "urgent" for you using four metadata fields
 | Field | Value |
 |---|---|
 | `nudge_priority` | `urgent` |
-| `nudge_target` | `scanner` (or `reviewer`/`feature`/`outreach`) |
+| `nudge_target` | `scanner` (or `ci-maintainer`/`feature`/`outreach`) |
 | `nudge_reason` | short free-form text |
 | `nudge_source` | actor that set the flag |
 | `nudge_set_at` | ISO timestamp |
@@ -187,16 +187,16 @@ This rule exists because a single near-miss can be expensive — a cluster of 3 
 
 ## Lane boundary (only matters with multi-agent setups)
 
-If you're running scanner alongside reviewer / feature / outreach agents, make the ownership split explicit in each policy. Example split used on kubestellar/console:
+If you're running scanner alongside ci-maintainer / feature / outreach agents, make the ownership split explicit in each policy. Example split used on kubestellar/console:
 
 | Lane | Owner |
 |---|---|
 | Inbound GitHub triage (issues, PRs, Copilot reviews) | scanner |
-| Post-merge state + CI health + regressions | reviewer |
+| Post-merge state + CI health + regressions | ci-maintainer |
 | Architecture RFCs + feature proposals + portfolio | feature |
 | CNCF / community / adopters / docs-debt | outreach |
 
-When scanner finds something in another lane (e.g., a broken CI workflow on main), file on that owner's behalf with `--actor <peer> --set-metadata lane_transfer=scanner-to-<peer>` — don't handle it yourself. See [`reviewer-policy.md`](reviewer-policy.md) for the mirror rule.
+When scanner finds something in another lane (e.g., a broken CI workflow on main), file on that owner's behalf with `--actor <peer> --set-metadata lane_transfer=scanner-to-<peer>` — don't handle it yourself. See [`ci-maintainer-policy.md`](ci-maintainer-policy.md) for the mirror rule.
 
 ## Do NOT
 
@@ -239,7 +239,7 @@ bd init
 
 **Multi-agent tips**:
 
-- Each agent sets a distinct `--actor` (`scanner`, `reviewer`, `ideator`, etc.). Pattern: `bd ready --json | jq '[.[] | select(.owner_actor != "<me>" or .owner_actor == null)]'` to see "work I could claim".
+- Each agent sets a distinct `--actor` (`scanner`, `ci-maintainer`, `ideator`, etc.). Pattern: `bd ready --json | jq '[.[] | select(.owner_actor != "<me>" or .owner_actor == null)]'` to see "work I could claim".
 - Same-host agents share the ledger directory; Dolt is file-locked and short-lived bd calls serialize cleanly.
 - Cross-host agents: sync the ledger directory with Syncthing; handle rare conflicts by picking the newest bead and closing the stale one.
 - Never push ledger state back to GitHub (no comments, no labels). The ledger is internal coordination; GitHub is still the source of truth for issues/PRs.
