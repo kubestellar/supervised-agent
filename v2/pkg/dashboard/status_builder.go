@@ -1,8 +1,10 @@
 package dashboard
 
 import (
+	"context"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kubestellar/hive/v2/pkg/agent"
@@ -15,6 +17,11 @@ import (
 
 const defaultLookbackHours = 24
 
+var (
+	cachedHealth   map[string]any
+	cachedHealthMu sync.RWMutex
+)
+
 func BuildFrontendStatus(
 	govState governor.State,
 	actionable *github.ActionableResult,
@@ -23,6 +30,8 @@ func BuildFrontendStatus(
 	tokenCollector *tokens.Collector,
 	gov *governor.Governor,
 	beadStores map[string]*beads.Store,
+	ghClient *github.Client,
+	ctx context.Context,
 ) *StatusPayload {
 	payload := &StatusPayload{
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
@@ -31,7 +40,7 @@ func BuildFrontendStatus(
 		Tokens:       buildTokens(tokenCollector),
 		Repos:        buildRepos(cfg, actionable),
 		Beads:        buildBeads(beadStores),
-		Health:       buildHealth(),
+		Health:       buildHealth(ghClient, ctx),
 		Budget:       buildBudget(gov, tokenCollector),
 		CadenceMatrix: buildCadenceMatrix(cfg, agentStatuses),
 		GHRateLimits: map[string]any{"core": map[string]any{}, "alerts": []any{}, "pullbacks": []any{}},
@@ -292,10 +301,24 @@ func buildBeads(stores map[string]*beads.Store) FrontendBeads {
 	return fb
 }
 
-func buildHealth() map[string]any {
-	return map[string]any{
-		"ci": 100,
+func buildHealth(ghClient *github.Client, ctx context.Context) map[string]any {
+	if ghClient == nil || ctx == nil {
+		cachedHealthMu.RLock()
+		if cachedHealth != nil {
+			defer cachedHealthMu.RUnlock()
+			return cachedHealth
+		}
+		cachedHealthMu.RUnlock()
+		return map[string]any{"ci": 100}
 	}
+
+	health := ghClient.FetchWorkflowHealth(ctx)
+
+	cachedHealthMu.Lock()
+	cachedHealth = health
+	cachedHealthMu.Unlock()
+
+	return health
 }
 
 func buildBudget(gov *governor.Governor, tokenCollector *tokens.Collector) FrontendBudget {
@@ -363,11 +386,12 @@ func buildCadenceMatrix(cfg *config.Config, agentStatuses map[string]*agent.Agen
 		}
 
 		for modeName, mode := range cfg.Governor.Modes {
-			cadence := mode.Cadences[name]
+			rawCadence, hasEntry := mode.Cadences[name]
+			cadence := rawCadence
 			if cadence == "" || cadence == "pause" {
 				cadence = "off"
 			}
-			if paused && cadence != "off" {
+			if paused && hasEntry {
 				cadence = "paused"
 			}
 			switch modeName {

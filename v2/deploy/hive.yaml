@@ -84,14 +84,14 @@ governor:
       architect: pause
       outreach: pause
       sec-check: 2m
-      strategist: pause
+      strategist: 8h
     quiet:
       threshold: 5
       supervisor: 5m
       scanner: 15m
       reviewer: 45m
-      architect: 45m
-      outreach: 2h
+      architect: pause
+      outreach: pause
       sec-check: 2m
       strategist: 4h
     idle:
@@ -99,8 +99,8 @@ governor:
       supervisor: 5m
       scanner: 15m
       reviewer: 15m
-      architect: 30m
-      outreach: 1h
+      architect: 2h
+      outreach: 2h
       sec-check: 2m
       strategist: 4h
 

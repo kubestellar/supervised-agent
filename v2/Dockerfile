@@ -7,7 +7,7 @@ FROM node:22-alpine
 
 ARG CLAUDE_CODE_VERSION=latest
 
-RUN apk add --no-cache git ca-certificates bash curl \
+RUN apk add --no-cache git ca-certificates bash curl tzdata \
  && npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
  && npm install -g @github/copilot \
  && npm cache clean --force

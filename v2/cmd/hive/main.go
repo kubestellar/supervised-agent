@@ -145,6 +145,8 @@ func main() {
 			tokenCollector,
 			gov,
 			beadStores,
+			ghClient,
+			ctx,
 		))
 	}
 
@@ -276,6 +278,8 @@ func runEvalCycle(
 		tokenCollector,
 		gov,
 		beadStores,
+		ghClient,
+		ctx,
 	))
 }
 
