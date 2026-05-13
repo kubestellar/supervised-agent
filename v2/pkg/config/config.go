@@ -20,6 +20,34 @@ type Config struct {
 	Notifications NotificationsConfig          `yaml:"notifications"`
 	Dashboard     DashboardConfig              `yaml:"dashboard"`
 	Data          DataConfig                   `yaml:"data"`
+	Knowledge     KnowledgeConfig              `yaml:"knowledge"`
+}
+
+type KnowledgeConfig struct {
+	Enabled bool                `yaml:"enabled"`
+	Engine  string              `yaml:"engine"`
+	Layers  []KnowledgeLayer    `yaml:"layers"`
+	Curator KnowledgeCurator    `yaml:"curator"`
+	Primer  KnowledgePrimer     `yaml:"primer"`
+}
+
+type KnowledgeLayer struct {
+	Type   string `yaml:"type"`
+	Path   string `yaml:"path,omitempty"`
+	URL    string `yaml:"url,omitempty"`
+	Shared bool   `yaml:"shared"`
+}
+
+type KnowledgeCurator struct {
+	Schedule             string   `yaml:"schedule"`
+	ExtractFrom          []string `yaml:"extract_from"`
+	AutoPromoteThreshold float64  `yaml:"auto_promote_threshold"`
+}
+
+type KnowledgePrimer struct {
+	MaxFacts      int      `yaml:"max_facts"`
+	Priority      []string `yaml:"priority"`
+	MergeStrategy string   `yaml:"merge_strategy"`
 }
 
 type ProjectConfig struct {
@@ -265,9 +293,13 @@ func expandEnvVars(s string) string {
 }
 
 const (
-	defaultDashboardPort    = 3002
-	defaultEvalIntervalS    = 300
-	defaultPollIntervalMins = 5
+	defaultDashboardPort       = 3002
+	defaultEvalIntervalS       = 300
+	defaultPollIntervalMins    = 5
+	defaultKnowledgeMaxFacts   = 25
+	defaultKnowledgeEngine     = "llm-wiki"
+	defaultCuratorSchedule     = "daily"
+	defaultPromoteThreshold    = 0.9
 )
 
 func (c *Config) applyDefaults() {
@@ -294,6 +326,27 @@ func (c *Config) applyDefaults() {
 			agent.Enabled = true
 		}
 		c.Agents[name] = agent
+	}
+
+	if c.Knowledge.Enabled {
+		if c.Knowledge.Engine == "" {
+			c.Knowledge.Engine = defaultKnowledgeEngine
+		}
+		if c.Knowledge.Primer.MaxFacts == 0 {
+			c.Knowledge.Primer.MaxFacts = defaultKnowledgeMaxFacts
+		}
+		if c.Knowledge.Primer.MergeStrategy == "" {
+			c.Knowledge.Primer.MergeStrategy = "precedence"
+		}
+		if len(c.Knowledge.Primer.Priority) == 0 {
+			c.Knowledge.Primer.Priority = []string{"regression", "gotcha", "test_scaffold", "pattern", "decision"}
+		}
+		if c.Knowledge.Curator.Schedule == "" {
+			c.Knowledge.Curator.Schedule = defaultCuratorSchedule
+		}
+		if c.Knowledge.Curator.AutoPromoteThreshold == 0 {
+			c.Knowledge.Curator.AutoPromoteThreshold = defaultPromoteThreshold
+		}
 	}
 }
 

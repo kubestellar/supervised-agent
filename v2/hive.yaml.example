@@ -118,6 +118,42 @@ dashboard:
   snapshot_dir: /data/snapshots
   auth_token: ${HIVE_DASHBOARD_TOKEN}     # Optional — omit to allow unauthenticated access
 
+# Knowledge — 4-layer wiki system powered by llm-wiki (geronimo-iia/llm-wiki)
+# Facts are primed into agent kicks automatically — agents never query the wiki.
+# Personal layer stays on your machine; project layer lives in the repo.
+knowledge:
+  enabled: false                             # Set to true to activate knowledge priming
+  engine: llm-wiki
+  layers:
+    - type: personal
+      path: ~/.hive/wiki                     # Private, local-only, highest precedence
+      shared: false
+    - type: project
+      path: .hive/wiki                       # Same visibility as the repo
+      shared: true
+    # - type: org
+    #   url: https://wiki.your-org.dev/mcp   # Team-scoped, hosted llm-wiki instance
+    #   shared: true
+    # - type: community
+    #   url: https://wiki.hive.dev/mcp       # Public, read-only
+    #   shared: true
+  curator:
+    schedule: daily                           # How often to extract facts from merged PRs
+    extract_from:
+      - pr_comments
+      - ci_failures
+      - review_comments
+    auto_promote_threshold: 0.9              # Confidence to auto-promote project→org
+  primer:
+    max_facts: 25                            # Max facts injected per agent kick
+    priority:                                # Fact types, highest priority first
+      - regression
+      - gotcha
+      - test_scaffold
+      - pattern
+      - decision
+    merge_strategy: precedence               # personal > project > org > community
+
 # Data directories — all persistent state
 data:
   metrics_dir: /data/metrics
