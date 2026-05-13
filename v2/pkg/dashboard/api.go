@@ -102,7 +102,15 @@ func jsonResponse(w http.ResponseWriter, data interface{}) {
 func jsonError(w http.ResponseWriter, msg string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": msg})
+}
+
+func okResponse(w http.ResponseWriter, extra map[string]string) {
+	result := map[string]interface{}{"ok": true}
+	for k, v := range extra {
+		result[k] = v
+	}
+	jsonResponse(w, result)
 }
 
 func decodeBody(r *http.Request, v interface{}) error {
@@ -242,7 +250,7 @@ func (s *Server) handleKick(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.deps.Governor.RecordKick(name)
-	jsonResponse(w, map[string]string{"status": "kicked", "agent": name})
+	okResponse(w, map[string]string{"status": "kicked", "agent": name})
 }
 
 func (s *Server) handleSwitch(w http.ResponseWriter, r *http.Request) {
@@ -254,7 +262,7 @@ func (s *Server) handleSwitch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]string{"status": "switched", "agent": name, "backend": backend})
+	okResponse(w, map[string]string{"status": "switched", "agent": name, "backend": backend})
 }
 
 func (s *Server) handleModelSet(w http.ResponseWriter, r *http.Request) {
@@ -266,7 +274,7 @@ func (s *Server) handleModelSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]string{"status": "model_set", "agent": name, "model": model})
+	okResponse(w, map[string]string{"status": "model_set", "agent": name, "model": model})
 }
 
 func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +285,7 @@ func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]string{"status": "paused", "agent": name})
+	okResponse(w, map[string]string{"status": "paused", "agent": name})
 }
 
 func (s *Server) handleResume(w http.ResponseWriter, r *http.Request) {
@@ -288,7 +296,7 @@ func (s *Server) handleResume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]string{"status": "resumed", "agent": name})
+	okResponse(w, map[string]string{"status": "resumed", "agent": name})
 }
 
 func (s *Server) handlePin(w http.ResponseWriter, r *http.Request) {
@@ -319,7 +327,7 @@ func (s *Server) handlePin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]string{"status": "pinned", "agent": name, "dimension": dimension, "value": body.Value})
+	okResponse(w, map[string]string{"status": "pinned", "agent": name, "dimension": dimension, "value": body.Value})
 }
 
 func (s *Server) handleUnpin(w http.ResponseWriter, r *http.Request) {
@@ -342,7 +350,7 @@ func (s *Server) handleUnpin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]string{"status": "unpinned", "agent": name, "dimension": dimension})
+	okResponse(w, map[string]string{"status": "unpinned", "agent": name, "dimension": dimension})
 }
 
 func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
@@ -353,7 +361,7 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]string{"status": "restarted", "agent": name})
+	okResponse(w, map[string]string{"status": "restarted", "agent": name})
 }
 
 func (s *Server) handleResetRestarts(w http.ResponseWriter, r *http.Request) {
@@ -364,7 +372,7 @@ func (s *Server) handleResetRestarts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, map[string]string{"status": "reset", "agent": name})
+	okResponse(w, map[string]string{"status": "reset", "agent": name})
 }
 
 // --- Token endpoints ---
@@ -415,7 +423,7 @@ func (s *Server) handleBudgetIgnoreSet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.deps.Governor.SetBudgetIgnored(body.Agents)
-	jsonResponse(w, map[string]string{"status": "updated"})
+	okResponse(w, map[string]string{"status": "updated"})
 }
 
 // --- GitHub endpoints ---
@@ -525,7 +533,7 @@ func (s *Server) handleAgentConfigGeneral(w http.ResponseWriter, r *http.Request
 	}
 	s.deps.Config.Agents[name] = agentCfg
 
-	jsonResponse(w, map[string]string{"status": "updated", "agent": name})
+	okResponse(w, map[string]string{"status": "updated", "agent": name})
 }
 
 func (s *Server) handleAgentConfigCadences(w http.ResponseWriter, r *http.Request) {
@@ -557,7 +565,7 @@ func (s *Server) handleAgentConfigModels(w http.ResponseWriter, r *http.Request)
 	}
 	s.deps.Config.Agents[name] = agentCfg
 
-	jsonResponse(w, map[string]string{"status": "updated", "agent": name})
+	okResponse(w, map[string]string{"status": "updated", "agent": name})
 }
 
 func (s *Server) handleAgentConfigPipeline(w http.ResponseWriter, r *http.Request) {
@@ -622,7 +630,7 @@ func (s *Server) handleGovernorSensing(w http.ResponseWriter, r *http.Request) {
 		s.deps.Config.Governor.EvalIntervalS = body.EvalIntervalS
 	}
 
-	jsonResponse(w, map[string]string{"status": "updated"})
+	okResponse(w, map[string]string{"status": "updated"})
 }
 
 func (s *Server) handleGovernorThresholds(w http.ResponseWriter, r *http.Request) {
@@ -639,7 +647,7 @@ func (s *Server) handleGovernorThresholds(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	jsonResponse(w, map[string]string{"status": "updated"})
+	okResponse(w, map[string]string{"status": "updated"})
 }
 
 func (s *Server) handleGovernorLabels(w http.ResponseWriter, r *http.Request) {
@@ -656,7 +664,7 @@ func (s *Server) handleGovernorBudget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.deps.Governor.SetBudgetLimit(body.WeeklyLimit)
-	jsonResponse(w, map[string]string{"status": "updated"})
+	okResponse(w, map[string]string{"status": "updated"})
 }
 
 func (s *Server) handleGovernorNotifications(w http.ResponseWriter, r *http.Request) {
@@ -693,7 +701,7 @@ func (s *Server) handleGovernorAddAgent(w http.ResponseWriter, r *http.Request) 
 		Enabled: true,
 	}
 
-	jsonResponse(w, map[string]string{"status": "added", "agent": body.Name})
+	okResponse(w, map[string]string{"status": "added", "agent": body.Name})
 }
 
 func (s *Server) handleGovernorRemoveAgent(w http.ResponseWriter, r *http.Request) {
@@ -704,7 +712,7 @@ func (s *Server) handleGovernorRemoveAgent(w http.ResponseWriter, r *http.Reques
 	}
 
 	delete(s.deps.Config.Agents, name)
-	jsonResponse(w, map[string]string{"status": "removed", "agent": name})
+	okResponse(w, map[string]string{"status": "removed", "agent": name})
 }
 
 func (s *Server) handleGovernorRepos(w http.ResponseWriter, r *http.Request) {
@@ -717,7 +725,7 @@ func (s *Server) handleGovernorRepos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.deps.Config.Project.Repos = body.Repos
-	jsonResponse(w, map[string]string{"status": "updated"})
+	okResponse(w, map[string]string{"status": "updated"})
 }
 
 // --- Sidebar endpoints ---
@@ -737,7 +745,7 @@ func (s *Server) handleSidebarSet(w http.ResponseWriter, r *http.Request) {
 	s.sidebar = body
 	s.sidebarMu.Unlock()
 
-	jsonResponse(w, map[string]string{"status": "updated"})
+	okResponse(w, map[string]string{"status": "updated"})
 }
 
 func (s *Server) handleBackends(w http.ResponseWriter, r *http.Request) {
@@ -793,11 +801,11 @@ func (s *Server) handleNousPrinciples(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNousApprove(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, map[string]string{"status": "approved"})
+	okResponse(w, map[string]string{"status": "approved"})
 }
 
 func (s *Server) handleNousAbort(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, map[string]string{"status": "aborted"})
+	okResponse(w, map[string]string{"status": "aborted"})
 }
 
 func (s *Server) handleNousMode(w http.ResponseWriter, r *http.Request) {
@@ -813,7 +821,7 @@ func (s *Server) handleNousMode(w http.ResponseWriter, r *http.Request) {
 		s.deps.Nous.Mode = body.Mode
 	}
 
-	jsonResponse(w, map[string]string{"status": "updated", "mode": body.Mode})
+	okResponse(w, map[string]string{"status": "updated", "mode": body.Mode})
 }
 
 func (s *Server) handleNousScope(w http.ResponseWriter, r *http.Request) {
@@ -829,7 +837,7 @@ func (s *Server) handleNousScope(w http.ResponseWriter, r *http.Request) {
 		s.deps.Nous.Scope = body.Scope
 	}
 
-	jsonResponse(w, map[string]string{"status": "updated", "scope": body.Scope})
+	okResponse(w, map[string]string{"status": "updated", "scope": body.Scope})
 }
 
 func (s *Server) handleNousPhase(w http.ResponseWriter, r *http.Request) {
@@ -863,7 +871,7 @@ func (s *Server) handleNousGateRespond(w http.ResponseWriter, r *http.Request) {
 		s.deps.Nous.GateResponse = body
 	}
 
-	jsonResponse(w, map[string]string{"status": "responded"})
+	okResponse(w, map[string]string{"status": "responded"})
 }
 
 func (s *Server) handleNousGateResponse(w http.ResponseWriter, r *http.Request) {
@@ -925,7 +933,7 @@ func (s *Server) handleNousDeletePrinciple(w http.ResponseWriter, r *http.Reques
 	}
 	s.deps.Nous.Principles = filtered
 
-	jsonResponse(w, map[string]string{"status": "deleted", "id": id})
+	okResponse(w, map[string]string{"status": "deleted", "id": id})
 }
 
 func (s *Server) handleNousConfigSection(w http.ResponseWriter, r *http.Request, section string) {
@@ -945,7 +953,7 @@ func (s *Server) handleNousConfigSection(w http.ResponseWriter, r *http.Request,
 	}
 	s.deps.Nous.Config[section] = body
 
-	jsonResponse(w, map[string]string{"status": "updated", "section": section})
+	okResponse(w, map[string]string{"status": "updated", "section": section})
 }
 
 func (s *Server) handleConfigStub(w http.ResponseWriter, r *http.Request, section string) {
@@ -963,7 +971,7 @@ func (s *Server) handleConfigStub(w http.ResponseWriter, r *http.Request, sectio
 		return
 	}
 
-	jsonResponse(w, map[string]string{"status": "updated", "section": section})
+	okResponse(w, map[string]string{"status": "updated", "section": section})
 }
 
 // suppress unused import warnings

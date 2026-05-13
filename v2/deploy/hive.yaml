@@ -1,0 +1,122 @@
+# Hive v2 — full agent deployment
+# All agents configured; pause/unpause via dashboard.
+# Runs inside Docker on a Proxmox LXC.
+
+project:
+  org: kubestellar
+  repos:
+    - console
+    - docs
+    - console-kb
+    - kubestellar-mcp
+    - console-marketplace
+    - homebrew-tap
+  ai_author: clubanderson
+  primary_repo: console
+
+policies:
+  repo: https://github.com/kubestellar/hive
+  path: examples/kubestellar/agents/
+  local_dir: /data/policies
+  poll_interval: 5m
+
+agents:
+  scanner:
+    enabled: true
+    backend: copilot
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/scanner
+    clear_on_kick: true
+  reviewer:
+    enabled: true
+    backend: copilot
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/reviewer
+    clear_on_kick: true
+  architect:
+    enabled: true
+    backend: copilot
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/architect
+    clear_on_kick: false
+  supervisor:
+    enabled: true
+    backend: copilot
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/supervisor
+    clear_on_kick: true
+  outreach:
+    enabled: true
+    backend: copilot
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/outreach
+    clear_on_kick: false
+  sec-check:
+    enabled: true
+    backend: copilot
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/sec-check
+    clear_on_kick: true
+  strategist:
+    enabled: true
+    backend: copilot
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/strategist
+    clear_on_kick: false
+
+governor:
+  eval_interval_s: 300
+  modes:
+    surge:
+      threshold: 20
+      supervisor: 5m
+      scanner: 15m
+      reviewer: pause
+      architect: pause
+      outreach: pause
+      sec-check: 2m
+      strategist: pause
+    busy:
+      threshold: 10
+      supervisor: 5m
+      scanner: 15m
+      reviewer: 1h
+      architect: pause
+      outreach: pause
+      sec-check: 2m
+      strategist: pause
+    quiet:
+      threshold: 2
+      supervisor: 5m
+      scanner: 15m
+      reviewer: 45m
+      architect: 45m
+      outreach: 2h
+      sec-check: 2m
+      strategist: 4h
+    idle:
+      threshold: 0
+      supervisor: 5m
+      scanner: 15m
+      reviewer: 15m
+      architect: 30m
+      outreach: 1h
+      sec-check: 2m
+      strategist: 4h
+
+github:
+  token: ${HIVE_GITHUB_TOKEN}
+
+notifications:
+  ntfy:
+    server: https://ntfy.sh
+    topic: hive-v2
+
+dashboard:
+  port: 3001
+  snapshot_dir: /data/snapshots
+  auth_token: ${HIVE_DASHBOARD_TOKEN}
+
+data:
+  metrics_dir: /data/metrics
+  logs_dir: /data/logs
