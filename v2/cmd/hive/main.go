@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -131,14 +132,31 @@ func main() {
 	go tokenCollector.Start(tokenStop)
 	defer close(tokenStop)
 
+	var lastActionable atomic.Pointer[github.ActionableResult]
+	refreshDashboard := func() {
+		actionable := lastActionable.Load()
+		govState := gov.GetState()
+		agentStatuses := agentMgr.AllStatuses()
+		dashSrv.UpdateStatus(dashboard.BuildFrontendStatus(
+			govState,
+			actionable,
+			agentStatuses,
+			cfg,
+			tokenCollector,
+			gov,
+			beadStores,
+		))
+	}
+
 	dashSrv.RegisterAPI(&dashboard.Dependencies{
-		Config:   cfg,
-		AgentMgr: agentMgr,
-		Governor: gov,
-		GHClient: ghClient,
-		Tokens:   tokenCollector,
-		Logger:   logger,
-		Ctx:      ctx,
+		Config:      cfg,
+		AgentMgr:    agentMgr,
+		Governor:    gov,
+		GHClient:    ghClient,
+		Tokens:      tokenCollector,
+		Logger:      logger,
+		Ctx:         ctx,
+		RefreshFunc: refreshDashboard,
 	})
 
 	if cfg.Policies.Repo != "" {
@@ -174,7 +192,7 @@ func main() {
 	ticker := time.NewTicker(time.Duration(cfg.Governor.EvalIntervalS) * time.Second)
 	defer ticker.Stop()
 
-	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, logger)
+	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, &lastActionable, logger)
 
 	for {
 		select {
@@ -183,7 +201,7 @@ func main() {
 			persistState(agentMgr, gov, statePath, logger)
 			return
 		case <-ticker.C:
-			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, logger)
+			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, &lastActionable, logger)
 		}
 	}
 }
@@ -199,6 +217,7 @@ func runEvalCycle(
 	notifier *notify.Notifier,
 	beadStores map[string]*beads.Store,
 	tokenCollector *tokens.Collector,
+	lastActionable *atomic.Pointer[github.ActionableResult],
 	logger *slog.Logger,
 ) {
 	actionable, err := ghClient.EnumerateActionable(ctx)
@@ -206,6 +225,7 @@ func runEvalCycle(
 		logger.Error("failed to enumerate actionable items", "error", err)
 		return
 	}
+	lastActionable.Store(actionable)
 
 	agentsDue := gov.Evaluate(
 		actionable.Issues.Count,

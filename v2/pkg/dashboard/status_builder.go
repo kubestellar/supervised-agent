@@ -32,7 +32,7 @@ func BuildFrontendStatus(
 		Beads:        buildBeads(beadStores),
 		Health:       buildHealth(),
 		Budget:       buildBudget(gov, tokenCollector),
-		CadenceMatrix: buildCadenceMatrix(cfg),
+		CadenceMatrix: buildCadenceMatrix(cfg, agentStatuses),
 		GHRateLimits: map[string]any{"core": map[string]any{}, "alerts": []any{}, "pullbacks": []any{}},
 		AgentMetrics: map[string]any{},
 		Hold:         buildHold(actionable),
@@ -330,7 +330,7 @@ func buildBudget(gov *governor.Governor, tokenCollector *tokens.Collector) Front
 	return fb
 }
 
-func buildCadenceMatrix(cfg *config.Config) []FrontendCadence {
+func buildCadenceMatrix(cfg *config.Config, agentStatuses map[string]*agent.AgentProcess) []FrontendCadence {
 	agentNames := make(map[string]bool)
 	for name := range cfg.Agents {
 		agentNames[name] = true
@@ -339,10 +339,19 @@ func buildCadenceMatrix(cfg *config.Config) []FrontendCadence {
 	matrix := make([]FrontendCadence, 0, len(agentNames))
 	for name := range agentNames {
 		entry := FrontendCadence{Agent: name}
+
+		paused := false
+		if proc, ok := agentStatuses[name]; ok && proc.Paused {
+			paused = true
+		}
+
 		for modeName, mode := range cfg.Governor.Modes {
 			cadence := mode.Cadences[name]
 			if cadence == "" {
 				cadence = "off"
+			}
+			if paused {
+				cadence = "paused"
 			}
 			switch modeName {
 			case "idle":

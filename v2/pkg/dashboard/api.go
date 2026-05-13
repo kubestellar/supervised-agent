@@ -113,6 +113,12 @@ func okResponse(w http.ResponseWriter, extra map[string]string) {
 	jsonResponse(w, result)
 }
 
+func (s *Server) refreshAfterMutation() {
+	if s.deps != nil && s.deps.RefreshFunc != nil {
+		go s.deps.RefreshFunc()
+	}
+}
+
 func decodeBody(r *http.Request, v interface{}) error {
 	defer r.Body.Close()
 	return json.NewDecoder(r.Body).Decode(v)
@@ -250,6 +256,7 @@ func (s *Server) handleKick(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.deps.Governor.RecordKick(name)
+	s.refreshAfterMutation()
 	okResponse(w, map[string]string{"status": "kicked", "agent": name})
 }
 
@@ -262,6 +269,7 @@ func (s *Server) handleSwitch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.refreshAfterMutation()
 	okResponse(w, map[string]string{"status": "switched", "agent": name, "backend": backend})
 }
 
@@ -274,6 +282,7 @@ func (s *Server) handleModelSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.refreshAfterMutation()
 	okResponse(w, map[string]string{"status": "model_set", "agent": name, "model": model})
 }
 
@@ -285,6 +294,7 @@ func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.refreshAfterMutation()
 	okResponse(w, map[string]string{"status": "paused", "agent": name})
 }
 
@@ -296,6 +306,7 @@ func (s *Server) handleResume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.refreshAfterMutation()
 	okResponse(w, map[string]string{"status": "resumed", "agent": name})
 }
 
@@ -327,6 +338,7 @@ func (s *Server) handlePin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.refreshAfterMutation()
 	okResponse(w, map[string]string{"status": "pinned", "agent": name, "dimension": dimension, "value": body.Value})
 }
 
@@ -350,6 +362,7 @@ func (s *Server) handleUnpin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.refreshAfterMutation()
 	okResponse(w, map[string]string{"status": "unpinned", "agent": name, "dimension": dimension})
 }
 
@@ -361,6 +374,7 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.refreshAfterMutation()
 	okResponse(w, map[string]string{"status": "restarted", "agent": name})
 }
 
