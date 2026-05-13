@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive
+  namespace: hive
+  labels:
+    app.kubernetes.io/name: hive
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: hive
+  ports:
+    - name: dashboard
+      port: 3001
+      targetPort: dashboard
+      protocol: TCP
+    - name: api
+      port: 3002
+      targetPort: api
+      protocol: TCP
+    - name: ttyd
+      port: 7681
+      targetPort: ttyd
+      protocol: TCP

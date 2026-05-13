@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive
+  namespace: hive
+  labels:
+    app.kubernetes.io/name: hive
+    app.kubernetes.io/component: controller
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hive
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hive
+        app.kubernetes.io/component: controller
+    spec:
+      containers:
+        - name: hive
+          image: hive:latest
+          args:
+            - "--config"
+            - "/etc/hive/hive.yaml"
+          ports:
+            - name: dashboard
+              containerPort: 3001
+              protocol: TCP
+            - name: api
+              containerPort: 3002
+              protocol: TCP
+            - name: ttyd
+              containerPort: 7681
+              protocol: TCP
+          env:
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hive-secrets
+                  key: HIVE_GITHUB_TOKEN
+                  optional: true
+            - name: HIVE_DASHBOARD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hive-secrets
+                  key: HIVE_DASHBOARD_TOKEN
+                  optional: true
+          volumeMounts:
+            - name: config
+              mountPath: /etc/hive
+              readOnly: true
+            - name: secrets
+              mountPath: /secrets
+              readOnly: true
+            - name: data
+              mountPath: /data
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: api
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: api
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: hive-config
+        - name: secrets
+          secret:
+            secretName: hive-secrets
+            optional: true
+        - name: data
+          persistentVolumeClaim:
+            claimName: hive-data

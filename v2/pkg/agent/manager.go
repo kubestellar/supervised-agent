@@ -176,11 +176,9 @@ func (m *Manager) launchInTmux(ctx context.Context, agent *AgentProcess) error {
 	envCmd := m.buildEnvPrefix(agent)
 	fullCmd := envCmd + launchCmd
 
-	cmd := exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, fullCmd, "Enter")
-	if err := cmd.Run(); err != nil {
-		agent.State = StateFailed
-		return fmt.Errorf("launching CLI in tmux for %s: %w", agent.Name, err)
-	}
+	m.tmuxSendLiteral(agent.tmuxSession, fullCmd)
+	time.Sleep(textToEnterDelay)
+	m.tmuxSendEnters(agent.tmuxSession)
 
 	now := time.Now()
 	agent.State = StateRunning
@@ -278,24 +276,36 @@ func (m *Manager) SendKick(name string, message string) error {
 		return fmt.Errorf("tmux session %s not found", agent.tmuxSession)
 	}
 
+	// Clear stale input before kick (Ctrl+C then Ctrl+U)
+	_ = exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, "C-c").Run()
+	time.Sleep(staleCheckDelay)
+	_ = exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, "C-u").Run()
+	time.Sleep(staleCheckDelay)
+
 	if agent.Config.ClearOnKick {
-		clearCmd := exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, "/clear", "Enter")
-		if err := clearCmd.Run(); err != nil {
-			return fmt.Errorf("sending /clear to %s: %w", name, err)
-		}
-		m.logger.Info("clear sent before kick", "name", name)
+		m.tmuxSendLiteral(agent.tmuxSession, "/clear")
+		time.Sleep(textToEnterDelay)
+		m.tmuxSendEnters(agent.tmuxSession)
 		time.Sleep(clearBeforeKickDelay)
 	}
 
-	escaped := strings.ReplaceAll(message, "'", "'\\''")
-	sendCmd := exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, "-l", escaped)
-	if err := sendCmd.Run(); err != nil {
-		return fmt.Errorf("sending kick text to %s: %w", name, err)
+	// Send message in chunks (old hive pattern: 400 char max per chunk)
+	if len(message) <= chunkSize {
+		m.tmuxSendLiteral(agent.tmuxSession, message)
+	} else {
+		for offset := 0; offset < len(message); offset += chunkSize {
+			end := offset + chunkSize
+			if end > len(message) {
+				end = len(message)
+			}
+			m.tmuxSendLiteral(agent.tmuxSession, message[offset:end])
+			time.Sleep(chunkDelay)
+		}
 	}
-	enterCmd := exec.Command("tmux", "send-keys", "-t", agent.tmuxSession, "Enter")
-	if err := enterCmd.Run(); err != nil {
-		return fmt.Errorf("sending enter to %s: %w", name, err)
-	}
+
+	// Text and Enter must always be separate calls with a delay between
+	time.Sleep(textToEnterDelay)
+	m.tmuxSendEnters(agent.tmuxSession)
 
 	now := time.Now()
 	agent.LastKick = &now
@@ -316,7 +326,30 @@ func (m *Manager) SendKick(name string, message string) error {
 	return nil
 }
 
-const clearBeforeKickDelay = 2 * time.Second
+// tmuxSendLiteral sends text literally (no key interpretation) via -l flag.
+func (m *Manager) tmuxSendLiteral(session, text string) {
+	_ = exec.Command("tmux", "send-keys", "-t", session, "-l", text).Run()
+}
+
+// tmuxSendEnters sends multiple Enter presses with delays between each (old hive: 3x, 300ms apart).
+func (m *Manager) tmuxSendEnters(session string) {
+	for i := 0; i < enterCount; i++ {
+		_ = exec.Command("tmux", "send-keys", "-t", session, "Enter").Run()
+		if i < enterCount-1 {
+			time.Sleep(enterDelay)
+		}
+	}
+}
+
+const (
+	clearBeforeKickDelay  = 2 * time.Second
+	enterCount            = 3
+	enterDelay            = 300 * time.Millisecond
+	textToEnterDelay      = 1 * time.Second
+	chunkSize             = 400
+	chunkDelay            = 1 * time.Second
+	staleCheckDelay       = 1 * time.Second
+)
 
 func (m *Manager) GetStatus(name string) (*AgentProcess, error) {
 	m.mu.RLock()

@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hive-config
+  namespace: hive
+  labels:
+    app.kubernetes.io/name: hive
+data:
+  hive.yaml: |
+    project:
+      org: kubestellar
+      repos:
+        - console
+        - docs
+      ai_author: clubanderson
+      primary_repo: console
+
+    agents:
+      supervisor:
+        enabled: true
+        backend: copilot
+        model: claude-sonnet-4.6
+        beads_dir: /data/beads/supervisor
+        clear_on_kick: true
+      scanner:
+        enabled: true
+        backend: copilot
+        model: claude-sonnet-4.6
+        beads_dir: /data/beads/scanner
+        clear_on_kick: true
+      architect:
+        enabled: true
+        backend: copilot
+        model: claude-sonnet-4.6
+        beads_dir: /data/beads/architect
+        clear_on_kick: false
+
+    governor:
+      eval_interval_s: 300
+      modes:
+        surge:
+          threshold: 30
+          supervisor: 5m
+          scanner: 5m
+          architect: 10m
+        busy:
+          threshold: 16
+          supervisor: 5m
+          scanner: 10m
+          architect: 15m
+        quiet:
+          threshold: 5
+          supervisor: 5m
+          scanner: 15m
+          architect: 2h
+        idle:
+          threshold: 0
+          supervisor: 5m
+          scanner: 15m
+          architect: 2h
+
+    dashboard:
+      port: 3002
+
+    notifications:
+      enabled: false
