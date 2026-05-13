@@ -593,6 +593,7 @@
       .pause-badge { font-size: 0.55rem; padding: 0px 3px; margin-left: 2px; }
     }
     .governor.dead { border-color: var(--red); }
+    .governor.starting { border-color: var(--yellow); }
     .governor.active { border-color: var(--green); }
     .gov-title { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
     .gov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
@@ -601,6 +602,7 @@
     .gov-stat .val { font-size: 1.2rem; font-weight: 700; }
     .gov-stat .val.active { color: var(--green); }
     .gov-stat .val.dead { color: var(--red); }
+    .gov-stat .val.starting { color: var(--yellow); }
 
     /* Repos */
     .repos { margin-bottom: 24px; }
@@ -2611,7 +2613,8 @@
 
     function renderGovernor(gov, cadenceMatrix, data) {
       const el = document.getElementById('governor');
-      const cls = gov.active ? 'active' : 'dead';
+      const isStarting = !gov.active && !gov.mode;
+      const cls = gov.active ? 'active' : (isStarting ? 'starting' : 'dead');
       el.className = `governor ${cls}`;
       const issuesSpark = sparkSvg(getHistorySeries('govIssues'), '#58a6ff');
       const prsSpark = sparkSvg(getHistorySeries('govPrs'), '#bc8cff');
@@ -2657,7 +2660,7 @@
       el.innerHTML = `
         <div class="gov-title">Governor <button class="config-gear" onclick="openConfigDialog('governor')" title="Configure Governor">⚙️</button></div>
         <div class="gov-grid">
-          <div class="gov-stat"><div class="label">timer</div><div class="val ${cls}">${gov.active ? '● active' : '⚠ DEAD'}</div></div>
+          <div class="gov-stat"><div class="label">timer</div><div class="val ${cls}">${gov.active ? '● active' : (isStarting ? '⏳ starting' : '⚠ DEAD')}</div></div>
           <div class="gov-stat"><div class="label">mode</div><div class="val" style="color:${modeColor}">${escapeHtml(gov.mode)}</div></div>
           <div class="gov-stat"><div class="label">actionable issues</div><div class="spark-row"><span class="val">${issueCount}</span>${issuesSpark}</div></div>
           <div class="gov-stat"><div class="label">PRs</div><div class="spark-row"><span class="val">${gov.prs}</span>${prsSpark}</div></div>
