@@ -23,7 +23,7 @@ COPY --from=builder /hive /usr/local/bin/hive
 COPY v2/proxy/ /opt/hive/proxy/
 RUN cd /opt/hive/proxy && npm install --omit=dev
 
-COPY dashboard/index.html /opt/hive/proxy/public/
+COPY v2/pkg/dashboard/static/index.html /opt/hive/proxy/public/
 
 EXPOSE 3001 3002
 VOLUME ["/data", "/secrets"]
