@@ -364,7 +364,7 @@ func buildCadenceMatrix(cfg *config.Config, agentStatuses map[string]*agent.Agen
 
 		for modeName, mode := range cfg.Governor.Modes {
 			cadence := mode.Cadences[name]
-			if cadence == "" {
+			if cadence == "" || cadence == "pause" {
 				cadence = "off"
 			}
 			if paused {
