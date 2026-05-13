@@ -10,10 +10,18 @@ FROM node:22-alpine
 
 ARG CLAUDE_CODE_VERSION=latest
 
-RUN apk add --no-cache git ca-certificates bash curl tzdata tmux \
+RUN apk add --no-cache git ca-certificates bash curl tzdata tmux libuv \
  && npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
  && npm install -g @github/copilot \
  && npm cache clean --force
+
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then TTYD_ARCH=x86_64; \
+    elif [ "$ARCH" = "aarch64" ]; then TTYD_ARCH=aarch64; \
+    else TTYD_ARCH=x86_64; fi && \
+    curl -sL -o /usr/local/bin/ttyd \
+      "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.${TTYD_ARCH}" && \
+    chmod +x /usr/local/bin/ttyd
 
 ENV HOME=/data/home
 RUN mkdir -p /data/home
@@ -25,7 +33,10 @@ RUN cd /opt/hive/proxy && npm install --omit=dev
 
 COPY v2/pkg/dashboard/static/index.html /opt/hive/proxy/public/
 
-EXPOSE 3001 3002
+COPY v2/deploy/ttyd-tmux.sh /usr/local/bin/ttyd-tmux.sh
+RUN chmod +x /usr/local/bin/ttyd-tmux.sh
+
+EXPOSE 3001 3002 7681
 VOLUME ["/data", "/secrets"]
 
 COPY v2/deploy/entrypoint.sh /usr/local/bin/entrypoint.sh
