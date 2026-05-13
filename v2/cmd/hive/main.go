@@ -19,6 +19,8 @@ import (
 	"github.com/kubestellar/hive/v2/pkg/notify"
 	"github.com/kubestellar/hive/v2/pkg/policies"
 	"github.com/kubestellar/hive/v2/pkg/scheduler"
+	"github.com/kubestellar/hive/v2/pkg/snapshot"
+	"github.com/kubestellar/hive/v2/pkg/tokens"
 )
 
 func main() {
@@ -79,6 +81,36 @@ func main() {
 	sched := scheduler.New(cfg, logger)
 	notifier := notify.New(cfg.Notifications, logger)
 	agentMgr := agent.NewManager(cfg.EnabledAgents(), logger)
+
+	const statePath = "/data/hive-state.json"
+	if saved, err := snapshot.LoadState(statePath, logger); err != nil {
+		logger.Warn("failed to load persisted state", "error", err)
+	} else if saved != nil {
+		for name, as := range saved.Agents {
+			if as.Paused {
+				_ = agentMgr.Pause(name)
+			}
+			if as.PinnedCLI != "" {
+				_ = agentMgr.PinCLI(name, as.PinnedCLI)
+			}
+			if as.PinnedModel != "" {
+				_ = agentMgr.PinModel(name, as.PinnedModel)
+			}
+			if as.ModelOverride != "" {
+				_ = agentMgr.SetModelOverride(name, as.ModelOverride)
+			}
+			if as.BackendOverride != "" {
+				_ = agentMgr.SetBackendOverride(name, as.BackendOverride)
+			}
+		}
+		if saved.BudgetLimit > 0 {
+			gov.SetBudgetLimit(saved.BudgetLimit)
+		}
+		if len(saved.BudgetIgnored) > 0 {
+			gov.SetBudgetIgnored(saved.BudgetIgnored)
+		}
+	}
+
 	var dashSrv *dashboard.Server
 	if cfg.Dashboard.AuthToken != "" {
 		dashSrv = dashboard.NewServerWithAuth(cfg.Dashboard.Port, cfg.Dashboard.AuthToken, logger)
@@ -96,6 +128,21 @@ func main() {
 		beadStores[name] = store
 		logger.Info("beads store initialized", "agent", name, "count", store.Count())
 	}
+
+	tokenCollector := tokens.NewCollector(cfg.Data.MetricsDir, logger)
+	tokenStop := make(chan struct{})
+	go tokenCollector.Start(tokenStop)
+	defer close(tokenStop)
+
+	dashSrv.RegisterAPI(&dashboard.Dependencies{
+		Config:   cfg,
+		AgentMgr: agentMgr,
+		Governor: gov,
+		GHClient: ghClient,
+		Tokens:   tokenCollector,
+		Logger:   logger,
+		Ctx:      ctx,
+	})
 
 	if cfg.Policies.Repo != "" {
 		localDir := cfg.Policies.LocalDir
@@ -135,7 +182,8 @@ func main() {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Info("shutting down")
+			logger.Info("shutting down, persisting state")
+			persistState(agentMgr, gov, statePath, logger)
 			return
 		case <-ticker.C:
 			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, logger)
@@ -220,4 +268,31 @@ func runEvalCycle(
 		Actionable: actionable,
 		Agents:     agentStatuses,
 	})
+}
+
+func persistState(agentMgr *agent.Manager, gov *governor.Governor, path string, logger *slog.Logger) {
+	statuses := agentMgr.AllStatuses()
+	agents := make(map[string]snapshot.AgentState, len(statuses))
+	for name, proc := range statuses {
+		agents[name] = snapshot.AgentState{
+			Paused:          proc.Paused,
+			PinnedCLI:       proc.PinnedCLI,
+			PinnedModel:     proc.PinnedModel,
+			ModelOverride:   proc.ModelOverride,
+			BackendOverride: proc.BackendOverride,
+			RestartCount:    proc.RestartCount,
+		}
+	}
+
+	budget := gov.GetBudget()
+	state := &snapshot.PersistedState{
+		Agents:        agents,
+		GovernorMode:  string(gov.GetState().Mode),
+		BudgetLimit:   budget.WeeklyLimit,
+		BudgetIgnored: budget.IgnoredAgents,
+	}
+
+	if err := snapshot.SaveState(path, state, logger); err != nil {
+		logger.Error("failed to persist state", "error", err)
+	}
 }

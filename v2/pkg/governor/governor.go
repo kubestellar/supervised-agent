@@ -24,16 +24,53 @@ type AgentCadence struct {
 	Paused   bool
 }
 
-type State struct {
-	Mode             Mode
-	QueueIssues      int
-	QueuePRs         int
-	QueueHold        int
-	Cadences         map[string]AgentCadence
-	LastKick         map[string]time.Time
-	LastEval         time.Time
-	SLAViolations    int
+type ModeChange struct {
+	Timestamp time.Time `json:"timestamp"`
+	From      Mode      `json:"from"`
+	To        Mode      `json:"to"`
+	Reason    string    `json:"reason"`
 }
+
+type EvalSnapshot struct {
+	Timestamp     time.Time `json:"timestamp"`
+	Mode          Mode      `json:"mode"`
+	QueueIssues   int       `json:"queue_issues"`
+	QueuePRs      int       `json:"queue_prs"`
+	QueueHold     int       `json:"queue_hold"`
+	SLAViolations int       `json:"sla_violations"`
+	AgentsKicked  []string  `json:"agents_kicked,omitempty"`
+}
+
+type KickRecord struct {
+	Timestamp time.Time `json:"timestamp"`
+	Agent     string    `json:"agent"`
+}
+
+type BudgetInfo struct {
+	WeeklyLimit   int64            `json:"weekly_limit"`
+	CurrentSpend  int64            `json:"current_spend"`
+	ByAgent       map[string]int64 `json:"by_agent"`
+	ByModel       map[string]int64 `json:"by_model"`
+	IgnoredAgents []string         `json:"ignored_agents"`
+	ResetAt       time.Time        `json:"reset_at"`
+}
+
+type State struct {
+	Mode          Mode                    `json:"mode"`
+	QueueIssues   int                     `json:"queue_issues"`
+	QueuePRs      int                     `json:"queue_prs"`
+	QueueHold     int                     `json:"queue_hold"`
+	Cadences      map[string]AgentCadence `json:"-"`
+	LastKick      map[string]time.Time    `json:"last_kick"`
+	LastEval      time.Time               `json:"last_eval"`
+	SLAViolations int                     `json:"sla_violations"`
+}
+
+const (
+	modeHistoryCapacity = 100
+	evalHistoryCapacity = 200
+	kickHistoryCapacity = 500
+)
 
 type Governor struct {
 	cfg    config.GovernorConfig
@@ -41,6 +78,11 @@ type Governor struct {
 	state  State
 	mu     sync.RWMutex
 	logger *slog.Logger
+
+	modeHistory []ModeChange
+	evalHistory []EvalSnapshot
+	kickHistory []KickRecord
+	budget      BudgetInfo
 }
 
 func New(cfg config.GovernorConfig, agents map[string]config.AgentConfig, logger *slog.Logger) *Governor {
@@ -52,7 +94,14 @@ func New(cfg config.GovernorConfig, agents map[string]config.AgentConfig, logger
 			Cadences: make(map[string]AgentCadence),
 			LastKick: make(map[string]time.Time),
 		},
-		logger: logger,
+		logger:      logger,
+		modeHistory: make([]ModeChange, 0, modeHistoryCapacity),
+		evalHistory: make([]EvalSnapshot, 0, evalHistoryCapacity),
+		kickHistory: make([]KickRecord, 0, kickHistoryCapacity),
+		budget: BudgetInfo{
+			ByAgent: make(map[string]int64),
+			ByModel: make(map[string]int64),
+		},
 	}
 }
 
@@ -74,12 +123,32 @@ func (g *Governor) Evaluate(queueIssues, queuePRs, queueHold, slaViolations int)
 			"issues", queueIssues,
 			"prs", queuePRs,
 		)
+		change := ModeChange{
+			Timestamp: time.Now(),
+			From:      g.state.Mode,
+			To:        newMode,
+			Reason:    fmt.Sprintf("queue_depth=%d", queueIssues),
+		}
+		g.appendModeHistory(change)
 		g.state.Mode = newMode
 	}
 
 	g.updateCadences()
 
-	return g.agentsDueForKick()
+	due := g.agentsDueForKick()
+
+	snap := EvalSnapshot{
+		Timestamp:     time.Now(),
+		Mode:          g.state.Mode,
+		QueueIssues:   queueIssues,
+		QueuePRs:      queuePRs,
+		QueueHold:     queueHold,
+		SLAViolations: slaViolations,
+		AgentsKicked:  due,
+	}
+	g.appendEvalHistory(snap)
+
+	return due
 }
 
 func (g *Governor) computeMode(queueDepth int) Mode {
@@ -181,7 +250,9 @@ func (g *Governor) agentsDueForKick() []string {
 func (g *Governor) RecordKick(agentName string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.state.LastKick[agentName] = time.Now()
+	now := time.Now()
+	g.state.LastKick[agentName] = now
+	g.appendKickHistory(KickRecord{Timestamp: now, Agent: agentName})
 }
 
 func (g *Governor) GetState() State {
@@ -227,4 +298,103 @@ func (g *Governor) FormatStatus() string {
 	s := g.GetState()
 	return fmt.Sprintf("mode=%s issues=%d prs=%d hold=%d sla_violations=%d",
 		s.Mode, s.QueueIssues, s.QueuePRs, s.QueueHold, s.SLAViolations)
+}
+
+func (g *Governor) appendModeHistory(change ModeChange) {
+	if len(g.modeHistory) >= modeHistoryCapacity {
+		g.modeHistory = g.modeHistory[1:]
+	}
+	g.modeHistory = append(g.modeHistory, change)
+}
+
+func (g *Governor) appendEvalHistory(snap EvalSnapshot) {
+	if len(g.evalHistory) >= evalHistoryCapacity {
+		g.evalHistory = g.evalHistory[1:]
+	}
+	g.evalHistory = append(g.evalHistory, snap)
+}
+
+func (g *Governor) appendKickHistory(record KickRecord) {
+	if len(g.kickHistory) >= kickHistoryCapacity {
+		g.kickHistory = g.kickHistory[1:]
+	}
+	g.kickHistory = append(g.kickHistory, record)
+}
+
+func (g *Governor) ModeHistory() []ModeChange {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	result := make([]ModeChange, len(g.modeHistory))
+	copy(result, g.modeHistory)
+	return result
+}
+
+func (g *Governor) EvalHistory() []EvalSnapshot {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	result := make([]EvalSnapshot, len(g.evalHistory))
+	copy(result, g.evalHistory)
+	return result
+}
+
+func (g *Governor) KickHistory() []KickRecord {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	result := make([]KickRecord, len(g.kickHistory))
+	copy(result, g.kickHistory)
+	return result
+}
+
+func (g *Governor) GetBudget() BudgetInfo {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	byAgent := make(map[string]int64, len(g.budget.ByAgent))
+	for k, v := range g.budget.ByAgent {
+		byAgent[k] = v
+	}
+	byModel := make(map[string]int64, len(g.budget.ByModel))
+	for k, v := range g.budget.ByModel {
+		byModel[k] = v
+	}
+	ignored := make([]string, len(g.budget.IgnoredAgents))
+	copy(ignored, g.budget.IgnoredAgents)
+	return BudgetInfo{
+		WeeklyLimit:   g.budget.WeeklyLimit,
+		CurrentSpend:  g.budget.CurrentSpend,
+		ByAgent:       byAgent,
+		ByModel:       byModel,
+		IgnoredAgents: ignored,
+		ResetAt:       g.budget.ResetAt,
+	}
+}
+
+func (g *Governor) UpdateBudget(totalTokens int64, byAgent map[string]int64, byModel map[string]int64) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.budget.CurrentSpend = totalTokens
+	for k, v := range byAgent {
+		g.budget.ByAgent[k] = v
+	}
+	for k, v := range byModel {
+		g.budget.ByModel[k] = v
+	}
+}
+
+func (g *Governor) SetBudgetLimit(limit int64) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.budget.WeeklyLimit = limit
+}
+
+func (g *Governor) SetBudgetIgnored(agents []string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.budget.IgnoredAgents = make([]string, len(agents))
+	copy(g.budget.IgnoredAgents, agents)
+}
+
+func (g *Governor) SetBudgetResetAt(t time.Time) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.budget.ResetAt = t
 }

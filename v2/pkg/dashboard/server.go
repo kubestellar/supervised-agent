@@ -26,6 +26,10 @@ type Server struct {
 	sseClients map[chan []byte]struct{}
 	sseMu      sync.Mutex
 	logger     *slog.Logger
+	mux        *http.ServeMux
+	deps       *Dependencies
+	sidebar    interface{}
+	sidebarMu  sync.RWMutex
 }
 
 type StatusPayload struct {
@@ -55,36 +59,42 @@ type TokenSummary struct {
 const sseRetryMs = 3000
 
 func NewServer(port int, logger *slog.Logger) *Server {
-	return &Server{
+	s := &Server{
 		port:       port,
 		sseClients: make(map[chan []byte]struct{}),
 		logger:     logger,
+		mux:        http.NewServeMux(),
 	}
+	s.registerCoreRoutes()
+	return s
 }
 
 func NewServerWithAuth(port int, authToken string, logger *slog.Logger) *Server {
-	return &Server{
+	s := &Server{
 		port:       port,
 		authToken:  authToken,
 		sseClients: make(map[chan []byte]struct{}),
 		logger:     logger,
+		mux:        http.NewServeMux(),
 	}
+	s.registerCoreRoutes()
+	return s
+}
+
+func (s *Server) registerCoreRoutes() {
+	s.mux.HandleFunc("GET /api/health", s.handleHealth)
+	s.mux.HandleFunc("GET /api/status", s.handleStatus)
+	s.mux.HandleFunc("GET /api/events", s.handleSSE)
 }
 
 func (s *Server) Start() error {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("GET /api/health", s.handleHealth)
-	mux.HandleFunc("GET /api/status", s.handleStatus)
-	mux.HandleFunc("GET /api/events", s.handleSSE)
-
 	staticContent, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		return fmt.Errorf("loading embedded static files: %w", err)
 	}
-	mux.Handle("GET /", http.FileServer(http.FS(staticContent)))
+	s.mux.Handle("GET /", http.FileServer(http.FS(staticContent)))
 
-	handler := s.securityHeaders(mux)
+	handler := s.securityHeaders(s.mux)
 
 	addr := fmt.Sprintf(":%d", s.port)
 	s.logger.Info("dashboard starting", "addr", addr)
@@ -117,11 +127,7 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 }
 
 func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", s.handleHealth)
-	mux.HandleFunc("GET /api/status", s.handleStatus)
-	mux.HandleFunc("GET /api/events", s.handleSSE)
-	return s.securityHeaders(mux)
+	return s.securityHeaders(s.mux)
 }
 
 func (s *Server) UpdateStatus(status *StatusPayload) {

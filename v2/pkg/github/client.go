@@ -316,3 +316,47 @@ func isTracker(title string, labels []string) bool {
 	}
 	return false
 }
+
+type RateLimitInfo struct {
+	Core    RateLimitEntry `json:"core"`
+	Search  RateLimitEntry `json:"search"`
+	GraphQL RateLimitEntry `json:"graphql"`
+}
+
+type RateLimitEntry struct {
+	Limit     int       `json:"limit"`
+	Remaining int       `json:"remaining"`
+	Reset     time.Time `json:"reset"`
+}
+
+func (c *Client) RateLimits(ctx context.Context) (*RateLimitInfo, error) {
+	limits, _, err := c.client.RateLimit.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("fetching rate limits: %w", err)
+	}
+
+	info := &RateLimitInfo{}
+	if limits.Core != nil {
+		info.Core = RateLimitEntry{
+			Limit:     limits.Core.Limit,
+			Remaining: limits.Core.Remaining,
+			Reset:     limits.Core.Reset.Time,
+		}
+	}
+	if limits.Search != nil {
+		info.Search = RateLimitEntry{
+			Limit:     limits.Search.Limit,
+			Remaining: limits.Search.Remaining,
+			Reset:     limits.Search.Reset.Time,
+		}
+	}
+	if limits.GraphQL != nil {
+		info.GraphQL = RateLimitEntry{
+			Limit:     limits.GraphQL.Limit,
+			Remaining: limits.GraphQL.Remaining,
+			Reset:     limits.GraphQL.Reset.Time,
+		}
+	}
+
+	return info, nil
+}

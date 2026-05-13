@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 type SessionEntry struct {
@@ -36,6 +39,69 @@ type AggregateSummary struct {
 	ByModel      map[string]int64          `json:"by_model"`
 	Sessions     []SessionSummary          `json:"sessions"`
 	SessionCount int                       `json:"session_count"`
+}
+
+const defaultScanInterval = 30 * time.Second
+
+type Collector struct {
+	sessionsDir   string
+	detector      func(string) string
+	logger        *slog.Logger
+	mu            sync.RWMutex
+	latest        *AggregateSummary
+	issueCosts    map[string]int64
+	scanInterval  time.Duration
+}
+
+func NewCollector(sessionsDir string, logger *slog.Logger) *Collector {
+	return &Collector{
+		sessionsDir:  sessionsDir,
+		detector:     DefaultAgentDetector,
+		logger:       logger,
+		issueCosts:   make(map[string]int64),
+		scanInterval: defaultScanInterval,
+	}
+}
+
+func (c *Collector) Start(stop <-chan struct{}) {
+	c.scan()
+	ticker := time.NewTicker(c.scanInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			c.scan()
+		}
+	}
+}
+
+func (c *Collector) scan() {
+	agg, err := CollectFromDir(c.sessionsDir, c.detector)
+	if err != nil {
+		c.logger.Warn("token scan failed", "error", err)
+		return
+	}
+	c.mu.Lock()
+	c.latest = agg
+	c.mu.Unlock()
+}
+
+func (c *Collector) Summary() *AggregateSummary {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.latest
+}
+
+func (c *Collector) IssueCosts() map[string]int64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	result := make(map[string]int64, len(c.issueCosts))
+	for k, v := range c.issueCosts {
+		result[k] = v
+	}
+	return result
 }
 
 func CollectFromDir(sessionsDir string, agentDetector func(firstMsg string) string) (*AggregateSummary, error) {

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -20,20 +21,40 @@ const (
 	StateRunning  ProcessState = "running"
 	StateStopped  ProcessState = "stopped"
 	StateFailed   ProcessState = "failed"
+	StatePaused   ProcessState = "paused"
+)
+
+type KickRecord struct {
+	Timestamp time.Time `json:"timestamp"`
+	Agent     string    `json:"agent"`
+	Snippet   string    `json:"snippet"`
+}
+
+const (
+	outputBufferCapacity  = 500
+	kickHistoryCapacity   = 50
 )
 
 type AgentProcess struct {
-	Name      string
-	Config    config.AgentConfig
-	State     ProcessState
-	PID       int
-	StartedAt *time.Time
-	LastKick  *time.Time
-	cmd       *exec.Cmd
-	stdin     io.WriteCloser
-	stdout    io.ReadCloser
-	stderr    io.ReadCloser
-	cancel    context.CancelFunc
+	Name            string
+	Config          config.AgentConfig
+	State           ProcessState
+	PID             int
+	StartedAt       *time.Time
+	LastKick        *time.Time
+	Paused          bool
+	PinnedCLI       string
+	PinnedModel     string
+	ModelOverride   string
+	BackendOverride string
+	RestartCount    int
+	OutputBuffer    *RingBuffer
+	KickHistory     []KickRecord
+	cmd             *exec.Cmd
+	stdin           io.WriteCloser
+	stdout          io.ReadCloser
+	stderr          io.ReadCloser
+	cancel          context.CancelFunc
 }
 
 type Manager struct {
@@ -50,9 +71,10 @@ func NewManager(agents map[string]config.AgentConfig, logger *slog.Logger) *Mana
 
 	for name, cfg := range agents {
 		m.agents[name] = &AgentProcess{
-			Name:   name,
-			Config: cfg,
-			State:  StateStopped,
+			Name:         name,
+			Config:       cfg,
+			State:        StateStopped,
+			OutputBuffer: NewRingBuffer(outputBufferCapacity),
 		}
 	}
 
@@ -72,7 +94,21 @@ func (m *Manager) Start(ctx context.Context, name string) error {
 		return fmt.Errorf("agent %s already running", name)
 	}
 
-	binary, err := backendBinary(agent.Config.Backend)
+	if agent.Paused {
+		agent.State = StatePaused
+		return nil
+	}
+
+	return m.startLocked(ctx, agent)
+}
+
+func (m *Manager) startLocked(ctx context.Context, agent *AgentProcess) error {
+	backend := agent.Config.Backend
+	if agent.BackendOverride != "" {
+		backend = agent.BackendOverride
+	}
+
+	binary, err := backendBinary(backend)
 	if err != nil {
 		return err
 	}
@@ -84,24 +120,24 @@ func (m *Manager) Start(ctx context.Context, name string) error {
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()
-		return fmt.Errorf("creating stdin pipe for %s: %w", name, err)
+		return fmt.Errorf("creating stdin pipe for %s: %w", agent.Name, err)
 	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
-		return fmt.Errorf("creating stdout pipe for %s: %w", name, err)
+		return fmt.Errorf("creating stdout pipe for %s: %w", agent.Name, err)
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		cancel()
-		return fmt.Errorf("creating stderr pipe for %s: %w", name, err)
+		return fmt.Errorf("creating stderr pipe for %s: %w", agent.Name, err)
 	}
 
 	if err := cmd.Start(); err != nil {
 		cancel()
-		return fmt.Errorf("starting agent %s: %w", name, err)
+		return fmt.Errorf("starting agent %s: %w", agent.Name, err)
 	}
 
 	now := time.Now()
@@ -114,11 +150,22 @@ func (m *Manager) Start(ctx context.Context, name string) error {
 	agent.PID = cmd.Process.Pid
 	agent.StartedAt = &now
 
-	m.logger.Info("agent started", "name", name, "pid", agent.PID, "backend", agent.Config.Backend)
+	m.logger.Info("agent started", "name", agent.Name, "pid", agent.PID, "backend", backend)
 
-	go m.watchProcess(name, cmd, agentCtx)
+	go m.captureOutput(agent.Name, stdout, agent.OutputBuffer)
+	go m.captureOutput(agent.Name, stderr, agent.OutputBuffer)
+	go m.watchProcess(agent.Name, cmd, agentCtx)
 
 	return nil
+}
+
+func (m *Manager) captureOutput(name string, r io.ReadCloser, buf *RingBuffer) {
+	scanner := bufio.NewScanner(r)
+	const maxOutputLineBytes = 64 * 1024
+	scanner.Buffer(make([]byte, 0, maxOutputLineBytes), maxOutputLineBytes)
+	for scanner.Scan() {
+		buf.Write(scanner.Text())
+	}
 }
 
 func (m *Manager) Stop(name string) error {
@@ -171,6 +218,18 @@ func (m *Manager) SendKick(name string, message string) error {
 
 	now := time.Now()
 	agent.LastKick = &now
+
+	snippet := message
+	const maxSnippetLen = 120
+	if len(snippet) > maxSnippetLen {
+		snippet = snippet[:maxSnippetLen] + "..."
+	}
+	record := KickRecord{Timestamp: now, Agent: name, Snippet: snippet}
+	if len(agent.KickHistory) >= kickHistoryCapacity {
+		agent.KickHistory = agent.KickHistory[1:]
+	}
+	agent.KickHistory = append(agent.KickHistory, record)
+
 	m.logger.Info("kick sent", "name", name, "message_len", len(message))
 
 	return nil
@@ -203,13 +262,22 @@ func (m *Manager) AllStatuses() map[string]*AgentProcess {
 }
 
 func (a *AgentProcess) snapshot() AgentProcess {
+	history := make([]KickRecord, len(a.KickHistory))
+	copy(history, a.KickHistory)
 	return AgentProcess{
-		Name:      a.Name,
-		Config:    a.Config,
-		State:     a.State,
-		PID:       a.PID,
-		StartedAt: a.StartedAt,
-		LastKick:  a.LastKick,
+		Name:            a.Name,
+		Config:          a.Config,
+		State:           a.State,
+		PID:             a.PID,
+		StartedAt:       a.StartedAt,
+		LastKick:        a.LastKick,
+		Paused:          a.Paused,
+		PinnedCLI:       a.PinnedCLI,
+		PinnedModel:     a.PinnedModel,
+		ModelOverride:   a.ModelOverride,
+		BackendOverride: a.BackendOverride,
+		RestartCount:    a.RestartCount,
+		KickHistory:     history,
 	}
 }
 
@@ -252,9 +320,198 @@ func backendBinary(backend string) (string, error) {
 }
 
 func agentEnvVars(agent *AgentProcess) []string {
+	model := agent.Config.Model
+	if agent.ModelOverride != "" {
+		model = agent.ModelOverride
+	}
+	backend := agent.Config.Backend
+	if agent.BackendOverride != "" {
+		backend = agent.BackendOverride
+	}
 	return []string{
 		fmt.Sprintf("HIVE_AGENT=%s", agent.Name),
-		fmt.Sprintf("HIVE_BACKEND=%s", agent.Config.Backend),
-		fmt.Sprintf("HIVE_MODEL=%s", agent.Config.Model),
+		fmt.Sprintf("HIVE_BACKEND=%s", backend),
+		fmt.Sprintf("HIVE_MODEL=%s", model),
 	}
+}
+
+func (m *Manager) Pause(name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return fmt.Errorf("agent %s not found", name)
+	}
+
+	agent.Paused = true
+	if agent.State == StateRunning && agent.cancel != nil {
+		agent.cancel()
+	}
+	agent.State = StatePaused
+	m.logger.Info("agent paused", "name", name)
+	return nil
+}
+
+func (m *Manager) Resume(ctx context.Context, name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return fmt.Errorf("agent %s not found", name)
+	}
+
+	agent.Paused = false
+	if agent.State == StatePaused {
+		return m.startLocked(ctx, agent)
+	}
+	return nil
+}
+
+func (m *Manager) Restart(ctx context.Context, name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return fmt.Errorf("agent %s not found", name)
+	}
+
+	if agent.State == StateRunning && agent.cancel != nil {
+		agent.cancel()
+	}
+
+	agent.RestartCount++
+	m.logger.Info("agent restarting", "name", name, "restart_count", agent.RestartCount)
+	return m.startLocked(ctx, agent)
+}
+
+func (m *Manager) ResetRestartCount(name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return fmt.Errorf("agent %s not found", name)
+	}
+
+	agent.RestartCount = 0
+	return nil
+}
+
+func (m *Manager) PinCLI(name, version string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return fmt.Errorf("agent %s not found", name)
+	}
+
+	agent.PinnedCLI = version
+	m.logger.Info("agent CLI pinned", "name", name, "version", version)
+	return nil
+}
+
+func (m *Manager) UnpinCLI(name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return fmt.Errorf("agent %s not found", name)
+	}
+
+	agent.PinnedCLI = ""
+	m.logger.Info("agent CLI unpinned", "name", name)
+	return nil
+}
+
+func (m *Manager) PinModel(name, model string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return fmt.Errorf("agent %s not found", name)
+	}
+
+	agent.PinnedModel = model
+	agent.ModelOverride = model
+	m.logger.Info("agent model pinned", "name", name, "model", model)
+	return nil
+}
+
+func (m *Manager) UnpinModel(name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return fmt.Errorf("agent %s not found", name)
+	}
+
+	agent.PinnedModel = ""
+	m.logger.Info("agent model unpinned", "name", name)
+	return nil
+}
+
+func (m *Manager) SetModelOverride(name, model string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return fmt.Errorf("agent %s not found", name)
+	}
+
+	if agent.PinnedModel != "" {
+		return fmt.Errorf("agent %s model is pinned to %s", name, agent.PinnedModel)
+	}
+
+	agent.ModelOverride = model
+	m.logger.Info("agent model override set", "name", name, "model", model)
+	return nil
+}
+
+func (m *Manager) SetBackendOverride(name, backend string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return fmt.Errorf("agent %s not found", name)
+	}
+
+	agent.BackendOverride = backend
+	m.logger.Info("agent backend override set", "name", name, "backend", backend)
+	return nil
+}
+
+func (m *Manager) GetOutput(name string, lines int) ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return nil, fmt.Errorf("agent %s not found", name)
+	}
+
+	if agent.OutputBuffer == nil {
+		return nil, nil
+	}
+
+	return agent.OutputBuffer.Last(lines), nil
+}
+
+func (m *Manager) IsPaused(name string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return false
+	}
+	return agent.Paused
 }

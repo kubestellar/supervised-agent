@@ -16,7 +16,17 @@ ENV HOME=/data/home
 RUN mkdir -p /data/home
 
 COPY --from=builder /hive /usr/local/bin/hive
-EXPOSE 3001
+
+COPY v2/proxy/ /opt/hive/proxy/
+RUN cd /opt/hive/proxy && npm install --omit=dev
+
+COPY dashboard/index.html /opt/hive/proxy/public/
+
+EXPOSE 3001 3002
 VOLUME ["/data", "/secrets"]
-ENTRYPOINT ["hive"]
+
+COPY v2/deploy/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["entrypoint.sh"]
 CMD ["--config", "/etc/hive/hive.yaml"]

@@ -228,7 +228,7 @@ func expandEnvVars(s string) string {
 }
 
 const (
-	defaultDashboardPort    = 3001
+	defaultDashboardPort    = 3002
 	defaultEvalIntervalS    = 300
 	defaultPollIntervalMins = 5
 )
