@@ -1,13 +1,17 @@
 package scheduler
 
 import (
+	"encoding/json"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/kubestellar/hive/v2/pkg/config"
 	"github.com/kubestellar/hive/v2/pkg/github"
+	"github.com/kubestellar/hive/v2/pkg/knowledge"
 )
 
 // ---------------------------------------------------------------------------
@@ -934,5 +938,224 @@ func TestBuildReposSection_BareRepoGetsPrefixed(t *testing.T) {
 	}
 	if !strings.Contains(section, "my-org/full-repo") {
 		t.Errorf("full repo should appear as-is: %q", section)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge primer wiring
+// ---------------------------------------------------------------------------
+
+func TestExtractKeywords_FromLabels(t *testing.T) {
+	issues := []github.Issue{
+		makeIssue("org/repo", 1, "Test", "", 5, []string{"typescript", "react", "kind/bug"}, false),
+	}
+	kw := extractKeywords(issues)
+	found := map[string]bool{}
+	for _, k := range kw {
+		found[k] = true
+	}
+	if !found["typescript"] {
+		t.Error("expected typescript keyword")
+	}
+	if !found["react"] {
+		t.Error("expected react keyword")
+	}
+	if found["kind/bug"] {
+		t.Error("kind/bug should be filtered as noise label")
+	}
+}
+
+func TestExtractKeywords_Dedup(t *testing.T) {
+	issues := []github.Issue{
+		makeIssue("org/repo", 1, "A", "", 5, []string{"react"}, false),
+		makeIssue("org/repo", 2, "B", "", 5, []string{"react"}, false),
+	}
+	kw := extractKeywords(issues)
+	count := 0
+	for _, k := range kw {
+		if k == "react" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected 1 'react', got %d", count)
+	}
+}
+
+func TestExtractKeywords_IncludesTier(t *testing.T) {
+	issues := []github.Issue{
+		{Repo: "org/repo", Number: 1, ComplexityTier: "Complex"},
+	}
+	kw := extractKeywords(issues)
+	found := false
+	for _, k := range kw {
+		if k == "complex" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected 'complex' from ComplexityTier, got %v", kw)
+	}
+}
+
+func TestExtractKeywords_EmptyIssues(t *testing.T) {
+	kw := extractKeywords(nil)
+	if len(kw) != 0 {
+		t.Errorf("expected 0 keywords, got %d", len(kw))
+	}
+}
+
+func TestIsNoiseLabel(t *testing.T) {
+	if !isNoiseLabel("kind/bug") {
+		t.Error("kind/bug should be noise")
+	}
+	if !isNoiseLabel("triage/accepted") {
+		t.Error("triage/accepted should be noise")
+	}
+	if isNoiseLabel("typescript") {
+		t.Error("typescript should not be noise")
+	}
+}
+
+func TestPrimeKnowledge_NilPrimer(t *testing.T) {
+	s := newScheduler()
+	issues := []github.Issue{
+		makeIssue("org/repo", 1, "test", "", 5, []string{"react"}, false),
+	}
+	result := s.primeKnowledge(issues)
+	if result != "" {
+		t.Errorf("expected empty result with nil primer, got: %s", result)
+	}
+}
+
+func TestPrimeKnowledge_EmptyIssues(t *testing.T) {
+	s := newScheduler()
+	result := s.primeKnowledge(nil)
+	if result != "" {
+		t.Errorf("expected empty result with nil issues, got: %s", result)
+	}
+}
+
+func TestPrimeKnowledge_WithMockWiki(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := struct {
+			Total   int `json:"total"`
+			Results []struct {
+				Slug       string   `json:"slug"`
+				Title      string   `json:"title"`
+				Score      float64  `json:"score"`
+				Type       string   `json:"type"`
+				Status     string   `json:"status"`
+				Confidence float64  `json:"confidence"`
+				Tags       []string `json:"tags"`
+				Snippet    string   `json:"snippet"`
+			} `json:"results"`
+		}{
+			Total: 1,
+			Results: []struct {
+				Slug       string   `json:"slug"`
+				Title      string   `json:"title"`
+				Score      float64  `json:"score"`
+				Type       string   `json:"type"`
+				Status     string   `json:"status"`
+				Confidence float64  `json:"confidence"`
+				Tags       []string `json:"tags"`
+				Snippet    string   `json:"snippet"`
+			}{
+				{
+					Slug:       "guard-join",
+					Title:      "Guard .join() against undefined",
+					Score:      0.95,
+					Type:       "gotcha",
+					Status:     "verified",
+					Confidence: 0.95,
+					Tags:       []string{"typescript"},
+					Snippet:    "Always use (arr || []).join()",
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	layers := []knowledge.LayerConfig{
+		{Type: knowledge.LayerProject, URL: srv.URL, Shared: true},
+	}
+	primerCfg := knowledge.PrimerConfig{
+		MaxFacts: 25,
+		Priority: []string{"regression", "gotcha", "pattern"},
+	}
+	primer := knowledge.NewPrimer(layers, primerCfg, logger)
+
+	s := newScheduler()
+	s.SetPrimer(primer)
+
+	issues := []github.Issue{
+		makeIssue("org/repo", 1, "Fix hook crash", "", 5, []string{"typescript", "hooks"}, false),
+	}
+
+	result := s.primeKnowledge(issues)
+	if result == "" {
+		t.Fatal("expected non-empty knowledge section")
+	}
+	if !strings.Contains(result, "Guard .join()") {
+		t.Errorf("expected knowledge section to contain fact title, got:\n%s", result)
+	}
+	if !strings.Contains(result, "Relevant Knowledge") {
+		t.Errorf("expected knowledge section header, got:\n%s", result)
+	}
+}
+
+func TestScannerMessage_IncludesKnowledgeWhenPrimerSet(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := struct {
+			Total   int `json:"total"`
+			Results []struct {
+				Slug       string   `json:"slug"`
+				Title      string   `json:"title"`
+				Score      float64  `json:"score"`
+				Type       string   `json:"type"`
+				Confidence float64  `json:"confidence"`
+				Snippet    string   `json:"snippet"`
+			} `json:"results"`
+		}{
+			Total: 1,
+			Results: []struct {
+				Slug       string   `json:"slug"`
+				Title      string   `json:"title"`
+				Score      float64  `json:"score"`
+				Type       string   `json:"type"`
+				Confidence float64  `json:"confidence"`
+				Snippet    string   `json:"snippet"`
+			}{
+				{Slug: "test-fact", Title: "Test fact", Type: "pattern", Confidence: 0.9, Snippet: "Use test factories"},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	layers := []knowledge.LayerConfig{
+		{Type: knowledge.LayerProject, URL: srv.URL, Shared: true},
+	}
+	primer := knowledge.NewPrimer(layers, knowledge.PrimerConfig{MaxFacts: 25}, logger)
+
+	s := newScheduler()
+	s.SetPrimer(primer)
+
+	issues := []github.Issue{
+		makeIssue("org/repo", 1, "Fix tests", "scanner", 5, []string{"testing"}, false),
+	}
+	msg := s.buildScannerMessage(issues, emptyActionable())
+
+	if !strings.Contains(msg, "Relevant Knowledge") {
+		t.Errorf("expected Relevant Knowledge section in scanner message:\n%s", msg)
+	}
+	if !strings.Contains(msg, "Test fact") {
+		t.Errorf("expected fact title in scanner message:\n%s", msg)
 	}
 }

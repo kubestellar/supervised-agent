@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -8,10 +9,12 @@ import (
 	"github.com/kubestellar/hive/v2/pkg/classify"
 	"github.com/kubestellar/hive/v2/pkg/config"
 	"github.com/kubestellar/hive/v2/pkg/github"
+	"github.com/kubestellar/hive/v2/pkg/knowledge"
 )
 
 type Scheduler struct {
 	cfg    *config.Config
+	primer *knowledge.Primer
 	logger *slog.Logger
 }
 
@@ -20,6 +23,12 @@ func New(cfg *config.Config, logger *slog.Logger) *Scheduler {
 		cfg:    cfg,
 		logger: logger,
 	}
+}
+
+// SetPrimer attaches a knowledge primer to the scheduler. When set, kick
+// messages include relevant facts from the wiki layers.
+func (s *Scheduler) SetPrimer(p *knowledge.Primer) {
+	s.primer = p
 }
 
 type KickMessage struct {
@@ -126,6 +135,11 @@ func (s *Scheduler) buildScannerMessage(issues []github.Issue, actionable *githu
 		b.WriteString(fmt.Sprintf("\n⚠️ %d SLA VIOLATIONS (>30 min)\n", actionable.Issues.SLAViolations))
 	}
 
+	if knowledgeSection := s.primeKnowledge(scannerIssues); knowledgeSection != "" {
+		b.WriteString("\n")
+		b.WriteString(knowledgeSection)
+	}
+
 	b.WriteString("\n⛔ NEVER run gh issue list, gh pr list, gh search issues — the work list above is your ONLY source.\n")
 	b.WriteString("⛔ MERGE DISCIPLINE: Only merge PRs listed in MERGE-READY section. Never merge a PR you created this session.\n")
 	b.WriteString("WORKFLOW: Dispatch sub-agents for each issue (Agent tool). 4-6 agents IN PARALLEL.\n")
@@ -164,6 +178,11 @@ func (s *Scheduler) buildGenericMessage(agentName string, issues []github.Issue,
 		}
 	}
 
+	if knowledgeSection := s.primeKnowledge(agentIssues); knowledgeSection != "" {
+		b.WriteString("\n")
+		b.WriteString(knowledgeSection)
+	}
+
 	return b.String()
 }
 
@@ -175,4 +194,68 @@ func filterByLane(issues []github.Issue, lane string) []github.Issue {
 		}
 	}
 	return result
+}
+
+const maxIssuesToPrime = 5
+
+// primeKnowledge queries the wiki layers for facts relevant to the given issues
+// and returns a formatted section for injection into the kick message.
+func (s *Scheduler) primeKnowledge(issues []github.Issue) string {
+	if s.primer == nil || len(issues) == 0 {
+		return ""
+	}
+
+	limit := maxIssuesToPrime
+	if len(issues) < limit {
+		limit = len(issues)
+	}
+
+	keywords := extractKeywords(issues[:limit])
+	if len(keywords) == 0 {
+		return ""
+	}
+
+	primed := s.primer.Prime(context.Background(), nil, keywords)
+	return primed.FormatForPrompt()
+}
+
+// extractKeywords pulls searchable terms from issue labels and titles.
+func extractKeywords(issues []github.Issue) []string {
+	seen := make(map[string]bool)
+	var keywords []string
+
+	for _, issue := range issues {
+		for _, label := range issue.Labels {
+			lower := strings.ToLower(label)
+			if !seen[lower] && !isNoiseLabel(lower) {
+				keywords = append(keywords, lower)
+				seen[lower] = true
+			}
+		}
+
+		if issue.ComplexityTier != "" {
+			tier := strings.ToLower(issue.ComplexityTier)
+			if !seen[tier] {
+				keywords = append(keywords, tier)
+				seen[tier] = true
+			}
+		}
+	}
+
+	return keywords
+}
+
+var noiseLabels = map[string]bool{
+	"triage/accepted":   true,
+	"ai-fix-requested":  true,
+	"kind/bug":          true,
+	"kind/feature":      true,
+	"kind/task":         true,
+	"good first issue":  true,
+	"help wanted":       true,
+	"hold":              true,
+}
+
+func isNoiseLabel(label string) bool {
+	return noiseLabels[label]
 }
