@@ -427,8 +427,8 @@ func (c *Client) GetFileContent(ctx context.Context, owner, repo, path string) (
 // SearchPRCount searches GitHub for outreach PRs by author on repos outside the org.
 // Filters to outreach-related PRs (awesome-lists, adopters, install missions).
 // state is "open" or "merged".
-func (c *Client) SearchPRCount(ctx context.Context, author, excludeOrg, state string) (int, error) {
-	qualifier := fmt.Sprintf("type:pr author:%s -org:%s -user:%s", author, excludeOrg, author)
+func (c *Client) SearchPRCount(ctx context.Context, author, org, state string) (int, error) {
+	qualifier := fmt.Sprintf("type:pr author:%s org:%s", author, org)
 	if state == "merged" {
 		qualifier += " is:merged"
 	} else {

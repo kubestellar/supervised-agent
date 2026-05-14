@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -247,7 +248,7 @@ func main() {
 	ticker := time.NewTicker(time.Duration(cfg.Governor.EvalIntervalS) * time.Second)
 	defer ticker.Stop()
 
-	const cliStartupDelay = 30 * time.Second
+	const cliStartupDelay = 10 * time.Second
 	logger.Info("waiting for CLI startup before first eval", "delay", cliStartupDelay)
 	select {
 	case <-time.After(cliStartupDelay):
@@ -394,5 +395,13 @@ func persistState(agentMgr *agent.Manager, gov *governor.Governor, path string, 
 
 	if err := snapshot.SaveState(path, state, logger); err != nil {
 		logger.Error("failed to persist state", "error", err)
+	}
+
+	history := gov.EvalHistory()
+	if len(history) > 0 {
+		historyData, err := json.Marshal(history)
+		if err == nil {
+			_ = os.WriteFile("/data/sparkline-history.json", historyData, 0o644)
+		}
 	}
 }

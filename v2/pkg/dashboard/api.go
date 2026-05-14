@@ -16,6 +16,7 @@ import (
 
 func (s *Server) RegisterAPI(deps *Dependencies) {
 	s.deps = deps
+	s.loadSidebarFromDisk()
 
 	s.mux.HandleFunc("GET /api/version", s.handleVersion)
 	s.mux.HandleFunc("GET /api/config", s.handleConfig)
@@ -1360,7 +1361,31 @@ func (s *Server) handleSidebarSet(w http.ResponseWriter, r *http.Request) {
 	s.sidebar = body
 	s.sidebarMu.Unlock()
 
+	s.saveSidebarToDisk(body)
 	okResponse(w, map[string]string{"status": "updated"})
+}
+
+const sidebarFile = "/data/sidebar.json"
+
+func (s *Server) loadSidebarFromDisk() {
+	data, err := os.ReadFile(sidebarFile)
+	if err != nil {
+		return
+	}
+	var sb interface{}
+	if json.Unmarshal(data, &sb) == nil {
+		s.sidebarMu.Lock()
+		s.sidebar = sb
+		s.sidebarMu.Unlock()
+	}
+}
+
+func (s *Server) saveSidebarToDisk(sb interface{}) {
+	data, err := json.Marshal(sb)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(sidebarFile, data, 0o644)
 }
 
 func (s *Server) handleBackends(w http.ResponseWriter, r *http.Request) {
