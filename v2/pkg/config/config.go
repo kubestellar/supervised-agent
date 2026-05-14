@@ -77,6 +77,7 @@ type AgentConfig struct {
 	RestartStrategy string `yaml:"restart_strategy"`
 	LaunchCmd       string `yaml:"launch_cmd"`
 	DisplayName     string `yaml:"display_name"`
+	Description     string `yaml:"description"`
 	// clearOnKickSet tracks whether YAML explicitly set clear_on_kick to false
 	clearOnKickSet bool
 }

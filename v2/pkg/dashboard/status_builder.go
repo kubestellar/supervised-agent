@@ -119,6 +119,8 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, go
 
 		a := FrontendAgent{
 			Name:          name,
+			DisplayName:   proc.Config.DisplayName,
+			Description:   proc.Config.Description,
 			Session:       name,
 			State:         string(proc.State),
 			Busy:          busy,

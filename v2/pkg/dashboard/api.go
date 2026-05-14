@@ -741,6 +741,7 @@ func (s *Server) handleAgentConfigGet(w http.ResponseWriter, r *http.Request) {
 		"general": map[string]interface{}{
 			"launchCmd":       launchCmd,
 			"displayName":     displayName,
+			"description":     agentCfg.Description,
 			"cliPinned":       agentCfg.CLIPinned || proc.PinnedCLI != "",
 			"cliPinValue":     cli,
 			"staleTimeout":    staleTimeout,
@@ -911,25 +912,52 @@ func (s *Server) handleAgentConfigGeneral(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var body struct {
-		Enabled     *bool  `json:"enabled"`
-		ClearOnKick *bool  `json:"clear_on_kick"`
-		BeadsDir    string `json:"beads_dir"`
-	}
+	var body map[string]interface{}
 	if err := decodeBody(r, &body); err != nil {
 		jsonError(w, "invalid body", http.StatusBadRequest)
 		return
 	}
 
 	agentCfg := s.deps.Config.Agents[name]
-	if body.Enabled != nil {
-		agentCfg.Enabled = *body.Enabled
+	if v, ok := body["enabled"]; ok {
+		if b, ok := v.(bool); ok {
+			agentCfg.Enabled = b
+		}
 	}
-	if body.ClearOnKick != nil {
-		agentCfg.ClearOnKick = *body.ClearOnKick
+	if v, ok := body["clearOnKick"]; ok {
+		if b, ok := v.(bool); ok {
+			agentCfg.ClearOnKick = b
+		}
 	}
-	if body.BeadsDir != "" {
-		agentCfg.BeadsDir = body.BeadsDir
+	if v, ok := body["displayName"]; ok {
+		if s, ok := v.(string); ok {
+			agentCfg.DisplayName = s
+		}
+	}
+	if v, ok := body["description"]; ok {
+		if s, ok := v.(string); ok {
+			agentCfg.Description = s
+		}
+	}
+	if v, ok := body["launchCmd"]; ok {
+		if s, ok := v.(string); ok {
+			agentCfg.LaunchCmd = s
+		}
+	}
+	if v, ok := body["staleTimeout"]; ok {
+		if f, ok := v.(float64); ok {
+			agentCfg.StaleTimeout = int(f)
+		}
+	}
+	if v, ok := body["restartStrategy"]; ok {
+		if s, ok := v.(string); ok {
+			agentCfg.RestartStrategy = s
+		}
+	}
+	if v, ok := body["cliPinned"]; ok {
+		if b, ok := v.(bool); ok {
+			agentCfg.CLIPinned = b
+		}
 	}
 	s.deps.Config.Agents[name] = agentCfg
 

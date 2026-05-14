@@ -1933,6 +1933,10 @@
       architect: 'Designs RFCs for cross-cutting changes — produces phase plans that scanner implements',
       outreach: 'Drives CNCF ecosystem engagement — ADOPTERS outreach, ACMM badges, community PRs',
       strategist: 'Nous agent — 3-stage protocol: (1) guardian fast-fail check, (2) experiment design via run_campaign.py, (3) principle sync and recommendations',
+      analyst: 'Monitors GA4 analytics, usage funnels, and adoption metrics — produces weekly digests and flags anomalies',
+      guardian: 'Fast-fail safety gate — pre-screens agent outputs for security, compliance, and policy violations before execution',
+      'sec-check': 'Security scanner — audits dependencies, container images, secrets exposure, and SBOM/SLSA compliance',
+      tester: 'Runs automated test suites — Playwright e2e, unit tests, coverage gates, and nightly regression checks',
     };
 
     // ── Sidebar layout: drag-and-drop + groups ──────────────────────────────
@@ -1975,7 +1979,7 @@
       const isRunning = a.busy === 'working' && !isPaused && !isOff && !isStopped;
       const dotCls = isStopped ? 'stopped' : isPaused ? 'paused' : isOff ? 'off' : isRunning ? 'running' : 'idle';
       const isActive = _ocSelectedAgent === a.name ? ' active' : '';
-      const agentDesc = AGENT_DESCRIPTIONS[a.name] || '';
+      const agentDesc = a.description || AGENT_DESCRIPTIONS[a.name] || '';
       const label = a.displayName || a.name;
       return `<a class="oc-nav-item${isActive}" data-agent-nav="${esc(a.name)}" draggable="true" data-action="ocSelectAgent" data-agent="${esc(a.name)}" title="${esc(agentDesc)}"><span class="oc-agent-dot ${dotCls}"></span> ${esc(label)}<span class="oc-nav-actions"><button data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Configure">⚙</button><button class="oc-nav-delete" data-action="deleteAgentFromConfig" data-agent="${esc(a.name)}" title="Delete">✕</button></span></a>`;
     }
@@ -4403,7 +4407,9 @@ function burnAreaChart() {
 
     // ── Knowledge modals and actions ──
 
-    function kbShowModal(title, bodyHtml) {
+    function kbShowModal(title, bodyHtml, opts) {
+      const dialogWidth = (opts && opts.width) || '600px';
+      const dialogMaxHeight = (opts && opts.maxHeight) || '';
       let overlay = document.getElementById('kb-modal-overlay');
       if (!overlay) {
         overlay = document.createElement('div');
@@ -4412,7 +4418,8 @@ function burnAreaChart() {
         document.body.appendChild(overlay);
       }
       overlay.style.display = 'flex';
-      overlay.innerHTML = `<div class="nous-config-dialog" style="width:600px">
+      const mhStyle = dialogMaxHeight ? ';max-height:' + dialogMaxHeight + ';overflow-y:auto' : '';
+      overlay.innerHTML = `<div class="nous-config-dialog" style="width:${dialogWidth}${mhStyle}">
         <h2 style="font-size:1rem;margin:0 0 16px 0;display:flex;align-items:center;justify-content:space-between">
           ${title}
           <button onclick="kbCloseModal()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted)">✕</button>
@@ -4613,7 +4620,7 @@ function burnAreaChart() {
             </label>
           </div>
           <label style="font-size:0.78rem;color:var(--muted)">Content
-            <textarea id="kb-import-content" rows="12" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.78rem;font-family:'SF Mono','Fira Code',monospace;resize:vertical" placeholder="# Guard .join() against undefined\n\nAlways use (arr || []).join(',')..."></textarea>
+            <textarea id="kb-import-content" rows="24" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:0.78rem;font-family:'SF Mono','Fira Code',monospace;resize:vertical;min-height:320px" placeholder="# Guard .join() against undefined\n\nAlways use (arr || []).join(',')..."></textarea>
           </label>
           <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
             <label style="font-size:0.72rem;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:4px">
@@ -4626,7 +4633,7 @@ function burnAreaChart() {
             <button class="nous-btn" style="background:var(--accent);color:white" onclick="kbSubmitImport()">Import</button>
           </div>
         </div>`;
-      kbShowModal('📥 Import Facts', html);
+      kbShowModal('📥 Import Facts', html, { width: 'min(700px, 80vw)', maxHeight: '85vh' });
     }
 
     function kbLoadFile(input) {
@@ -5629,6 +5636,10 @@ function burnAreaChart() {
           <input type="text" id="cfg-agent-name" value="${esc(g.displayName || agentName)}" placeholder="e.g. Scanner, Code Reviewer" onchange="updateConfigAgentName(this.value);markDirty('general','displayName',this.value)">
         </div>
         <div class="config-field">
+          <label>Description <span class="config-info">i<span class="config-tooltip">A short description of what this agent is responsible for. Shown as hover text on the sidebar agent list. Helps operators and collaborators understand each agent's role at a glance.</span></span></label>
+          <textarea id="cfg-agent-desc" rows="2" style="width:100%;resize:vertical;font-size:0.75rem" placeholder="e.g. Triages GitHub issues and dispatches fix agents" onchange="markDirty('general','description',this.value)">${esc(g.description || AGENT_DESCRIPTIONS[agentName] || '')}</textarea>
+        </div>
+        <div class="config-field">
           <label>Launch Command <span class="config-info">i<span class="config-tooltip">The shell command used to start this agent's CLI process. Typically uses agent-launch.sh with a --backend flag. Changing the CLI Pin Value will auto-update the binary path here.</span></span></label>
           <input type="text" id="cfg-launch-cmd" value="${esc(g.launchCmd || '')}" onchange="markDirty('general','launchCmd',this.value)">
         </div>
@@ -5836,7 +5847,7 @@ function burnAreaChart() {
             <input type="text" id="cfg-hive-id" value="${esc(currentId)}" placeholder="hive-xxxxxxxx" style="flex:1">
             <button onclick="saveHiveId()" style="font-size:0.75rem;padding:6px 14px;background:var(--green);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">Save</button>
           </div>
-          <span style="font-size:0.65rem;color:var(--muted);margin-top:4px;display:block">Format: hive-XXXXXXXX (8 hex chars). Changes take effect immediately.</span>
+          <span style="font-size:0.65rem;color:var(--muted);margin-top:4px;display:block">Format: hive-adjective-noun (e.g. hive-bold-hawk). Changes take effect immediately.</span>
         </div>`;
     }
 

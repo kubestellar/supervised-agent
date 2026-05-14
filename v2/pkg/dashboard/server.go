@@ -55,6 +55,8 @@ type StatusPayload struct {
 
 type FrontendAgent struct {
 	Name             string `json:"name"`
+	DisplayName      string `json:"displayName,omitempty"`
+	Description      string `json:"description,omitempty"`
 	Session          string `json:"session"`
 	State            string `json:"state"`
 	Busy             string `json:"busy"`
