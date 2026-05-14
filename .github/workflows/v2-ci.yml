@@ -85,5 +85,8 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}/hive:nightly
             ghcr.io/${{ github.repository }}/hive:nightly-${{ github.sha }}
+          build-args: |
+            GIT_HASH=${{ github.sha }}
+            GIT_SHORT=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
