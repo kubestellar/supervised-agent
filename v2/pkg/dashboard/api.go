@@ -1168,9 +1168,47 @@ func (s *Server) handleAgentPrompt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	template := s.loadPromptTemplate(name)
+
+	// Build source control paths so operators know where to edit
+	const agentDir = "examples/kubestellar/agents"
+	const repoBaseURL = "https://github.com/kubestellar/hive/blob/v2/"
+
+	sourceFiles := []map[string]string{}
+
+	// Policy file (CLAUDE.md)
+	claudeMdPath := s.findAgentCLAUDEMd(name)
+	policyRelPath := fmt.Sprintf("%s/%s-CLAUDE.md", agentDir, name)
+	if claudeMdPath != "" {
+		sourceFiles = append(sourceFiles, map[string]string{
+			"label": "Policy",
+			"path":  policyRelPath,
+			"url":   repoBaseURL + policyRelPath,
+			"note":  "",
+		})
+	}
+
+	// Env file (kick prompt)
+	envRelPath := fmt.Sprintf("%s/%s.env", agentDir, name)
+	sourceFiles = append(sourceFiles, map[string]string{
+		"label": "Kick prompt",
+		"path":  envRelPath,
+		"url":   repoBaseURL + envRelPath,
+		"note":  "AGENT_LOOP_PROMPT",
+	})
+
+	// Kick script
+	kickScriptPath := "bin/kick-agents.sh"
+	sourceFiles = append(sourceFiles, map[string]string{
+		"label": "Kick script",
+		"path":  kickScriptPath,
+		"url":   repoBaseURL + kickScriptPath,
+		"note":  "template rendering",
+	})
+
 	jsonResponse(w, map[string]interface{}{
-		"agent":  name,
-		"prompt": template,
+		"agent":       name,
+		"prompt":      template,
+		"sourceFiles": sourceFiles,
 	})
 }
 

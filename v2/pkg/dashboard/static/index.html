@@ -5805,18 +5805,34 @@ function burnAreaChart() {
     function renderAgentPromptTemplate() {
       const agentName = _configState.agent;
       const elId = 'prompt-template-content';
+      const srcId = 'prompt-source-files';
       if (agentName) {
         fetch(`/api/config/agent/${agentName}/prompt`)
           .then(r => r.json())
           .then(data => {
             const el = document.getElementById(elId);
             if (el) el.textContent = data.prompt || '(no template found in kick-agents.sh)';
+            const srcEl = document.getElementById(srcId);
+            if (srcEl && data.sourceFiles && data.sourceFiles.length > 0) {
+              let items = '';
+              for (const sf of data.sourceFiles) {
+                const note = sf.note ? ' <span style="color:var(--muted)">(' + esc(sf.note) + ')</span>' : '';
+                items += '<li style="margin:3px 0"><strong style="color:var(--muted);min-width:80px;display:inline-block">' + esc(sf.label) + ':</strong> '
+                  + '<a href="' + esc(sf.url) + '" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:none;font-family:\'SF Mono\',\'Cascadia Code\',monospace;font-size:0.75rem">' + esc(sf.path) + '</a>'
+                  + note + '</li>';
+              }
+              srcEl.innerHTML = '<ul style="list-style:none;padding:0;margin:0">' + items + '</ul>';
+              srcEl.style.display = 'block';
+            }
           })
           .catch(() => {});
       }
       return `
         <div style="display:flex;flex-direction:column;height:100%">
-        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:8px;flex-shrink:0">Prompt template from <code>kick-agents.sh</code>. Variable names shown as <code>⟨name⟩</code> — these are filled by the deterministic pipeline at kick time. Edit the template in kick-agents.sh or hive-project.yaml.</p>
+        <div id="${srcId}" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:10px;flex-shrink:0">
+          <div style="font-size:0.7rem;font-weight:600;color:var(--text);margin-bottom:6px">Source files <span style="font-weight:400;color:var(--muted)">(edit these on your fork)</span></div>
+        </div>
+        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:8px;flex-shrink:0">Prompt template from <code>kick-agents.sh</code>. Variable names shown as <code>⟨name⟩</code> — these are filled by the deterministic pipeline at kick time.</p>
         <pre class="config-pre config-pre-fill" id="${elId}">${esc('Loading template…')}</pre>
         </div>`;
     }
