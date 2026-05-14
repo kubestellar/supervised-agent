@@ -174,6 +174,17 @@ governor:
       - "out of extra usage"
       - "extra usage.*resets"
       - "resets [0-9]+(:[0-9]+)?[aApP][mM]"
+    login_patterns:
+      - "please log in"
+      - "authentication required"
+      - "not logged in"
+      - "login required"
+      - "session expired"
+      - "token expired"
+      - "unauthorized.*401"
+      - "gh auth login"
+      - "claude login"
+      - "copilot auth"
     ttl_seconds: 900
     pullback_seconds: 900
   health:
@@ -201,4 +212,4 @@ dashboard:
 data:
   metrics_dir: /data/metrics
   logs_dir: /data/logs
-  claude_sessions_dir: /root/.claude/projects
+  claude_sessions_dir: /data/home/.claude/projects

@@ -113,6 +113,7 @@ type LabelsConfig struct {
 type SensingConfig struct {
 	GHRatePatterns     []string `yaml:"gh_rate_patterns"`
 	CLIExcludePatterns []string `yaml:"cli_exclude_patterns"`
+	LoginPatterns      []string `yaml:"login_patterns"`
 	TTLSeconds         int      `yaml:"ttl_seconds"`
 	PullbackSeconds    int      `yaml:"pullback_seconds"`
 }
@@ -378,7 +379,7 @@ func (c *Config) applyDefaults() {
 		c.Data.LogsDir = "/data/logs"
 	}
 	if c.Data.ClaudeSessionsDir == "" {
-		c.Data.ClaudeSessionsDir = "/root/.claude/projects"
+		c.Data.ClaudeSessionsDir = "/data/home/.claude/projects"
 	}
 	for name, agent := range c.Agents {
 		if agent.BeadsDir == "" {
@@ -417,6 +418,20 @@ func (c *Config) applyDefaults() {
 			"out of extra usage",
 			"extra usage.*resets",
 			"resets [0-9]+(:[0-9]+)?[aApP][mM]",
+		}
+	}
+	if len(c.Governor.Sensing.LoginPatterns) == 0 {
+		c.Governor.Sensing.LoginPatterns = []string{
+			"please log in",
+			"authentication required",
+			"not logged in",
+			"login required",
+			"session expired",
+			"token expired",
+			"unauthorized.*401",
+			"gh auth login",
+			"claude login",
+			"copilot auth",
 		}
 	}
 	if c.Governor.Sensing.TTLSeconds == 0 {

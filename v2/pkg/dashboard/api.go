@@ -1211,6 +1211,7 @@ func (s *Server) handleGovernorConfigGet(w http.ResponseWriter, r *http.Request)
 		"sensing": map[string]interface{}{
 			"ghRatePatterns":     cfg.Governor.Sensing.GHRatePatterns,
 			"cliExcludePatterns": cfg.Governor.Sensing.CLIExcludePatterns,
+			"loginPatterns":      cfg.Governor.Sensing.LoginPatterns,
 			"ttlSeconds":         cfg.Governor.Sensing.TTLSeconds,
 			"pullbackSeconds":    cfg.Governor.Sensing.PullbackSeconds,
 		},
@@ -1219,7 +1220,12 @@ func (s *Server) handleGovernorConfigGet(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleGovernorSensing(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		EvalIntervalS int `json:"eval_interval_s"`
+		EvalIntervalS      int      `json:"eval_interval_s"`
+		GHRatePatterns     []string `json:"ghRatePatterns"`
+		CLIExcludePatterns []string `json:"cliExcludePatterns"`
+		LoginPatterns      []string `json:"loginPatterns"`
+		TTLSeconds         int      `json:"ttlSeconds"`
+		PullbackSeconds    int      `json:"pullbackSeconds"`
 	}
 	if err := decodeBody(r, &body); err != nil {
 		jsonError(w, "invalid body", http.StatusBadRequest)
@@ -1229,7 +1235,23 @@ func (s *Server) handleGovernorSensing(w http.ResponseWriter, r *http.Request) {
 	if body.EvalIntervalS > 0 {
 		s.deps.Config.Governor.EvalIntervalS = body.EvalIntervalS
 	}
+	if body.GHRatePatterns != nil {
+		s.deps.Config.Governor.Sensing.GHRatePatterns = body.GHRatePatterns
+	}
+	if body.CLIExcludePatterns != nil {
+		s.deps.Config.Governor.Sensing.CLIExcludePatterns = body.CLIExcludePatterns
+	}
+	if body.LoginPatterns != nil {
+		s.deps.Config.Governor.Sensing.LoginPatterns = body.LoginPatterns
+	}
+	if body.TTLSeconds > 0 {
+		s.deps.Config.Governor.Sensing.TTLSeconds = body.TTLSeconds
+	}
+	if body.PullbackSeconds > 0 {
+		s.deps.Config.Governor.Sensing.PullbackSeconds = body.PullbackSeconds
+	}
 
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated"})
 }
 

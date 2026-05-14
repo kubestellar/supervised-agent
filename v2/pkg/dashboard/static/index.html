@@ -1082,7 +1082,7 @@
     }
     .config-info:hover { background: var(--blue); color: #fff; }
     .config-info .config-tooltip {
-      display: none; position: absolute; bottom: calc(100% + 6px); left: 50%;
+      display: none; position: absolute; top: calc(100% + 6px); left: 50%;
       transform: translateX(-50%); background: var(--bg); border: 1px solid var(--border);
       border-radius: 6px; padding: 8px 10px; font-size: 0.7rem; font-weight: 400;
       color: var(--text); white-space: normal; width: 240px; z-index: 10001;
@@ -6173,8 +6173,11 @@ function burnAreaChart() {
       const cliPatterns = (s.cliExcludePatterns || []).map((p, i) =>
         `<div class="config-list-item"><code style="font-size:0.7rem">${esc(p)}</code><button class="remove-item" onclick="removeSensingItem('cliExcludePatterns',${i})">✕</button></div>`
       ).join('');
+      const loginPatterns = (s.loginPatterns || []).map((p, i) =>
+        `<div class="config-list-item"><code style="font-size:0.7rem">${esc(p)}</code><button class="remove-item" onclick="removeSensingItem('loginPatterns',${i})">✕</button></div>`
+      ).join('');
       return `
-        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Patterns scanned in agent tmux panes to detect rate limits and CLI usage caps.</p>
+        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Patterns scanned in agent tmux panes to detect rate limits, CLI usage caps, and login requirements.</p>
         <div style="margin-bottom:18px">
           <label style="font-weight:600;font-size:0.78rem;display:block;margin-bottom:6px">GitHub API Rate Limit Patterns <span style="font-weight:400;color:var(--muted)">(regex, matched against pane output)</span></label>
           <div class="config-list">
@@ -6192,6 +6195,16 @@ function burnAreaChart() {
             <div class="config-list-add">
               <input type="text" id="cfg-sensing-cli-input" placeholder="e.g. out of extra usage" style="font-family:monospace;font-size:0.75rem" title="Lines matching these patterns are filtered out before rate-limit detection. Use for known false positives in agent output.">
               <button onclick="addSensingItem('cliExcludePatterns','cfg-sensing-cli-input')" title="Add this pattern to the CLI exclusion list">+ Add</button>
+            </div>
+          </div>
+        </div>
+        <div style="margin-bottom:18px">
+          <label style="font-weight:600;font-size:0.78rem;display:block;margin-bottom:6px">Login Required Patterns <span style="font-weight:400;color:var(--muted)">(regex, matched against pane output &mdash; pauses agent and notifies)</span></label>
+          <div class="config-list">
+            ${loginPatterns || '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">No login patterns configured</div>'}
+            <div class="config-list-add">
+              <input type="text" id="cfg-sensing-login-input" placeholder="e.g. session expired" style="font-family:monospace;font-size:0.75rem" title="Regular expression to match against agent tmux pane output. When matched, the agent is paused and a notification is sent prompting you to log in.">
+              <button onclick="addSensingItem('loginPatterns','cfg-sensing-login-input')" title="Add this regex pattern to the login detection list">+ Add</button>
             </div>
           </div>
         </div>

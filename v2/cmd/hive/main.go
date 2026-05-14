@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -387,6 +388,9 @@ func runEvalCycle(
 		}
 	}
 
+	// Scan agent panes for login-required patterns and pause + notify if detected
+	scanForLoginRequired(cfg, agentMgr, notifier, logger)
+
 	agentStatuses := agentMgr.AllStatuses()
 
 	dashSrv.UpdateStatus(dashboard.BuildFrontendStatus(
@@ -401,6 +405,95 @@ func runEvalCycle(
 		ctx,
 		metricsCollector,
 	))
+}
+
+// loginCommandForBackend returns the login instruction for a given CLI backend.
+func loginCommandForBackend(backend string) string {
+	switch backend {
+	case "claude":
+		return "Run: claude login"
+	case "copilot":
+		return "Run: copilot auth login"
+	case "gemini":
+		return "Run: gemini auth login"
+	case "goose":
+		return "Run: goose auth login"
+	default:
+		return "Run the login command for " + backend
+	}
+}
+
+// scanForLoginRequired checks each running agent's tmux pane output for login-required
+// patterns. When a match is found, the agent is paused and a notification is sent.
+func scanForLoginRequired(
+	cfg *config.Config,
+	agentMgr *agent.Manager,
+	notifier *notify.Notifier,
+	logger *slog.Logger,
+) {
+	patterns := cfg.Governor.Sensing.LoginPatterns
+	if len(patterns) == 0 {
+		return
+	}
+
+	// Compile regex patterns, skipping any that fail to compile
+	compiled := make([]*regexp.Regexp, 0, len(patterns))
+	for _, p := range patterns {
+		re, err := regexp.Compile("(?i)" + p)
+		if err != nil {
+			logger.Warn("invalid login pattern regex", "pattern", p, "error", err)
+			continue
+		}
+		compiled = append(compiled, re)
+	}
+	if len(compiled) == 0 {
+		return
+	}
+
+	const paneLines = 50 // number of recent lines to scan
+	statuses := agentMgr.AllStatuses()
+	for name, proc := range statuses {
+		if proc.State != "running" {
+			continue
+		}
+
+		output, err := agentMgr.GetOutput(name, paneLines)
+		if err != nil || len(output) == 0 {
+			continue
+		}
+
+		joined := strings.Join(output, "\n")
+		for _, re := range compiled {
+			if re.MatchString(joined) {
+				logger.Warn("login required detected",
+					"agent", name,
+					"pattern", re.String(),
+				)
+
+				// Pause the agent instead of restarting
+				if pauseErr := agentMgr.Pause(name); pauseErr != nil {
+					logger.Warn("failed to pause agent after login detection",
+						"agent", name, "error", pauseErr)
+				}
+
+				// Determine the login instruction based on the agent's backend
+				backend := cfg.Agents[name].Backend
+				loginCmd := loginCommandForBackend(backend)
+
+				notifier.Send(
+					fmt.Sprintf("\U0001F511 Login required: %s", name),
+					fmt.Sprintf(
+						"Agent '%s' needs authentication. Open the agent's terminal "+
+							"(tmux attach -t hive-%s) and run the login command for the CLI (%s). %s",
+						name, name, backend, loginCmd,
+					),
+					notify.PriorityHigh,
+				)
+
+				break // one match per agent is enough
+			}
+		}
+	}
 }
 
 func convertKnowledgeLayers(cfgLayers []config.KnowledgeLayer) []knowledge.LayerConfig {

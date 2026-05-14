@@ -61,11 +61,15 @@ type AggregateSummary struct {
 	SessionCount   int                          `json:"session_count"`
 }
 
-const defaultScanInterval = 30 * time.Second
+const (
+	defaultScanInterval  = 30 * time.Second
+	defaultPersistPath   = "/data/token-summary.json"
+)
 
 type Collector struct {
 	sessionsDir        string
 	claudeSessionsDir  string
+	persistPath        string
 	detector           func(string) string
 	logger             *slog.Logger
 	mu                 sync.RWMutex
@@ -75,13 +79,21 @@ type Collector struct {
 }
 
 func NewCollector(sessionsDir string, logger *slog.Logger) *Collector {
-	return &Collector{
+	c := &Collector{
 		sessionsDir:  sessionsDir,
+		persistPath:  defaultPersistPath,
 		detector:     DefaultAgentDetector,
 		logger:       logger,
 		issueCosts:   make(map[string]int64),
 		scanInterval: defaultScanInterval,
 	}
+	c.loadSnapshot()
+	return c
+}
+
+// SetPersistPath overrides the default path for the token summary snapshot.
+func (c *Collector) SetPersistPath(path string) {
+	c.persistPath = path
 }
 
 // SetClaudeSessionsDir configures the collector to also scan Claude Code's
@@ -129,6 +141,8 @@ func (c *Collector) scan() {
 	c.mu.Lock()
 	c.latest = agg
 	c.mu.Unlock()
+
+	c.saveSnapshot(agg)
 }
 
 func (c *Collector) Summary() *AggregateSummary {
@@ -263,6 +277,54 @@ func parseSessionFile(path string, agentDetector func(string) string) (*SessionS
 	}
 
 	return summary, nil
+}
+
+func (c *Collector) loadSnapshot() {
+	if c.persistPath == "" {
+		return
+	}
+	data, err := os.ReadFile(c.persistPath)
+	if err != nil {
+		return
+	}
+	var agg AggregateSummary
+	if err := json.Unmarshal(data, &agg); err != nil {
+		c.logger.Warn("failed to parse token snapshot", "path", c.persistPath, "error", err)
+		return
+	}
+	if agg.ByAgent == nil {
+		agg.ByAgent = make(map[string]int64)
+	}
+	if agg.ByModel == nil {
+		agg.ByModel = make(map[string]int64)
+	}
+	if agg.ByAgentDetail == nil {
+		agg.ByAgentDetail = make(map[string]*AgentModelBucket)
+	}
+	if agg.ByModelDetail == nil {
+		agg.ByModelDetail = make(map[string]*AgentModelBucket)
+	}
+	c.latest = &agg
+	c.logger.Info("loaded token snapshot", "path", c.persistPath, "sessions", agg.SessionCount, "total_tokens", agg.TotalTokens)
+}
+
+func (c *Collector) saveSnapshot(agg *AggregateSummary) {
+	if c.persistPath == "" || agg == nil {
+		return
+	}
+	data, err := json.Marshal(agg)
+	if err != nil {
+		c.logger.Warn("failed to marshal token snapshot", "error", err)
+		return
+	}
+	tmpPath := c.persistPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		c.logger.Warn("failed to write token snapshot", "path", tmpPath, "error", err)
+		return
+	}
+	if err := os.Rename(tmpPath, c.persistPath); err != nil {
+		c.logger.Warn("failed to rename token snapshot", "error", err)
+	}
 }
 
 func DefaultAgentDetector(firstMsg string) string {

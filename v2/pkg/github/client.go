@@ -28,6 +28,7 @@ type Issue struct {
 	Assignees      []string  `json:"assignees"`
 	CreatedAt      time.Time `json:"created_at"`
 	AgeMinutes     int       `json:"age_minutes"`
+	URL            string    `json:"url"`
 	IsTracker      bool      `json:"is_tracker"`
 	ComplexityTier string    `json:"complexity_tier,omitempty"`
 	ModelRec       string    `json:"model_recommendation,omitempty"`
@@ -235,6 +236,7 @@ func (c *Client) fetchIssues(ctx context.Context, repo string, now time.Time) (a
 			Assignees:  extractAssignees(issue.Assignees),
 			CreatedAt:  issue.GetCreatedAt().Time,
 			AgeMinutes: ageMinutes,
+			URL:        issue.GetHTMLURL(),
 			IsTracker:  isTracker(issue.GetTitle(), labels),
 		})
 	}
