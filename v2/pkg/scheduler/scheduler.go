@@ -64,6 +64,8 @@ func (s *Scheduler) substituteTemplate(template string, actionable *github.Actio
 	primaryRepo := s.cfg.Project.PrimaryRepo
 	fullPrimaryRepo := fmt.Sprintf("%s/%s", s.cfg.Project.Org, primaryRepo)
 
+	agentList, agentRoles := s.buildAgentListAndRoles()
+
 	replacer := strings.NewReplacer(
 		"${AGENT_NAME}", agentName,
 		"${TIMESTAMP}", now.Format("1/2 3:04 PM MST"),
@@ -82,6 +84,9 @@ func (s *Scheduler) substituteTemplate(template string, actionable *github.Actio
 		"${PROJECT_REPOS_LIST}", reposList,
 		"${PROJECT_HOMEBREW_REPO}", fmt.Sprintf("%s/homebrew-tap", s.cfg.Project.Org),
 		"${HIVE_REPO}", fmt.Sprintf("%s/hive", s.cfg.Project.Org),
+		"${AGENT_LIST}", agentList,
+		"${AGENT_ROLES}", agentRoles,
+		"${ENABLED_AGENTS}", agentList,
 	)
 	return replacer.Replace(template)
 }
@@ -123,6 +128,32 @@ func (s *Scheduler) formatPRList(actionable *github.ActionableResult) string {
 		b.WriteString(fmt.Sprintf("  %s#%d by @%s %s\n", pr.Repo, pr.Number, pr.Author, title))
 	}
 	return b.String()
+}
+
+// buildAgentListAndRoles returns a comma-separated agent list and a formatted
+// role table derived from the config, so templates stay correct when agents
+// are added, removed, or renamed.
+func (s *Scheduler) buildAgentListAndRoles() (list, roles string) {
+	var names []string
+	for name := range s.cfg.EnabledAgents() {
+		names = append(names, name)
+	}
+	list = strings.Join(names, ", ")
+
+	var b strings.Builder
+	for name, agentCfg := range s.cfg.EnabledAgents() {
+		displayName := agentCfg.DisplayName
+		if displayName == "" {
+			displayName = name
+		}
+		model := agentCfg.Model
+		if model == "" {
+			model = "default"
+		}
+		b.WriteString(fmt.Sprintf("  - %s (%s, %s)\n", displayName, name, model))
+	}
+	roles = b.String()
+	return list, roles
 }
 
 type KickMessage struct {
