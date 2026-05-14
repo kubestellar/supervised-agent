@@ -1610,6 +1610,34 @@
   </aside>
 
   <script>
+    // Wrap fetch to inject auth token for mutation requests (PUT/POST/PATCH/DELETE)
+    (function() {
+      let _authToken = null;
+      const _origFetch = window.fetch;
+      window.fetch = async function(url, opts) {
+        opts = opts || {};
+        const method = (opts.method || 'GET').toUpperCase();
+        if (['PUT','POST','PATCH','DELETE'].includes(method)) {
+          if (!_authToken) {
+            try {
+              const r = await _origFetch('/api/auth/token');
+              const d = await r.json();
+              _authToken = d.token;
+            } catch {}
+          }
+          if (_authToken && _authToken !== '(not set)') {
+            opts.headers = opts.headers || {};
+            if (opts.headers instanceof Headers) {
+              if (!opts.headers.has('Authorization')) opts.headers.set('Authorization', 'Bearer ' + _authToken);
+            } else {
+              if (!opts.headers['Authorization']) opts.headers['Authorization'] = 'Bearer ' + _authToken;
+            }
+          }
+        }
+        return _origFetch(url, opts);
+      };
+    })();
+
     /** Escape HTML special characters to prevent XSS in innerHTML sinks */
     function escapeHtml(str) {
       if (typeof str !== 'string') return '';
