@@ -1356,6 +1356,7 @@ func (s *Server) handleGovernorThresholds(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated"})
 }
 
@@ -1368,19 +1369,33 @@ func (s *Server) handleGovernorLabels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.deps.Config.Governor.Labels.Exempt = body.Labels
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated"})
 }
 
 func (s *Server) handleGovernorBudget(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		WeeklyLimit int64 `json:"weekly_limit"`
+		TotalTokens int64 `json:"totalTokens"`
+		PeriodDays  int   `json:"periodDays"`
+		CriticalPct int   `json:"criticalPct"`
 	}
 	if err := decodeBody(r, &body); err != nil {
 		jsonError(w, "invalid body", http.StatusBadRequest)
 		return
 	}
 
-	s.deps.Governor.SetBudgetLimit(body.WeeklyLimit)
+	if body.TotalTokens > 0 {
+		s.deps.Config.Governor.Budget.TotalTokens = body.TotalTokens
+		s.deps.Governor.SetBudgetLimit(body.TotalTokens)
+	}
+	if body.PeriodDays > 0 {
+		s.deps.Config.Governor.Budget.PeriodDays = body.PeriodDays
+	}
+	if body.CriticalPct > 0 {
+		s.deps.Config.Governor.Budget.CriticalPct = body.CriticalPct
+	}
+
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated"})
 }
 
@@ -1407,6 +1422,7 @@ func (s *Server) handleGovernorNotifications(w http.ResponseWriter, r *http.Requ
 		}
 		s.deps.Config.Notifications.Discord.Webhook = body.DiscordWebhook
 	}
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated"})
 }
 
@@ -1427,6 +1443,7 @@ func (s *Server) handleGovernorHealth(w http.ResponseWriter, r *http.Request) {
 		s.deps.Config.Governor.Health.RestartCooldown = body.RestartCooldown
 	}
 	s.deps.Config.Governor.Health.ModelLock = body.ModelLock
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated"})
 }
 
@@ -1494,7 +1511,7 @@ func (s *Server) handleGovernorRepos(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.deps.Config.Project.Repos = stripped
-	s.refreshAfterMutation()
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated"})
 }
 

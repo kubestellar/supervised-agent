@@ -6229,12 +6229,12 @@ function burnAreaChart() {
     function renderGovBudget(b) {
       return `
         <div class="config-field-row">
-          <div class="config-field"><label>Total Tokens <span class="config-info">i<span class="config-tooltip">Maximum token budget for the period. When usage approaches this limit, the governor will downgrade models or skip low-priority kicks. Set to 0 to disable budget tracking.</span></span></label><input type="number" value="${b.totalTokens || 0}" onchange="markDirty('budget','totalTokens',this.value)"></div>
-          <div class="config-field"><label>Period (days) <span class="config-info">i<span class="config-tooltip">Rolling window length in days for token budget accounting. Default is 7 (weekly). The budget resets at the end of each period.</span></span></label><input type="number" value="${b.periodDays || 7}" onchange="markDirty('budget','periodDays',this.value)"></div>
+          <div class="config-field"><label>Total Tokens <span class="config-info">i<span class="config-tooltip">Maximum token budget for the period. When usage approaches this limit, the governor will downgrade models or skip low-priority kicks. Set to 0 to disable budget tracking.</span></span></label><input type="number" value="${b.totalTokens || 0}" onchange="markDirty('budget','totalTokens',Number(this.value))"></div>
+          <div class="config-field"><label>Period (days) <span class="config-info">i<span class="config-tooltip">Rolling window length in days for token budget accounting. Default is 7 (weekly). The budget resets at the end of each period.</span></span></label><input type="number" value="${b.periodDays || 7}" onchange="markDirty('budget','periodDays',Number(this.value))"></div>
         </div>
         <div class="config-field">
           <label>Critical Percent <span class="config-info">i<span class="config-tooltip">When token usage exceeds this percentage of the total budget, the governor enters budget-critical mode: downgrading models to cheaper alternatives and potentially skipping non-essential kicks. Default is 90%.</span></span></label>
-          <input type="number" value="${b.criticalPct || 90}" onchange="markDirty('budget','criticalPct',this.value)">
+          <input type="number" value="${b.criticalPct || 90}" onchange="markDirty('budget','criticalPct',Number(this.value))">
         </div>`;
     }
 
@@ -6365,8 +6365,8 @@ function burnAreaChart() {
     function renderGovHealth(h) {
       return `
         <div class="config-field-row">
-          <div class="config-field"><label>Healthcheck Interval (sec) <span class="config-info">i<span class="config-tooltip">How often the governor checks each agent's tmux session for liveness (responding to prompts, no crash indicators). Default is 300 seconds (5 minutes).</span></span></label><input type="number" value="${h.healthcheckInterval || 300}" onchange="markDirty('health','healthcheckInterval',this.value)"></div>
-          <div class="config-field"><label>Restart Cooldown (sec) <span class="config-info">i<span class="config-tooltip">Minimum time between restart attempts for the same agent. Prevents restart loops when an agent keeps crashing. Default is 60 seconds.</span></span></label><input type="number" value="${h.restartCooldown || 60}" onchange="markDirty('health','restartCooldown',this.value)"></div>
+          <div class="config-field"><label>Healthcheck Interval (sec) <span class="config-info">i<span class="config-tooltip">How often the governor checks each agent's tmux session for liveness (responding to prompts, no crash indicators). Default is 300 seconds (5 minutes).</span></span></label><input type="number" value="${h.healthcheckInterval || 300}" onchange="markDirty('health','healthcheckInterval',Number(this.value))"></div>
+          <div class="config-field"><label>Restart Cooldown (sec) <span class="config-info">i<span class="config-tooltip">Minimum time between restart attempts for the same agent. Prevents restart loops when an agent keeps crashing. Default is 60 seconds.</span></span></label><input type="number" value="${h.restartCooldown || 60}" onchange="markDirty('health','restartCooldown',Number(this.value))"></div>
         </div>
         <div class="config-toggle">
           <div class="config-toggle-switch ${h.modelLock ? 'on' : ''}" data-action="toggleConfigSwitch" data-section="health" data-key="modelLock"></div>
