@@ -5752,6 +5752,7 @@ function burnAreaChart() {
             govIssues: data.governor?.issues || 0,
             govPrs: data.governor?.prs || 0,
             govTotal: (data.governor?.issues || 0) + (data.governor?.prs || 0),
+            govHold: data.hold?.total || 0,
             govActive: data.governor?.active ? 1 : 0,
             beadsWorkers: Math.max(data.beads?.workers ?? 0, 0),
             beadsSupervisor: Math.max(data.beads?.supervisor ?? 0, 0),
