@@ -314,9 +314,6 @@ func runEvalCycle(
 		if cadence.Paused && !proc.Paused {
 			_ = agentMgr.Pause(name)
 			logger.Info("governor paused agent", "agent", name, "mode", govState.Mode)
-		} else if !cadence.Paused && proc.Paused {
-			_ = agentMgr.Resume(ctx, name)
-			logger.Info("governor resumed agent", "agent", name, "mode", govState.Mode)
 		}
 	}
 
