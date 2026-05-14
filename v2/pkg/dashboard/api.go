@@ -1609,7 +1609,7 @@ func (s *Server) handleKnowledgeToggle(w http.ResponseWriter, r *http.Request) {
 		s.deps.Knowledge = nil
 	}
 
-	s.refreshAfterMutation()
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated", "enabled": fmt.Sprintf("%v", body.Enabled)})
 }
 

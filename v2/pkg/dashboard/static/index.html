@@ -4222,15 +4222,23 @@ function burnAreaChart() {
     async function toggleKnowledge(enabled) {
       try {
         await fetch('/api/knowledge/enabled', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({enabled}) });
+        if (enabled) _kbSetupView = 'none';
+        if (!enabled) _kbSetupView = 'choose';
         await fetchKnowledgeStats();
       } catch (e) { console.error('toggle knowledge failed', e); }
     }
 
+    let _kbInitialLoad = true;
     async function fetchKnowledgeStats() {
       try {
         const r = await fetch('/api/knowledge/stats');
         if (!r.ok) return;
         _kbCache = await r.json();
+        // On initial page load, skip vault setup wizard if knowledge is already enabled
+        if (_kbInitialLoad && _kbCache && _kbCache.enabled) {
+          _kbSetupView = 'none';
+        }
+        _kbInitialLoad = false;
         renderKnowledge();
       } catch (e) { /* knowledge unavailable */ }
     }
