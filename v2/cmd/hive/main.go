@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -132,6 +131,7 @@ func main() {
 	}
 
 	notifier := notify.New(cfg.Notifications, logger)
+	notifier.SetHiveID(cfg.HiveID)
 	agentMgr := agent.NewManager(cfg.EnabledAgents(), logger)
 
 	const statePath = "/data/hive-state.json"
@@ -418,9 +418,6 @@ func convertKnowledgeLayers(cfgLayers []config.KnowledgeLayer) []knowledge.Layer
 // hiveIDFilePath is the persistent file where the Hive ID is stored across restarts.
 const hiveIDFilePath = "/data/hive-id"
 
-// hiveIDRandomBytes is the number of random bytes used to generate a Hive ID (produces 8 hex chars).
-const hiveIDRandomBytes = 4
-
 // loadOrGenerateHiveID reads the Hive ID from disk, or generates and persists a new one.
 func loadOrGenerateHiveID(logger *slog.Logger) string {
 	if data, err := os.ReadFile(hiveIDFilePath); err == nil {
@@ -431,13 +428,7 @@ func loadOrGenerateHiveID(logger *slog.Logger) string {
 		}
 	}
 
-	// Generate a new Hive ID: hive- followed by 8 random hex characters
-	randomBytes := make([]byte, hiveIDRandomBytes)
-	if _, err := rand.Read(randomBytes); err != nil {
-		logger.Error("failed to generate random bytes for hive ID", "error", err)
-		return "hive-00000000"
-	}
-	id := "hive-" + hex.EncodeToString(randomBytes)
+	id := "hive-" + randomName()
 
 	if err := os.WriteFile(hiveIDFilePath, []byte(id+"\n"), 0o644); err != nil {
 		logger.Warn("failed to persist hive ID", "error", err)
@@ -446,6 +437,34 @@ func loadOrGenerateHiveID(logger *slog.Logger) string {
 	}
 
 	return id
+}
+
+// randomName generates a Docker-style adjective-noun name.
+func randomName() string {
+	adjectives := []string{
+		"bold", "calm", "cool", "dark", "deep", "fair", "fast", "keen",
+		"kind", "loud", "mild", "neat", "pale", "pure", "rare", "rich",
+		"safe", "slim", "soft", "tall", "thin", "true", "vast", "warm",
+		"wise", "able", "busy", "easy", "epic", "free", "glad", "good",
+		"idle", "just", "lazy", "lean", "live", "long", "lost", "main",
+		"next", "open", "real", "sure", "wild", "worn", "zero", "blue",
+	}
+	nouns := []string{
+		"ant", "ape", "bat", "bee", "cow", "doe", "eel", "elk",
+		"fox", "gnu", "hen", "jay", "kit", "lark", "moth", "newt",
+		"owl", "pug", "ram", "ray", "seal", "swan", "toad", "wren",
+		"bear", "colt", "crow", "deer", "dove", "duck", "fawn", "frog",
+		"goat", "gull", "hare", "hawk", "ibis", "lynx", "mink", "mole",
+		"orca", "pike", "puma", "slug", "stag", "wolf", "yak", "wasp",
+	}
+
+	buf := make([]byte, 2)
+	if _, err := rand.Read(buf); err != nil {
+		return "bold-ant"
+	}
+	adj := adjectives[int(buf[0])%len(adjectives)]
+	noun := nouns[int(buf[1])%len(nouns)]
+	return adj + "-" + noun
 }
 
 func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.Config, path string, logger *slog.Logger) {

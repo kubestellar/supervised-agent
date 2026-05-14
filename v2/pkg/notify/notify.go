@@ -15,6 +15,7 @@ const httpTimeoutSeconds = 10
 
 type Notifier struct {
 	cfg    config.NotificationsConfig
+	hiveID string
 	client *http.Client
 	logger *slog.Logger
 }
@@ -29,6 +30,11 @@ func New(cfg config.NotificationsConfig, logger *slog.Logger) *Notifier {
 	}
 }
 
+// SetHiveID configures the Hive instance ID to prefix notification titles.
+func (n *Notifier) SetHiveID(id string) {
+	n.hiveID = id
+}
+
 type Priority string
 
 const (
@@ -38,6 +44,9 @@ const (
 )
 
 func (n *Notifier) Send(title, message string, priority Priority) {
+	if n.hiveID != "" {
+		title = fmt.Sprintf("[%s] %s", n.hiveID, title)
+	}
 	if n.cfg.Ntfy != nil {
 		go n.sendNtfy(title, message, priority)
 	}
