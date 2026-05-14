@@ -44,7 +44,8 @@ RUN npm install -g @google/gemini-cli@${GEMINI_CLI_VERSION} && npm cache clean -
 
 # --- Layer 6: GitHub Copilot CLI (frequent updates) ---
 ARG COPILOT_VERSION=latest
-RUN npm install -g @github/copilot@${COPILOT_VERSION} && npm cache clean --force
+RUN npm install -g @github/copilot@${COPILOT_VERSION} && npm cache clean --force || \
+    echo "WARN: GitHub Copilot CLI install failed — skipping"
 
 # --- Layer 7: Claude Code (most frequent updates) ---
 ARG CLAUDE_CODE_VERSION=latest
