@@ -84,6 +84,8 @@ func (s *Scheduler) buildAgentMessage(agentName string, issues []github.Issue, a
 		return s.buildSupervisorMessage(actionable)
 	case "tester":
 		return s.buildTesterMessage(issues, actionable)
+	case "architect":
+		return s.buildArchitectMessage(issues, actionable)
 	default:
 		return s.buildGenericMessage(agentName, issues, actionable)
 	}
@@ -280,6 +282,59 @@ func (s *Scheduler) buildTesterMessage(issues []github.Issue, actionable *github
 	b.WriteString("  4. Each PR must include: test file, required mocks/factories, coverage delta estimate.\n")
 	b.WriteString("  5. Write test_scaffold and pattern facts to the knowledge wiki for future agents.\n")
 	b.WriteString("⛔ NEVER run gh issue list, gh pr list, gh search issues — the work list above is your ONLY source.\n")
+
+	return b.String()
+}
+
+func (s *Scheduler) buildArchitectMessage(issues []github.Issue, actionable *github.ActionableResult) string {
+	var b strings.Builder
+	b.WriteString("[agent:architect] [KICK]\n")
+	b.WriteString("Full architect pass — refactor/perf scan across all repos.\n\n")
+
+	b.WriteString(s.ghAuthInstructions())
+
+	architectIssues := filterByLane(issues, "architect")
+	if len(architectIssues) > 0 {
+		b.WriteString(fmt.Sprintf("ARCHITECTURE-RELATED ISSUES (%d):\n", len(architectIssues)))
+		shown := 0
+		for _, issue := range architectIssues {
+			if shown >= maxIssuesPerKick {
+				break
+			}
+			title := issue.Title
+			const maxTitleLen = 60
+			if len(title) > maxTitleLen {
+				title = title[:maxTitleLen]
+			}
+			b.WriteString(fmt.Sprintf("  %s#%d [%s] %s\n",
+				issue.Repo, issue.Number,
+				strings.Join(issue.Labels, ","),
+				title))
+			shown++
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString(fmt.Sprintf("Queue: %d issues, %d PRs, %d on hold\n\n",
+		actionable.Issues.Count, actionable.PRs.Count, actionable.Hold.Total))
+
+	b.WriteString("YOUR RESPONSIBILITIES:\n")
+	b.WriteString("  1. Scan repos for refactoring opportunities (dead code, duplication, tech debt)\n")
+	b.WriteString("  2. Identify performance bottlenecks and propose improvements\n")
+	b.WriteString("  3. Review architecture decisions and flag inconsistencies\n")
+	b.WriteString("  4. Create RFC-style issues for large changes that need discussion\n")
+	b.WriteString("  5. Open PRs for small refactors that improve maintainability\n\n")
+
+	b.WriteString("AUTONOMY RULES:\n")
+	b.WriteString("  ✅ May do without approval: refactoring PRs, perf improvements, dead code removal\n")
+	b.WriteString("  ❌ Needs human approval: API changes, dependency upgrades, schema migrations\n\n")
+
+	if knowledgeSection := s.primeKnowledge(architectIssues); knowledgeSection != "" {
+		b.WriteString(knowledgeSection)
+		b.WriteString("\n")
+	}
+
+	b.WriteString("Beads: ~/architect-beads\n")
 
 	return b.String()
 }

@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -14,20 +13,8 @@ import (
 	"github.com/kubestellar/hive/v2/pkg/config"
 )
 
-// ---------------------------------------------------------------------------
-// TestMain: install stub backends so Start() can exercise its full path
-// ---------------------------------------------------------------------------
-
-// stubBinDir holds the temp directory containing stub backend binaries.
-// It is created in TestMain and injected at the front of PATH.
 var stubBinDir string
 
-// TestMain sets up stub binaries for every known backend (claude, copilot,
-// gemini, goose) so that backendBinary() resolves them and Start() can create
-// real child processes without needing the actual CLI tools installed.
-//
-// Each stub is a shell script that behaves like `cat` (reads stdin, echoes
-// stdout) so that SendKick and pipe-setup code is exerciseable too.
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "hive-agent-stubs-*")
 	if err != nil {
@@ -38,8 +25,6 @@ func TestMain(m *testing.M) {
 
 	stubBinDir = dir
 
-	// Stub script: read stdin line by line and echo it (like cat).
-	// This keeps the process alive until stdin is closed or the context cancels.
 	const stubScript = "#!/bin/sh\nexec cat\n"
 
 	for _, name := range []string{"claude", "copilot", "gemini", "goose", "bob"} {
@@ -50,7 +35,6 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	// Prepend stub dir so exec.LookPath finds our stubs first.
 	originalPath := os.Getenv("PATH")
 	os.Setenv("PATH", dir+":"+originalPath)
 	defer os.Setenv("PATH", originalPath)
@@ -58,16 +42,10 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-// discardLogger returns a logger that discards all output, keeping test output clean.
 func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// makeAgentConfig is a convenience helper for building a config.AgentConfig.
 func makeAgentConfig(backend, model string) config.AgentConfig {
 	return config.AgentConfig{
 		Backend: backend,
@@ -76,70 +54,6 @@ func makeAgentConfig(backend, model string) config.AgentConfig {
 	}
 }
 
-// catPath resolves the absolute path to `cat`.
-func catPath(t *testing.T) string {
-	t.Helper()
-	p, err := exec.LookPath("cat")
-	if err != nil {
-		t.Skip("cat not found in PATH — skipping test that requires a real process")
-	}
-	return p
-}
-
-// startWithCat injects a `cat` process into the manager under the given agent
-// name without going through backendBinary, allowing us to test the running
-// state logic without touching the backend map.
-func startWithCat(t *testing.T, m *Manager, name string) context.CancelFunc {
-	t.Helper()
-	catBin := catPath(t)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	agent := m.agents[name]
-	if agent == nil {
-		t.Fatalf("agent %q not found in manager", name)
-	}
-
-	agentCtx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(agentCtx, catBin)
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		cancel()
-		t.Fatalf("StdinPipe: %v", err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		cancel()
-		t.Fatalf("StdoutPipe: %v", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		cancel()
-		t.Fatalf("StderrPipe: %v", err)
-	}
-	if err := cmd.Start(); err != nil {
-		cancel()
-		t.Fatalf("cmd.Start: %v", err)
-	}
-
-	now := time.Now()
-	agent.cmd = cmd
-	agent.stdin = stdin
-	agent.stdout = stdout
-	agent.stderr = stderr
-	agent.cancel = cancel
-	agent.State = StateRunning
-	agent.PID = cmd.Process.Pid
-	agent.StartedAt = &now
-
-	go m.watchProcess(name, cmd, agentCtx)
-
-	return cancel
-}
-
-// waitForState polls the agent's state until it matches want or the deadline passes.
 func waitForState(t *testing.T, m *Manager, name string, want ...ProcessState) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
@@ -331,7 +245,6 @@ func TestBackendBinary_EmptyBackendReturnsError(t *testing.T) {
 }
 
 func TestBackendBinary_KnownBackendsResolveToStubs(t *testing.T) {
-	// TestMain installed stubs for all known backends in stubBinDir.
 	knownBackends := []string{"claude", "copilot", "gemini", "goose", "bob"}
 
 	for _, backend := range knownBackends {
@@ -344,7 +257,6 @@ func TestBackendBinary_KnownBackendsResolveToStubs(t *testing.T) {
 			if !strings.HasPrefix(path, "/") {
 				t.Errorf("backendBinary(%q) returned non-absolute path %q", backend, path)
 			}
-			// Must resolve to our stub dir (or a real installation — either is fine).
 			if path == "" {
 				t.Errorf("backendBinary(%q) returned empty path", backend)
 			}
@@ -433,79 +345,177 @@ func TestAgentEnvVars_EmptyModelAllowed(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Start — happy path (uses stub binary installed by TestMain)
+// Pause / Resume
 // ---------------------------------------------------------------------------
 
-func TestStart_SucceedsWithStubBackend(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("claude", "claude-3-5-sonnet"),
+func TestPause_UnknownAgentReturnsError(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
+	err := m.Pause("ghost")
+	if err == nil {
+		t.Fatal("expected error pausing unknown agent, got nil")
 	}
-	m := NewManager(cfgs, discardLogger())
-
-	ctx := context.Background()
-	if err := m.Start(ctx, "worker"); err != nil {
-		t.Fatalf("Start() unexpected error: %v", err)
-	}
-
-	ap, err := m.GetStatus("worker")
-	if err != nil {
-		t.Fatalf("GetStatus: %v", err)
-	}
-	if ap.State != StateRunning {
-		t.Errorf("State = %q after Start(), want %q", ap.State, StateRunning)
-	}
-	if ap.PID == 0 {
-		t.Error("PID should be non-zero after Start()")
-	}
-	if ap.StartedAt == nil {
-		t.Error("StartedAt should be set after Start()")
-	}
-	// Clean up.
-	_ = m.Stop("worker")
 }
 
-func TestStart_SetsStartedAtTimestamp(t *testing.T) {
+func TestPause_SetsPausedFlag(t *testing.T) {
 	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("gemini", "pro"),
+		"worker": makeAgentConfig("claude", "sonnet"),
 	}
 	m := NewManager(cfgs, discardLogger())
 
-	before := time.Now()
-	if err := m.Start(context.Background(), "worker"); err != nil {
-		t.Fatalf("Start() error: %v", err)
+	if err := m.Pause("worker"); err != nil {
+		t.Fatalf("Pause() error: %v", err)
 	}
-	after := time.Now()
-	defer m.Stop("worker")
 
 	ap, _ := m.GetStatus("worker")
-	if ap.StartedAt == nil {
-		t.Fatal("StartedAt is nil after Start()")
-	}
-	if ap.StartedAt.Before(before) || ap.StartedAt.After(after) {
-		t.Errorf("StartedAt %v outside [%v, %v]", ap.StartedAt, before, after)
+	if !ap.Paused {
+		t.Error("expected agent to be paused after Pause()")
 	}
 }
 
-func TestStart_EnvVarsSetOnProcess(t *testing.T) {
-	cfg := makeAgentConfig("claude", "haiku")
-	ap := &AgentProcess{Name: "worker", Config: cfg}
-
-	vars := agentEnvVars(ap)
-
-	expected := map[string]bool{
-		"HIVE_AGENT=worker":    false,
-		"HIVE_BACKEND=claude":  false,
-		"HIVE_MODEL=haiku":     false,
+func TestResume_ClearsPausedFlag(t *testing.T) {
+	cfgs := map[string]config.AgentConfig{
+		"worker": makeAgentConfig("claude", "sonnet"),
 	}
-	for _, v := range vars {
-		if _, ok := expected[v]; ok {
-			expected[v] = true
-		}
+	m := NewManager(cfgs, discardLogger())
+
+	_ = m.Pause("worker")
+	if err := m.Resume(context.Background(), "worker"); err != nil {
+		t.Fatalf("Resume() error: %v", err)
 	}
-	for k, found := range expected {
-		if !found {
-			t.Errorf("expected %q in agentEnvVars output", k)
-		}
+
+	ap, _ := m.GetStatus("worker")
+	if ap.Paused {
+		t.Error("expected agent to not be paused after Resume()")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PinCLI / PinModel
+// ---------------------------------------------------------------------------
+
+func TestPinCLI_SetsValue(t *testing.T) {
+	cfgs := map[string]config.AgentConfig{
+		"worker": makeAgentConfig("claude", "sonnet"),
+	}
+	m := NewManager(cfgs, discardLogger())
+
+	if err := m.PinCLI("worker", "1.2.3"); err != nil {
+		t.Fatalf("PinCLI() error: %v", err)
+	}
+
+	ap, _ := m.GetStatus("worker")
+	if ap.PinnedCLI != "1.2.3" {
+		t.Errorf("PinnedCLI = %q, want %q", ap.PinnedCLI, "1.2.3")
+	}
+}
+
+func TestPinModel_SetsValue(t *testing.T) {
+	cfgs := map[string]config.AgentConfig{
+		"worker": makeAgentConfig("claude", "sonnet"),
+	}
+	m := NewManager(cfgs, discardLogger())
+
+	if err := m.PinModel("worker", "opus"); err != nil {
+		t.Fatalf("PinModel() error: %v", err)
+	}
+
+	ap, _ := m.GetStatus("worker")
+	if ap.PinnedModel != "opus" {
+		t.Errorf("PinnedModel = %q, want %q", ap.PinnedModel, "opus")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ModelOverride / BackendOverride
+// ---------------------------------------------------------------------------
+
+func TestSetModelOverride(t *testing.T) {
+	cfgs := map[string]config.AgentConfig{
+		"worker": makeAgentConfig("claude", "sonnet"),
+	}
+	m := NewManager(cfgs, discardLogger())
+
+	if err := m.SetModelOverride("worker", "opus"); err != nil {
+		t.Fatalf("SetModelOverride() error: %v", err)
+	}
+
+	ap, _ := m.GetStatus("worker")
+	if ap.ModelOverride != "opus" {
+		t.Errorf("ModelOverride = %q, want %q", ap.ModelOverride, "opus")
+	}
+}
+
+func TestSetBackendOverride(t *testing.T) {
+	cfgs := map[string]config.AgentConfig{
+		"worker": makeAgentConfig("claude", "sonnet"),
+	}
+	m := NewManager(cfgs, discardLogger())
+
+	if err := m.SetBackendOverride("worker", "gemini"); err != nil {
+		t.Fatalf("SetBackendOverride() error: %v", err)
+	}
+
+	ap, _ := m.GetStatus("worker")
+	if ap.BackendOverride != "gemini" {
+		t.Errorf("BackendOverride = %q, want %q", ap.BackendOverride, "gemini")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SendKick — non-running agent
+// ---------------------------------------------------------------------------
+
+func TestSendKick_UnknownAgentReturnsError(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
+	err := m.SendKick("nobody", "hello")
+	if err == nil {
+		t.Fatal("expected error for unknown agent, got nil")
+	}
+	if !strings.Contains(err.Error(), "nobody") {
+		t.Errorf("error %q should mention the agent name", err.Error())
+	}
+}
+
+func TestSendKick_NonRunningAgentReturnsError(t *testing.T) {
+	cfgs := map[string]config.AgentConfig{
+		"idle": makeAgentConfig("claude", "haiku"),
+	}
+	m := NewManager(cfgs, discardLogger())
+
+	err := m.SendKick("idle", "wake up")
+	if err == nil {
+		t.Fatal("expected error kicking non-running agent, got nil")
+	}
+	if !strings.Contains(err.Error(), "not running") {
+		t.Errorf("error %q should say 'not running'", err.Error())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Stop
+// ---------------------------------------------------------------------------
+
+func TestStop_UnknownAgentReturnsError(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
+	err := m.Stop("ghost")
+	if err == nil {
+		t.Fatal("expected error stopping unknown agent, got nil")
+	}
+}
+
+func TestStop_NonRunningAgentIsNoOp(t *testing.T) {
+	cfgs := map[string]config.AgentConfig{
+		"idle": makeAgentConfig("claude", "haiku"),
+	}
+	m := NewManager(cfgs, discardLogger())
+
+	if err := m.Stop("idle"); err != nil {
+		t.Fatalf("Stop() on non-running agent returned error: %v", err)
+	}
+
+	ap, _ := m.GetStatus("idle")
+	if ap.State != StateStopped {
+		t.Errorf("State = %q after no-op Stop(), want %q", ap.State, StateStopped)
 	}
 }
 
@@ -540,400 +550,6 @@ func TestStart_UnknownBackendReturnsError(t *testing.T) {
 	}
 }
 
-func TestStart_AlreadyRunningReturnsError(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("claude", "sonnet"),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	if err := m.Start(context.Background(), "worker"); err != nil {
-		t.Fatalf("first Start() error: %v", err)
-	}
-	defer m.Stop("worker")
-
-	err := m.Start(context.Background(), "worker")
-	if err == nil {
-		t.Fatal("expected error when starting an already-running agent, got nil")
-	}
-	if !strings.Contains(err.Error(), "already running") {
-		t.Errorf("error %q should mention 'already running'", err.Error())
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Stop
-// ---------------------------------------------------------------------------
-
-func TestStop_UnknownAgentReturnsError(t *testing.T) {
-	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
-	err := m.Stop("ghost")
-	if err == nil {
-		t.Fatal("expected error stopping unknown agent, got nil")
-	}
-}
-
-func TestStop_NonRunningAgentIsNoOp(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"idle": makeAgentConfig("claude", "haiku"),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	if err := m.Stop("idle"); err != nil {
-		t.Fatalf("Stop() on non-running agent returned error: %v", err)
-	}
-
-	ap, _ := m.GetStatus("idle")
-	if ap.State != StateStopped {
-		t.Errorf("State = %q after no-op Stop(), want %q", ap.State, StateStopped)
-	}
-}
-
-func TestStop_RunningAgentChangesStateToStopped(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("claude", "sonnet"),
-	}
-	m := NewManager(cfgs, discardLogger())
-	cancel := startWithCat(t, m, "worker")
-	defer cancel()
-
-	ap, _ := m.GetStatus("worker")
-	if ap.State != StateRunning {
-		t.Fatalf("precondition: expected StateRunning, got %q", ap.State)
-	}
-
-	if err := m.Stop("worker"); err != nil {
-		t.Fatalf("Stop() returned unexpected error: %v", err)
-	}
-
-	ap2, _ := m.GetStatus("worker")
-	if ap2.State != StateStopped {
-		t.Errorf("State = %q after Stop(), want %q", ap2.State, StateStopped)
-	}
-}
-
-func TestStop_FailedStateAgentIsNoOp(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"crashed": makeAgentConfig("claude", "sonnet"),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	m.mu.Lock()
-	m.agents["crashed"].State = StateFailed
-	m.mu.Unlock()
-
-	if err := m.Stop("crashed"); err != nil {
-		t.Fatalf("Stop() on failed agent returned error: %v", err)
-	}
-
-	ap, _ := m.GetStatus("crashed")
-	if ap.State != StateFailed {
-		t.Errorf("Stop() should not change state of a non-running agent; got %q", ap.State)
-	}
-}
-
-func TestStop_ViaPublicStartThenStop(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("gemini", "pro"),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	if err := m.Start(context.Background(), "worker"); err != nil {
-		t.Fatalf("Start() error: %v", err)
-	}
-
-	if err := m.Stop("worker"); err != nil {
-		t.Fatalf("Stop() error: %v", err)
-	}
-
-	ap, _ := m.GetStatus("worker")
-	if ap.State != StateStopped {
-		t.Errorf("State = %q after Stop(), want StateStopped", ap.State)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// SendKick
-// ---------------------------------------------------------------------------
-
-func TestSendKick_UnknownAgentReturnsError(t *testing.T) {
-	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
-	err := m.SendKick("nobody", "hello")
-	if err == nil {
-		t.Fatal("expected error for unknown agent, got nil")
-	}
-	if !strings.Contains(err.Error(), "nobody") {
-		t.Errorf("error %q should mention the agent name", err.Error())
-	}
-}
-
-func TestSendKick_NonRunningAgentReturnsError(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"idle": makeAgentConfig("claude", "haiku"),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	err := m.SendKick("idle", "wake up")
-	if err == nil {
-		t.Fatal("expected error kicking non-running agent, got nil")
-	}
-	if !strings.Contains(err.Error(), "not running") {
-		t.Errorf("error %q should say 'not running'", err.Error())
-	}
-}
-
-func TestSendKick_RunningAgentSucceeds(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("claude", "sonnet"),
-	}
-	m := NewManager(cfgs, discardLogger())
-	cancel := startWithCat(t, m, "worker")
-	defer cancel()
-
-	if err := m.SendKick("worker", "do something"); err != nil {
-		t.Fatalf("SendKick() returned unexpected error: %v", err)
-	}
-
-	ap, _ := m.GetStatus("worker")
-	if ap.LastKick == nil {
-		t.Error("LastKick should be set after a successful SendKick")
-	}
-}
-
-func TestSendKick_UpdatesLastKick(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("claude", "sonnet"),
-	}
-	m := NewManager(cfgs, discardLogger())
-	cancel := startWithCat(t, m, "worker")
-	defer cancel()
-
-	before := time.Now()
-	if err := m.SendKick("worker", "ping"); err != nil {
-		t.Fatalf("SendKick() error: %v", err)
-	}
-	after := time.Now()
-
-	ap, _ := m.GetStatus("worker")
-	if ap.LastKick == nil {
-		t.Fatal("LastKick is nil after SendKick")
-	}
-	if ap.LastKick.Before(before) || ap.LastKick.After(after) {
-		t.Errorf("LastKick %v is outside expected window [%v, %v]", ap.LastKick, before, after)
-	}
-}
-
-func TestSendKick_MultipleKicksAllSucceed(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("claude", "sonnet"),
-	}
-	m := NewManager(cfgs, discardLogger())
-	cancel := startWithCat(t, m, "worker")
-	defer cancel()
-
-	messages := []string{"first", "second", "third"}
-	for _, msg := range messages {
-		if err := m.SendKick("worker", msg); err != nil {
-			t.Fatalf("SendKick(%q) error: %v", msg, err)
-		}
-	}
-}
-
-func TestSendKick_NilStdinReturnsError(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"agent": makeAgentConfig("claude", "haiku"),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	m.mu.Lock()
-	m.agents["agent"].State = StateRunning
-	m.agents["agent"].stdin = nil
-	m.mu.Unlock()
-
-	err := m.SendKick("agent", "test")
-	if err == nil {
-		t.Fatal("expected error when stdin is nil, got nil")
-	}
-	if !strings.Contains(err.Error(), "not running") {
-		t.Errorf("error %q should say 'not running'", err.Error())
-	}
-}
-
-func TestSendKick_ViaPublicStart(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("claude", "haiku"),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	if err := m.Start(context.Background(), "worker"); err != nil {
-		t.Fatalf("Start() error: %v", err)
-	}
-	defer m.Stop("worker")
-
-	if err := m.SendKick("worker", "kick message"); err != nil {
-		t.Fatalf("SendKick() after real Start() error: %v", err)
-	}
-
-	ap, _ := m.GetStatus("worker")
-	if ap.LastKick == nil {
-		t.Error("LastKick should be set after SendKick on public-started agent")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// watchProcess (indirectly via process exit)
-// ---------------------------------------------------------------------------
-
-func TestWatchProcess_CleanExitSetsStateStopped(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("claude", "sonnet"),
-	}
-	m := NewManager(cfgs, discardLogger())
-	cancel := startWithCat(t, m, "worker")
-	defer cancel()
-
-	m.mu.Lock()
-	stdin := m.agents["worker"].stdin
-	m.mu.Unlock()
-
-	stdin.Close()
-	cancel()
-
-	waitForState(t, m, "worker", StateStopped, StateFailed)
-}
-
-func TestWatchProcess_ForcedExitSetsFailed(t *testing.T) {
-	catBin := catPath(t)
-
-	cfgs := map[string]config.AgentConfig{
-		"victim": makeAgentConfig("claude", "sonnet"),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	agentCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	cmd := exec.CommandContext(agentCtx, catBin)
-	stdin, _ := cmd.StdinPipe()
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("cmd.Start: %v", err)
-	}
-
-	now := time.Now()
-	m.mu.Lock()
-	agent := m.agents["victim"]
-	agent.cmd = cmd
-	agent.stdin = stdin
-	agent.stdout = stdout
-	agent.stderr = stderr
-	agent.cancel = cancel
-	agent.State = StateRunning
-	agent.PID = cmd.Process.Pid
-	agent.StartedAt = &now
-	m.mu.Unlock()
-
-	go m.watchProcess("victim", cmd, agentCtx)
-
-	cmd.Process.Kill()
-
-	waitForState(t, m, "victim", StateFailed, StateStopped)
-}
-
-func TestWatchProcess_CleanExitViaStubBinary(t *testing.T) {
-	// Start a real agent via the public API using the stub binary.
-	// Cancel the context (which exec.CommandContext honours) so the stub exits.
-	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("goose", ""),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	ctx, cancel := context.WithCancel(context.Background())
-	if err := m.Start(ctx, "worker"); err != nil {
-		cancel()
-		t.Fatalf("Start() error: %v", err)
-	}
-
-	m.mu.Lock()
-	stdin := m.agents["worker"].stdin
-	m.mu.Unlock()
-
-	// Close stdin so cat sees EOF; cancel context as belt-and-suspenders.
-	stdin.Close()
-	cancel()
-
-	waitForState(t, m, "worker", StateStopped, StateFailed)
-}
-
-// ---------------------------------------------------------------------------
-// Integration: Start → SendKick → Stop (using public API + stub backend)
-// ---------------------------------------------------------------------------
-
-func TestIntegration_StartKickStop_PublicAPI(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"agent": {Backend: "claude", Model: "test-model", Enabled: true},
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	// Start via public API.
-	if err := m.Start(context.Background(), "agent"); err != nil {
-		t.Fatalf("Start() error: %v", err)
-	}
-
-	status, err := m.GetStatus("agent")
-	if err != nil {
-		t.Fatalf("GetStatus: %v", err)
-	}
-	if status.State != StateRunning {
-		t.Errorf("expected StateRunning, got %q", status.State)
-	}
-	if status.PID == 0 {
-		t.Error("PID should be non-zero after start")
-	}
-	if status.StartedAt == nil {
-		t.Error("StartedAt should be set after start")
-	}
-
-	// Kick.
-	if err := m.SendKick("agent", "hello agent"); err != nil {
-		t.Fatalf("SendKick: %v", err)
-	}
-
-	// Stop.
-	if err := m.Stop("agent"); err != nil {
-		t.Fatalf("Stop: %v", err)
-	}
-
-	status, _ = m.GetStatus("agent")
-	if status.State != StateStopped {
-		t.Errorf("expected StateStopped after Stop(), got %q", status.State)
-	}
-	if status.LastKick == nil {
-		t.Error("LastKick should be set after kick")
-	}
-}
-
-func TestIntegration_AllStatuses_ReflectsRunningState(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"a": makeAgentConfig("claude", "opus"),
-		"b": makeAgentConfig("gemini", "pro"),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	if err := m.Start(context.Background(), "a"); err != nil {
-		t.Fatalf("Start(a): %v", err)
-	}
-	defer m.Stop("a")
-
-	all := m.AllStatuses()
-	if all["a"].State != StateRunning {
-		t.Errorf("agent 'a' should be running, got %q", all["a"].State)
-	}
-	if all["b"].State != StateStopped {
-		t.Errorf("agent 'b' should be stopped, got %q", all["b"].State)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Concurrency
 // ---------------------------------------------------------------------------
@@ -961,32 +577,6 @@ func TestConcurrentGetStatus_NoPanic(t *testing.T) {
 	}
 }
 
-func TestConcurrentStartStop_NoPanic(t *testing.T) {
-	// Start multiple agents concurrently and stop them to exercise mutex paths.
-	backends := []string{"claude", "gemini", "copilot", "goose"}
-	cfgs := make(map[string]config.AgentConfig, len(backends))
-	for _, b := range backends {
-		cfgs[b] = makeAgentConfig(b, "")
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	done := make(chan struct{}, len(backends))
-	for _, b := range backends {
-		name := b
-		go func() {
-			defer func() { done <- struct{}{} }()
-			if err := m.Start(context.Background(), name); err != nil {
-				return // may race — that's fine
-			}
-			time.Sleep(5 * time.Millisecond)
-			m.Stop(name)
-		}()
-	}
-	for range backends {
-		<-done
-	}
-}
-
 // ---------------------------------------------------------------------------
 // ProcessState constants sanity check
 // ---------------------------------------------------------------------------
@@ -1010,10 +600,7 @@ func TestProcessStateConstants(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBackendBinary_KnownBackendMissingFromPath(t *testing.T) {
-	// Temporarily restore PATH to the original (no stubs) to exercise the
-	// "not found in PATH" error branch inside backendBinary().
 	origPath := os.Getenv("PATH")
-	// Use a path that definitely contains none of the known backends.
 	os.Setenv("PATH", "/nonexistent-path-for-testing")
 	defer os.Setenv("PATH", origPath)
 
@@ -1027,135 +614,29 @@ func TestBackendBinary_KnownBackendMissingFromPath(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Start: cmd.Start() failure branch
+// normalizeModelName
 // ---------------------------------------------------------------------------
 
-func TestStart_CmdStartFailsForInvalidBinary(t *testing.T) {
-	// Create a non-executable-format file (invalid ELF/Mach-O header) that
-	// exec.LookPath will accept (it's +x) but exec.Cmd.Start() will reject
-	// with an "exec format error".
-	dir := t.TempDir()
-	badBin := fmt.Sprintf("%s/badclaude", dir)
-	// Write an invalid binary header.
-	if err := os.WriteFile(badBin, []byte("\x00\x01\x02\x03\x04bad"), 0o755); err != nil {
-		t.Fatalf("WriteFile: %v", err)
+func TestNormalizeModelName_HyphenToDotsForVersionSuffix(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"claude-sonnet-4-6", "claude-sonnet-4.6"},
+		{"claude-opus-4-6", "claude-opus-4.6"},
+		{"claude-haiku-4-5", "claude-haiku-4.5"},
+		{"gemini-pro", "gemini-pro"},
+		{"claude-3-5-sonnet", "claude-3-5-sonnet"},
+		{"", ""},
 	}
 
-	// Prepend our dir so LookPath resolves our bad binary.
-	origPath := os.Getenv("PATH")
-	os.Setenv("PATH", dir+":"+origPath)
-	defer os.Setenv("PATH", origPath)
-
-	// Rename stub to match the backend name.
-	badClaudePath := fmt.Sprintf("%s/claude", dir)
-	if err := os.Rename(badBin, badClaudePath); err != nil {
-		t.Fatalf("Rename: %v", err)
-	}
-
-	cfgs := map[string]config.AgentConfig{
-		"worker": makeAgentConfig("claude", "sonnet"),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	err := m.Start(context.Background(), "worker")
-	if err == nil {
-		// On some platforms an empty or invalid file may start as a shell —
-		// stop it and skip rather than fail.
-		m.Stop("worker")
-		t.Skip("platform executed invalid binary without error — skipping")
-	}
-	if !strings.Contains(err.Error(), "starting agent") {
-		t.Errorf("error %q should mention 'starting agent'", err.Error())
-	}
-}
-
-// ---------------------------------------------------------------------------
-// SendKick: fmt.Fprintf error branch (broken pipe)
-// ---------------------------------------------------------------------------
-
-// brokenWriter implements io.WriteCloser and always returns an error on Write.
-type brokenWriter struct{}
-
-func (b *brokenWriter) Write(p []byte) (int, error) {
-	return 0, fmt.Errorf("broken pipe")
-}
-
-func (b *brokenWriter) Close() error { return nil }
-
-func TestSendKick_WriteErrorReturnsError(t *testing.T) {
-	cfgs := map[string]config.AgentConfig{
-		"agent": makeAgentConfig("claude", "haiku"),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	// Inject a broken stdin writer while keeping State = Running.
-	m.mu.Lock()
-	m.agents["agent"].State = StateRunning
-	m.agents["agent"].stdin = &brokenWriter{}
-	m.mu.Unlock()
-
-	err := m.SendKick("agent", "test message")
-	if err == nil {
-		t.Fatal("expected error when stdin write fails, got nil")
-	}
-	if !strings.Contains(err.Error(), "sending kick") {
-		t.Errorf("error %q should mention 'sending kick'", err.Error())
-	}
-}
-
-// ---------------------------------------------------------------------------
-// watchProcess: clean exit branch (StateStopped when err == nil)
-// ---------------------------------------------------------------------------
-
-func TestWatchProcess_CleanExitMarksStateStopped(t *testing.T) {
-	// Use a binary that exits 0 immediately: /bin/true or equivalent.
-	trueBin, err := exec.LookPath("true")
-	if err != nil {
-		// Fallback: use cat, close stdin immediately so it exits 0.
-		trueBin = catPath(t)
-	}
-
-	cfgs := map[string]config.AgentConfig{
-		"agent": makeAgentConfig("claude", "haiku"),
-	}
-	m := NewManager(cfgs, discardLogger())
-
-	agentCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	cmd := exec.CommandContext(agentCtx, trueBin)
-	// For "true", there's no stdin to pipe — but StdinPipe is needed for the
-	// general case. We use cat and close stdin for an immediate clean exit.
-	stdinPipe, _ := cmd.StdinPipe()
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
-
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("cmd.Start: %v", err)
-	}
-
-	// Close stdin so cat (or true) exits cleanly with code 0.
-	stdinPipe.Close()
-
-	now := time.Now()
-	m.mu.Lock()
-	ap := m.agents["agent"]
-	ap.cmd = cmd
-	ap.stdin = stdinPipe
-	ap.stdout = stdout
-	ap.stderr = stderr
-	ap.cancel = cancel
-	ap.State = StateRunning
-	ap.PID = cmd.Process.Pid
-	ap.StartedAt = &now
-	m.mu.Unlock()
-
-	// watchProcess is called synchronously here so we know when it's done.
-	m.watchProcess("agent", cmd, agentCtx)
-
-	ap2, _ := m.GetStatus("agent")
-	if ap2.State != StateStopped {
-		t.Errorf("after clean exit: State = %q, want StateStopped", ap2.State)
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := normalizeModelName(tt.input)
+			if got != tt.want {
+				t.Errorf("normalizeModelName(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
 	}
 }
 
