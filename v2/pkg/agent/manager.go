@@ -189,7 +189,42 @@ func (m *Manager) launchInTmux(ctx context.Context, agent *AgentProcess) error {
 	agent.cancel = cancel
 	go m.pollTmuxOutput(agent.Name, agent.tmuxSession, agent.OutputBuffer, agentCtx)
 
+	if backend == "copilot" {
+		go m.watchForTrustPrompt(agent.tmuxSession, agentCtx)
+	}
+
 	return nil
+}
+
+// watchForTrustPrompt monitors a tmux session for Copilot's "Confirm folder trust"
+// prompt and auto-selects "Yes, and remember for future sessions" (option 2).
+func (m *Manager) watchForTrustPrompt(session string, ctx context.Context) {
+	const (
+		trustPollInterval = 2 * time.Second
+		trustMaxWait      = 60 * time.Second
+	)
+	deadline := time.After(trustMaxWait)
+	ticker := time.NewTicker(trustPollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-deadline:
+			return
+		case <-ticker.C:
+			output := m.captureTmuxPane(session)
+			if strings.Contains(output, "Confirm folder trust") || strings.Contains(output, "Do you trust the files") {
+				time.Sleep(paneCaptureSleep)
+				_ = exec.Command("tmux", "send-keys", "-t", session, "2").Run()
+				time.Sleep(enterDelay)
+				_ = exec.Command("tmux", "send-keys", "-t", session, "Enter").Run()
+				m.logger.Info("auto-answered folder trust prompt", "session", session)
+				return
+			}
+		}
+	}
 }
 
 func (m *Manager) buildEnvPrefix(agent *AgentProcess) string {
