@@ -65,6 +65,13 @@ COPY v2/deploy/data/ /opt/hive/seed-data/
 COPY v2/deploy/ttyd-tmux.sh /usr/local/bin/ttyd-tmux.sh
 RUN chmod +x /usr/local/bin/ttyd-tmux.sh
 
+# --- Nous framework (strategist experiment engine) ---
+RUN apt-get update && apt-get install -y --no-install-recommends python3 jq && rm -rf /var/lib/apt/lists/*
+COPY bin/nous-runner.sh bin/nous-sync.py bin/nous-hive-gate.py bin/nous-install.sh /tmp/hive/bin/
+RUN chmod +x /tmp/hive/bin/*.sh
+COPY examples/kubestellar/nous-campaign.yaml examples/kubestellar/nous-governor-campaign.yaml examples/kubestellar/nous-repo-campaign.yaml /etc/hive/
+RUN mkdir -p /var/run/nous/governor /var/run/nous/repo
+
 EXPOSE 3001 3002 7681
 VOLUME ["/data", "/secrets"]
 

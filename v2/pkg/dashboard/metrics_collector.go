@@ -44,6 +44,9 @@ func NewMetricsCollector(ghClient *ghpkg.Client, org, primaryRepo, badgeURL, aiA
 		logger:      logger,
 		metrics:     make(map[string]any),
 	}
+	if projectName == "" {
+		logger.Warn("project.name is empty — outreach PR counts will be zero (set project.name in config)")
+	}
 	mc.loadFromDisk()
 	return mc
 }

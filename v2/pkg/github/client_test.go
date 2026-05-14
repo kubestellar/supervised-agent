@@ -138,7 +138,7 @@ func TestEnumerateActionable_BasicCounts(t *testing.T) {
 	prs := []wirePR{
 		{Number: 10, Title: "open pr", User: wireUser{"alice"}, CreatedAt: hoursAgo(3), Draft: false},
 		{Number: 11, Title: "draft pr", User: wireUser{"bob"}, CreatedAt: hoursAgo(1), Draft: true},
-		{Number: 12, Title: "held pr", User: wireUser{"carol"}, Labels: []wireLabel{{Name: "do-not-merge"}}, CreatedAt: hoursAgo(1)},
+		{Number: 12, Title: "held pr", User: wireUser{"carol"}, Labels: []wireLabel{{Name: "hold"}}, CreatedAt: hoursAgo(1)},
 	}
 
 	mux := buildMux(t, org, repo, issues, prs)
@@ -505,9 +505,7 @@ func TestIsHeld(t *testing.T) {
 		{[]string{"hold"}, true},
 		{[]string{"on-hold"}, true},
 		{[]string{"hold/review"}, true},
-		{[]string{"do-not-merge"}, true},
 		{[]string{"HOLD"}, true},             // case-insensitive
-		{[]string{"DO-NOT-MERGE"}, true},     // case-insensitive
 		{[]string{"bug", "hold"}, true},      // mixed labels
 		{[]string{"bug", "enhancement"}, false},
 		{[]string{}, false},

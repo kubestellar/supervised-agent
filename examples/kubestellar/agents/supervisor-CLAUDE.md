@@ -8,7 +8,7 @@ These are non-negotiable. Violating any of these is a supervisor failure.
 
 1. **NEVER do agent work yourself.** You are a manager, not a worker. Do NOT merge PRs, fix issues, review code, or do outreach. ALWAYS dispatch to the correct agent:
    - Scanner merges PRs and fixes issues
-   - Reviewer checks coverage, CI health, post-merge diffs
+   - CI-Maintainer checks coverage, CI health, post-merge diffs
    - Architect does refactors and architecture improvements
    - Outreach handles awesome-lists and ecosystem PRs
 2. **NEVER send bare work orders.** Every kick MUST include the full startup message from `kick-agents.sh`: PULL_INSTRUCTIONS + BEADS_RESTORE + agent-specific work + BEADS_SYNC. Read `/tmp/hive/bin/kick-agents.sh` for the exact messages.
@@ -333,7 +333,7 @@ tmux send-keys -t scanner Enter
 tmux send-keys -t scanner Enter
 ```
 
-## Reviewer Session — What It Does
+## CI-Maintainer Session — What It Does
 
 The `ci-maintainer` session (Sonnet 4.6) handles post-merge work:
 - Coverage ratchet ≥91% check
@@ -363,7 +363,7 @@ The `ci-maintainer` session (Sonnet 4.6) handles post-merge work:
   ```
 - **pok-prod01 deployment health**: check the same `Build and Deploy KC` workflow runs for jobs named `deploy-pok-prod`. Verify the deployed version matches the latest stable release tag. Any failure or version mismatch → high ntfy + regression issue + bead P1.
 
-Reviewer is NOT a /loop — send it work orders when needed:
+CI-Maintainer is NOT a /loop — send it work orders when needed:
 ```bash
 tmux send-keys -t ci-maintainer "Run a full ci-maintainer pass: check coverage, CI health, release freshness, post-merge diff on PRs #N #N #N. Write results to ci-maintainer_log.md."
 tmux send-keys -t ci-maintainer Enter
@@ -428,8 +428,8 @@ curl -s -H "Title: <agent>: <action>" -H "Priority: high" -d "<details>" $NTFY_S
   `unset GITHUB_TOKEN && gh pr list --repo <repo> --state open --json number --jq length` for each repo.
 - **External contributor PR reviewed** — when scanner posts a review on a non-${PROJECT_AI_AUTHOR} PR, send ntfy with PR number, author, and review summary. External contributors need timely feedback — scanner must re-review when they push updates.
 - Scanner issues dispatched to fix agents
-- Reviewer pass started + what it's checking
-- Reviewer findings (coverage %, GA4 anomalies, CI failures, version mismatches)
+- CI-Maintainer pass started + what it's checking
+- CI-Maintainer findings (coverage %, GA4 anomalies, CI failures, version mismatches)
 - Architect plan proposed or autonomous refactor PR opened
 - Any errors or failures across any agent
 - Periodic status summary (repos stats: open issues/PRs per repo)
@@ -485,7 +485,7 @@ Format:
 [2026-04-25 09:15 AM ET] Merged: #N, #N, #N
 [2026-04-25 09:15 AM ET] Dispatched agents: #N (slug), #N (slug)
 [2026-04-25 09:15 AM ET] Pending CI: #N
-Reviewer: <working on X | idle — kicked at 09:00 AM ET, next ~09:30 AM ET>
+CI-Maintainer: <working on X | idle — kicked at 09:00 AM ET, next ~09:30 AM ET>
 Scanner: <active | idle — kicked at 09:00 AM ET, next ~09:15 AM ET>
 Architect: <working on X | idle>
 ```

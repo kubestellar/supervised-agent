@@ -354,6 +354,18 @@ func (g *Governor) EvalHistory() []EvalSnapshot {
 	return result
 }
 
+// SeedEvalHistory loads previously persisted eval snapshots so sparkline
+// history survives container restarts.
+func (g *Governor) SeedEvalHistory(snapshots []EvalSnapshot) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if len(snapshots) > evalHistoryCapacity {
+		snapshots = snapshots[len(snapshots)-evalHistoryCapacity:]
+	}
+	g.evalHistory = make([]EvalSnapshot, len(snapshots), evalHistoryCapacity)
+	copy(g.evalHistory, snapshots)
+}
+
 func (g *Governor) KickHistory() []KickRecord {
 	g.mu.RLock()
 	defer g.mu.RUnlock()

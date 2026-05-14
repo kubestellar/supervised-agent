@@ -689,3 +689,211 @@ agents:
 		t.Error("ci-maintainer.ClearOnKick should be false")
 	}
 }
+
+func TestModeConfig_UnmarshalYAML(t *testing.T) {
+	yamlContent := `
+project:
+  org: my-org
+  repos:
+    - repo-a
+github:
+  token: ghp_tok
+agents:
+  scanner:
+    backend: claude
+governor:
+  modes:
+    idle:
+      threshold: 0
+      scanner: 15m
+      supervisor: pause
+    busy:
+      threshold: 10
+      scanner: 5m
+`
+	path := writeTempConfig(t, yamlContent)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Governor.Modes["idle"].Threshold != 0 {
+		t.Errorf("idle threshold = %d", cfg.Governor.Modes["idle"].Threshold)
+	}
+	if cfg.Governor.Modes["idle"].Cadences["scanner"] != "15m" {
+		t.Errorf("idle scanner cadence = %q", cfg.Governor.Modes["idle"].Cadences["scanner"])
+	}
+	if cfg.Governor.Modes["idle"].Cadences["supervisor"] != "pause" {
+		t.Errorf("idle supervisor cadence = %q", cfg.Governor.Modes["idle"].Cadences["supervisor"])
+	}
+	if cfg.Governor.Modes["busy"].Threshold != 10 {
+		t.Errorf("busy threshold = %d", cfg.Governor.Modes["busy"].Threshold)
+	}
+}
+
+func TestModeConfig_UnmarshalYAML_InvalidThreshold(t *testing.T) {
+	yamlContent := `
+project:
+  org: my-org
+  repos:
+    - repo-a
+github:
+  token: ghp_tok
+agents:
+  scanner:
+    backend: claude
+governor:
+  modes:
+    idle:
+      threshold: not-a-number
+      scanner: 15m
+`
+	path := writeTempConfig(t, yamlContent)
+	_, err := Load(path)
+	if err == nil {
+		t.Error("expected error for invalid threshold")
+	}
+}
+
+func TestApplyConfigEnv_AllFields(t *testing.T) {
+	yamlContent := minimalValidYAML("default-org", "ghp_tok")
+	path := writeTempConfig(t, yamlContent)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	envDir := t.TempDir()
+	envPath := filepath.Join(envDir, "config.env")
+	envContent := `PROJECT_ORG=overridden-org
+PROJECT_REPOS=repo-x repo-y
+PROJECT_AI_AUTHOR=custom-bot
+PROJECT_PRIMARY_REPO=overridden-org/repo-x
+DASHBOARD_PORT=9999
+DASHBOARD_AUTH_TOKEN=secret123
+AGENTS_ENABLED=worker
+`
+	os.WriteFile(envPath, []byte(envContent), 0o644)
+
+	err = cfg.applyConfigEnv(envPath)
+	if err != nil {
+		t.Fatalf("applyConfigEnv() error = %v", err)
+	}
+	if cfg.Project.Org != "overridden-org" {
+		t.Errorf("org = %q", cfg.Project.Org)
+	}
+	if len(cfg.Project.Repos) != 2 {
+		t.Errorf("repos = %v", cfg.Project.Repos)
+	}
+	if cfg.Project.AIAuthor != "custom-bot" {
+		t.Errorf("ai_author = %q", cfg.Project.AIAuthor)
+	}
+	if cfg.Project.PrimaryRepo != "overridden-org/repo-x" {
+		t.Errorf("primary_repo = %q", cfg.Project.PrimaryRepo)
+	}
+	if cfg.Dashboard.Port != 9999 {
+		t.Errorf("port = %d", cfg.Dashboard.Port)
+	}
+	if cfg.Dashboard.AuthToken != "secret123" {
+		t.Errorf("auth_token = %q", cfg.Dashboard.AuthToken)
+	}
+}
+
+func TestApplyDefaults_AllGovernorDefaults(t *testing.T) {
+	cfg := &Config{
+		Project: ProjectConfig{Org: "o", Repos: []string{"r"}},
+		GitHub:  GitHubConfig{Token: "t"},
+		Agents:  map[string]AgentConfig{"a": {Backend: "claude"}},
+	}
+	cfg.applyDefaults()
+
+	if cfg.Governor.EvalIntervalS != defaultEvalIntervalS {
+		t.Errorf("eval_interval = %d", cfg.Governor.EvalIntervalS)
+	}
+	if cfg.Policies.PollInterval != time.Duration(defaultPollIntervalMins)*time.Minute {
+		t.Errorf("poll_interval = %v", cfg.Policies.PollInterval)
+	}
+	if cfg.Data.MetricsDir != "/data/metrics" {
+		t.Errorf("metrics_dir = %q", cfg.Data.MetricsDir)
+	}
+	if cfg.Data.LogsDir != "/data/logs" {
+		t.Errorf("logs_dir = %q", cfg.Data.LogsDir)
+	}
+	if len(cfg.Governor.Labels.Exempt) == 0 {
+		t.Error("expected default exempt labels")
+	}
+	if cfg.Governor.Sensing.TTLSeconds != defaultSensingTTLSeconds {
+		t.Errorf("sensing_ttl = %d", cfg.Governor.Sensing.TTLSeconds)
+	}
+	if cfg.Governor.Sensing.PullbackSeconds != defaultSensingPullbackSeconds {
+		t.Errorf("sensing_pullback = %d", cfg.Governor.Sensing.PullbackSeconds)
+	}
+	if cfg.Governor.Health.HealthcheckInterval != defaultHealthcheckIntervalS {
+		t.Errorf("healthcheck = %d", cfg.Governor.Health.HealthcheckInterval)
+	}
+	if cfg.Governor.Health.RestartCooldown != defaultRestartCooldownS {
+		t.Errorf("restart_cooldown = %d", cfg.Governor.Health.RestartCooldown)
+	}
+	if cfg.Governor.Budget.PeriodDays != defaultBudgetPeriodDays {
+		t.Errorf("budget_period = %d", cfg.Governor.Budget.PeriodDays)
+	}
+	if cfg.Governor.Budget.CriticalPct != defaultBudgetCriticalPct {
+		t.Errorf("budget_critical = %d", cfg.Governor.Budget.CriticalPct)
+	}
+}
+
+func TestApplyDefaults_KnowledgeDefaults(t *testing.T) {
+	cfg := &Config{
+		Project:   ProjectConfig{Org: "o", Repos: []string{"r"}},
+		GitHub:    GitHubConfig{Token: "t"},
+		Agents:    map[string]AgentConfig{"a": {Backend: "claude"}},
+		Knowledge: KnowledgeConfig{Enabled: true},
+	}
+	cfg.applyDefaults()
+
+	if cfg.Knowledge.Engine != defaultKnowledgeEngine {
+		t.Errorf("engine = %q", cfg.Knowledge.Engine)
+	}
+	if cfg.Knowledge.Primer.MaxFacts != defaultKnowledgeMaxFacts {
+		t.Errorf("max_facts = %d", cfg.Knowledge.Primer.MaxFacts)
+	}
+	if cfg.Knowledge.Primer.MergeStrategy != "precedence" {
+		t.Errorf("merge_strategy = %q", cfg.Knowledge.Primer.MergeStrategy)
+	}
+	if len(cfg.Knowledge.Primer.Priority) == 0 {
+		t.Error("expected default priority")
+	}
+	if cfg.Knowledge.Curator.Schedule != defaultCuratorSchedule {
+		t.Errorf("schedule = %q", cfg.Knowledge.Curator.Schedule)
+	}
+	if cfg.Knowledge.Curator.AutoPromoteThreshold != defaultPromoteThreshold {
+		t.Errorf("threshold = %f", cfg.Knowledge.Curator.AutoPromoteThreshold)
+	}
+}
+
+func TestApplyDefaults_ExistingValuesNotOverridden(t *testing.T) {
+	cfg := &Config{
+		Project: ProjectConfig{Org: "o", Repos: []string{"r"}},
+		GitHub:  GitHubConfig{Token: "t"},
+		Agents:  map[string]AgentConfig{"a": {Backend: "claude"}},
+		Dashboard: DashboardConfig{Port: 8080},
+		Governor: GovernorConfig{
+			EvalIntervalS: 600,
+			Labels: LabelsConfig{Exempt: []string{"custom-label"}},
+			Sensing: SensingConfig{TTLSeconds: 1800, PullbackSeconds: 1800},
+		},
+	}
+	cfg.applyDefaults()
+
+	if cfg.Dashboard.Port != 8080 {
+		t.Errorf("port = %d, want 8080", cfg.Dashboard.Port)
+	}
+	if cfg.Governor.EvalIntervalS != 600 {
+		t.Errorf("eval = %d, want 600", cfg.Governor.EvalIntervalS)
+	}
+	if len(cfg.Governor.Labels.Exempt) != 1 || cfg.Governor.Labels.Exempt[0] != "custom-label" {
+		t.Errorf("exempt = %v", cfg.Governor.Labels.Exempt)
+	}
+	if cfg.Governor.Sensing.TTLSeconds != 1800 {
+		t.Errorf("ttl = %d", cfg.Governor.Sensing.TTLSeconds)
+	}
+}

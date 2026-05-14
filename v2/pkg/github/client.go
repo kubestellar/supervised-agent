@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -104,6 +105,18 @@ func NewClient(token string, org string, repos []string, logger *slog.Logger) *C
 		repos:  repos,
 		logger: logger,
 	}
+}
+
+// NewClientForTest creates a client pointing at a test server. Exported for
+// cross-package testing (e.g. dashboard tests that need a mock GH client).
+func NewClientForTest(serverURL string, org string, repos []string, logger *slog.Logger) *Client {
+	c := NewClient("fake", org, repos, logger)
+	base, err := url.Parse(serverURL + "/")
+	if err != nil {
+		panic("bad test server URL: " + err.Error())
+	}
+	c.client.BaseURL = base
+	return c
 }
 
 func (c *Client) EnumerateActionable(ctx context.Context) (*ActionableResult, error) {
@@ -448,12 +461,13 @@ func (c *Client) SearchPRCount(ctx context.Context, author, org, state string) (
 // by the AI author, on external repos (e.g., awesome-lists, adopters, install missions).
 // state is "open" or "merged".
 func (c *Client) SearchOutreachPRCount(ctx context.Context, author, org, projectName, state string) (int, error) {
+	if projectName == "" {
+		return 0, fmt.Errorf("projectName is required for outreach PR search (set project.name in config)")
+	}
 	// Match the old hive query: author:X type:pr is:STATE "ProjectName" in:title -org:ORG
 	// The -org: prefix excludes PRs within the org, showing only external outreach PRs.
-	qualifier := fmt.Sprintf("type:pr author:%s -org:%s", author, org)
-	if projectName != "" {
-		qualifier += fmt.Sprintf(" \"%s\" in:title", projectName)
-	}
+	// Without the projectName filter, this returns ALL external PRs by the author, inflating the count.
+	qualifier := fmt.Sprintf("type:pr author:%s -org:%s \"%s\" in:title", author, org, projectName)
 	if state == "merged" {
 		qualifier += " is:merged"
 	} else {

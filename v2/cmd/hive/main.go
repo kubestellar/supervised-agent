@@ -89,6 +89,16 @@ func main() {
 	gov := governor.New(cfg.Governor, cfg.EnabledAgents(), logger)
 	sched := scheduler.New(cfg, logger)
 
+	// Restore sparkline history from disk so it survives container restarts
+	const sparklinePath = "/data/sparkline-history.json"
+	if sparkData, err := os.ReadFile(sparklinePath); err == nil {
+		var snapshots []governor.EvalSnapshot
+		if err := json.Unmarshal(sparkData, &snapshots); err == nil && len(snapshots) > 0 {
+			gov.SeedEvalHistory(snapshots)
+			logger.Info("sparkline history restored", "entries", len(snapshots))
+		}
+	}
+
 	if cfg.Knowledge.Enabled {
 		layers := convertKnowledgeLayers(cfg.Knowledge.Layers)
 		primerCfg := knowledge.PrimerConfig{
