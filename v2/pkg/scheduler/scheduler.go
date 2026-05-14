@@ -86,6 +86,10 @@ func (s *Scheduler) buildAgentMessage(agentName string, issues []github.Issue, a
 		return s.buildTesterMessage(issues, actionable)
 	case "architect":
 		return s.buildArchitectMessage(issues, actionable)
+	case "outreach":
+		return s.buildOutreachMessage(actionable)
+	case "sec-check":
+		return s.buildSecCheckMessage(actionable)
 	default:
 		return s.buildGenericMessage(agentName, issues, actionable)
 	}
@@ -335,6 +339,52 @@ func (s *Scheduler) buildArchitectMessage(issues []github.Issue, actionable *git
 	}
 
 	b.WriteString("Beads: ~/architect-beads\n")
+
+	return b.String()
+}
+
+func (s *Scheduler) buildOutreachMessage(actionable *github.ActionableResult) string {
+	now := time.Now().In(time.FixedZone("EDT", -4*3600))
+	var b strings.Builder
+	b.WriteString("[agent:outreach] [KICK]\n")
+	b.WriteString(fmt.Sprintf("Full outreach pass. Time: %s\n\n", now.Format("1/2 3:04 PM MST")))
+
+	b.WriteString(s.ghAuthInstructions())
+
+	b.WriteString("YOUR RESPONSIBILITIES:\n")
+	b.WriteString("  1. Open PRs on external repos to promote adoption (awesome-lists, adopters files, install guides)\n")
+	b.WriteString("  2. Check blocked_orgs before opening new PRs — one PR per org at a time\n")
+	b.WriteString("  3. Monitor open outreach PRs for review feedback and address comments\n")
+	b.WriteString("  4. Track placement progress toward target\n\n")
+
+	b.WriteString("RULES:\n")
+	b.WriteString("  ⛔ NEVER re-query PR counts with gh search — use pre-computed metrics\n")
+	b.WriteString("  ⛔ NEVER open a second PR on an org that already has an open outreach PR\n")
+	b.WriteString("  ⛔ NEVER open PRs on repos without verifying a matching mission exists first\n")
+	b.WriteString("  ✅ Check ADOPTERS.MD before proposing cold outreach to any org\n\n")
+
+	b.WriteString("Beads: ~/outreach-beads\n")
+
+	return b.String()
+}
+
+func (s *Scheduler) buildSecCheckMessage(actionable *github.ActionableResult) string {
+	now := time.Now().In(time.FixedZone("EDT", -4*3600))
+	var b strings.Builder
+	b.WriteString("[agent:sec-check] [KICK]\n")
+	b.WriteString(fmt.Sprintf("Security review pass. Time: %s\n\n", now.Format("1/2 3:04 PM MST")))
+
+	b.WriteString(s.ghAuthInstructions())
+
+	b.WriteString("YOUR RESPONSIBILITIES:\n")
+	b.WriteString("  1. Scan repos for security vulnerabilities (OWASP top 10, dependency CVEs)\n")
+	b.WriteString("  2. Review recent PRs for security implications\n")
+	b.WriteString("  3. Check for exposed secrets, hardcoded credentials, insecure defaults\n")
+	b.WriteString("  4. Verify security headers, CSP policies, and auth middleware\n")
+	b.WriteString("  5. Open issues or PRs for any findings\n\n")
+
+	b.WriteString(fmt.Sprintf("Queue: %d issues, %d PRs\n",
+		actionable.Issues.Count, actionable.PRs.Count))
 
 	return b.String()
 }
