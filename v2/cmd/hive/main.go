@@ -234,6 +234,16 @@ func main() {
 		))
 	}
 
+	const cachedActionablePath = "/data/last-actionable.json"
+	if data, err := os.ReadFile(cachedActionablePath); err == nil {
+		var cached github.ActionableResult
+		if err := json.Unmarshal(data, &cached); err == nil {
+			lastActionable.Store(&cached)
+			refreshDashboard()
+			logger.Info("restored cached actionable data", "issues", cached.Issues.Count, "prs", cached.PRs.Count, "age", time.Since(cached.GeneratedAt).Round(time.Second))
+		}
+	}
+
 	var knowledgeAPI *knowledge.KnowledgeAPI
 	if cfg.Knowledge.Enabled {
 		layers := convertKnowledgeLayers(cfg.Knowledge.Layers)
@@ -377,6 +387,9 @@ func runEvalCycle(
 		return
 	}
 	lastActionable.Store(actionable)
+	if data, err := json.Marshal(actionable); err == nil {
+		_ = os.WriteFile("/data/last-actionable.json", data, 0o644)
+	}
 
 	agentsDue := gov.Evaluate(
 		actionable.Issues.Count,
@@ -655,6 +668,8 @@ func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.C
 			_ = os.WriteFile("/data/sparkline-history.json", historyData, 0o644)
 		}
 	}
+
+
 
 	modeHistory := gov.ModeHistory()
 	if len(modeHistory) > 0 {

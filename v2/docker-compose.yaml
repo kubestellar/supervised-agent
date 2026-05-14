@@ -22,9 +22,10 @@ services:
       - NTFY_TOPIC=${NTFY_TOPIC}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/api/health"]
-      interval: 30s
+      interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 120s
 
 volumes:
   hive-data:

@@ -275,7 +275,16 @@ func (s *Server) UpdateStatus(status *StatusPayload) {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	s.statusMu.RLock()
+	ready := s.status != nil
+	s.statusMu.RUnlock()
+
 	w.Header().Set("Content-Type", "application/json")
+	if !ready {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{"status": "starting"})
+		return
+	}
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
