@@ -2051,8 +2051,14 @@ func (s *Server) handleObsidianSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Content == "" {
-		jsonError(w, "content is required", http.StatusBadRequest)
-		return
+		if title, ok := req.Frontmatter["title"]; ok {
+			if s, ok := title.(string); ok && s != "" {
+				req.Content = s
+			}
+		}
+		if req.Content == "" {
+			req.Content = "(no body)"
+		}
 	}
 
 	result, err := s.deps.Knowledge.ObsidianSync(s.deps.Ctx, req)
