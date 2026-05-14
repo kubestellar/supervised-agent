@@ -690,9 +690,12 @@ func loadNousState(logger *slog.Logger) *dashboard.NousState {
 		"scope":           state.Scope,
 		"phase":           state.Phase,
 		"snapshots":       snapshotCount,
+		"snapshotCount":   snapshotCount,
 		"iterations":      iterationCount,
 		"principles":      len(state.Principles),
+		"principleCount":  len(state.Principles),
 		"baseline_target": dashboard.NousBaselineTarget,
+		"snapshotTarget":  dashboard.NousBaselineTarget,
 		"baseline_pct":    float64(snapshotCount) * 100 / dashboard.NousBaselineTarget,
 	}
 

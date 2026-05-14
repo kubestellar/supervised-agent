@@ -119,6 +119,10 @@ func (ns *NousState) refreshStatus() {
 	}
 
 	ns.Status["snapshots"] = count
+	ns.Status["snapshotCount"] = count
 	ns.Status["baseline_pct"] = float64(count) * 100 / NousBaselineTarget
+	ns.Status["baseline_target"] = NousBaselineTarget
+	ns.Status["snapshotTarget"] = NousBaselineTarget
 	ns.Status["phase"] = ns.Phase
+	ns.Status["principleCount"] = len(ns.Principles)
 }
