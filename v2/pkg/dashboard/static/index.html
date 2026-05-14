@@ -1673,7 +1673,14 @@
       el.classList.toggle('collapsed');
       const children = el.nextElementSibling;
       if (children) children.classList.toggle('collapsed');
+      localStorage.setItem('hive-agent-tree-collapsed', el.classList.contains('collapsed') ? '1' : '0');
     }
+    (function() {
+      if (localStorage.getItem('hive-agent-tree-collapsed') === '1') {
+        const t = document.querySelector('.oc-tree-toggle');
+        if (t) { t.classList.add('collapsed'); const c = t.nextElementSibling; if (c) c.classList.add('collapsed'); }
+      }
+    })();
 
     const STRATEGY_AGENT_NAMES = ['strategist'];
     function ocUpdateFocusedState() {
@@ -2237,6 +2244,13 @@
       header.classList.toggle('collapsed');
       const children = header.nextElementSibling;
       if (children) children.classList.toggle('collapsed');
+      const group = header.closest('.oc-sidebar-group');
+      const name = group?.dataset?.groupName;
+      if (name) {
+        const collapsed = JSON.parse(localStorage.getItem('hive-sidebar-collapsed') || '{}');
+        collapsed[name] = header.classList.contains('collapsed');
+        localStorage.setItem('hive-sidebar-collapsed', JSON.stringify(collapsed));
+      }
     }
 
     function ocUpdateSidebarAgents() {
@@ -2278,6 +2292,16 @@
       html += `</div>`;
 
       tree.innerHTML = html;
+      const collapsed = JSON.parse(localStorage.getItem('hive-sidebar-collapsed') || '{}');
+      tree.querySelectorAll('.oc-sidebar-group[data-group-name]').forEach(g => {
+        const name = g.dataset.groupName;
+        if (name && collapsed[name]) {
+          const header = g.querySelector('.oc-sidebar-group-header');
+          const children = g.querySelector('.oc-sidebar-group-children');
+          if (header) header.classList.add('collapsed');
+          if (children) children.classList.add('collapsed');
+        }
+      });
       _sidebarAttachDragHandlers();
     }
 
@@ -3337,7 +3361,8 @@ function burnAreaChart() {
       }
 
       const sessionsEl = el.querySelector('.token-sessions');
-      const sessionsOpen = sessionsEl ? sessionsEl.open : true;
+      const storedSessionsOpen = localStorage.getItem('hive-sessions-open');
+      const sessionsOpen = sessionsEl ? sessionsEl.open : (storedSessionsOpen !== null ? storedSessionsOpen === '1' : true);
 
       const t = tokens.totals;
       const totalTokens = t.input + t.output + t.cacheRead;
@@ -3431,6 +3456,8 @@ function burnAreaChart() {
         <div class="token-models">${modelChips}</div>
         ${agentSessions.length > 0 ? `<details class="token-sessions"${sessionsOpen ? ' open' : ''}><summary>Active Sessions (${agentSessions.length})</summary>${sessionRows}</details>` : ''}
       </div>`;
+      const detailsEl = el.querySelector('.token-sessions');
+      if (detailsEl) detailsEl.addEventListener('toggle', () => { localStorage.setItem('hive-sessions-open', detailsEl.open ? '1' : '0'); });
     }
 
     // GitHub auth health — sticky banner when 401
@@ -5919,10 +5946,10 @@ function burnAreaChart() {
     }
 
     function updateConfigAgentName(name) {
-      _configState.agent = name;
+      // Do NOT overwrite _configState.agent — it holds the agent's config key
+      // used in the API URL. Changing it to the display name causes 404 on save.
       const titleEl = document.querySelector('.config-title');
       if (titleEl) titleEl.textContent = `${name || 'New Agent'} Configuration`;
-      markDirty('general', 'name', name);
     }
 
     const SECONDS_PER_MIN = 60;
