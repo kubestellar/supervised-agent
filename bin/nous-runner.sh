@@ -148,18 +148,23 @@ elif [ "$EFFECTIVE_MODE" = "observe" ]; then
 fi
 
 NOUS_AGENT="${NOUS_AGENT:-inline}"
+
+APPROVE_FLAG=""
+if [ "$AUTO_APPROVE" = "true" ]; then
+  APPROVE_FLAG="--auto-approve"
+fi
+
 echo "[nous-runner] invoking run_campaign.py (agent=$NOUS_AGENT, auto_approve=$AUTO_APPROVE, timeout=${TIMEOUT_SEC}s)"
 NOUS_HIVE_MODE="$EFFECTIVE_MODE" \
 NOUS_HIVE_SCOPE="$EFFECTIVE_SCOPE" \
 NOUS_GATE_SCRIPT="$GATE_SCRIPT" \
 "$NOUS_PYTHON" "$NOUS_DIR/run_campaign.py" \
-  --campaign "$CAMPAIGN_CONFIG" \
-  --work-dir "$WORK_DIR" \
+  "$CAMPAIGN_CONFIG" \
+  --run-id "$(basename "$WORK_DIR")" \
   --max-iterations 1 \
   --timeout "$TIMEOUT_SEC" \
-  --auto-approve "$AUTO_APPROVE" \
+  $APPROVE_FLAG \
   --agent "$NOUS_AGENT" \
-  --context-file "$WORK_DIR/hive-context.json" \
   2>&1 || {
     echo "[nous-runner] run_campaign.py exited with $?"
   }

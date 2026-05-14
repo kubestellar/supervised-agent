@@ -78,6 +78,9 @@ COPY bin/nous-runner.sh bin/nous-sync.py bin/nous-hive-gate.py bin/nous-install.
 RUN chmod +x /tmp/hive/bin/*.sh
 COPY examples/kubestellar/nous-campaign.yaml examples/kubestellar/nous-governor-campaign.yaml examples/kubestellar/nous-repo-campaign.yaml /etc/hive/
 RUN mkdir -p /var/run/nous/governor /var/run/nous/repo /var/run/nous/snapshots /opt/nous
+RUN pip3 install --no-cache-dir --break-system-packages pyyaml 2>/dev/null || \
+    pip3 install --no-cache-dir pyyaml 2>/dev/null || \
+    echo "WARN: system pyyaml install failed"
 RUN git clone -b feat/cli-agent-mode https://github.com/clubanderson/agentic-strategy-evolution /opt/nous && \
     python3 -m venv /opt/nous/venv && \
     /opt/nous/venv/bin/pip install --no-cache-dir -e /opt/nous 2>&1 || \
