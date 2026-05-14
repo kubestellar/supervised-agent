@@ -167,7 +167,7 @@ func main() {
 	if primaryRepo == "" && len(cfg.Project.Repos) > 0 {
 		primaryRepo = cfg.Project.Repos[0]
 	}
-	metricsCollector := dashboard.NewMetricsCollector(ghClient, cfg.Project.Org, primaryRepo, badgeURL, logger)
+	metricsCollector := dashboard.NewMetricsCollector(ghClient, cfg.Project.Org, primaryRepo, badgeURL, cfg.Project.AIAuthor, logger)
 	go metricsCollector.Start(ctx)
 
 	var lastActionable atomic.Pointer[github.ActionableResult]

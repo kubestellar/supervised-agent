@@ -21,22 +21,28 @@ const (
 	metricsCacheFile       = "/data/metrics/agent-metrics-cache.json"
 )
 
+const (
+	adoptersRepo = "kubestellar"
+)
+
 type MetricsCollector struct {
 	ghClient *ghpkg.Client
 	org      string
 	repo     string
 	badgeURL string
+	aiAuthor string
 	logger   *slog.Logger
 	mu       sync.RWMutex
 	metrics  map[string]any
 }
 
-func NewMetricsCollector(ghClient *ghpkg.Client, org, primaryRepo, badgeURL string, logger *slog.Logger) *MetricsCollector {
+func NewMetricsCollector(ghClient *ghpkg.Client, org, primaryRepo, badgeURL, aiAuthor string, logger *slog.Logger) *MetricsCollector {
 	mc := &MetricsCollector{
 		ghClient: ghClient,
 		org:      org,
 		repo:     primaryRepo,
 		badgeURL: badgeURL,
+		aiAuthor: aiAuthor,
 		logger:   logger,
 		metrics:  make(map[string]any),
 	}
@@ -123,10 +129,10 @@ func (mc *MetricsCollector) collectOutreach(ctx context.Context) map[string]any 
 		result["contributors"] = contribs
 	}
 
-	adopters := mc.countAdopters(ctx, parts[0], parts[1])
+	adopters := mc.countAdopters(ctx, mc.org, adoptersRepo)
 	result["adopters"] = adopters
 
-	acmm := mc.countACMM(ctx)
+	acmm := mc.countACMM(ctx, mc.org, adoptersRepo)
 	result["acmm"] = acmm
 
 	open, merged := mc.countOutreachPRs(ctx)
@@ -195,8 +201,8 @@ func (mc *MetricsCollector) countAdopters(ctx context.Context, owner, repo strin
 	return count
 }
 
-func (mc *MetricsCollector) countACMM(ctx context.Context) int {
-	content, err := mc.ghClient.GetFileContent(ctx, mc.org, mc.repo, "ADOPTERS.md")
+func (mc *MetricsCollector) countACMM(ctx context.Context, owner, repo string) int {
+	content, err := mc.ghClient.GetFileContent(ctx, owner, repo, "ADOPTERS.md")
 	if err != nil {
 		return 0
 	}
@@ -210,15 +216,21 @@ func (mc *MetricsCollector) countACMM(ctx context.Context) int {
 }
 
 func (mc *MetricsCollector) countOutreachPRs(ctx context.Context) (open, merged int) {
-	if mc.ghClient == nil {
+	if mc.ghClient == nil || mc.aiAuthor == "" {
 		return 0, 0
 	}
-	open, merged, err := mc.ghClient.CountOutreachPRs(ctx)
+
+	openCount, err := mc.ghClient.SearchPRCount(ctx, mc.aiAuthor, mc.org, "open")
 	if err != nil {
-		mc.logger.Warn("failed to count outreach PRs", "error", err)
-		return 0, 0
+		mc.logger.Warn("failed to count open outreach PRs", "error", err)
 	}
-	return open, merged
+
+	mergedCount, err := mc.ghClient.SearchPRCount(ctx, mc.aiAuthor, mc.org, "merged")
+	if err != nil {
+		mc.logger.Warn("failed to count merged outreach PRs", "error", err)
+	}
+
+	return openCount, mergedCount
 }
 
 func (mc *MetricsCollector) loadFromDisk() {

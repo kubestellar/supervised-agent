@@ -424,36 +424,23 @@ func (c *Client) GetFileContent(ctx context.Context, owner, repo, path string) (
 	return content, nil
 }
 
-func (c *Client) CountOutreachPRs(ctx context.Context) (open, merged int, err error) {
-	for _, repo := range c.repos {
-		opts := &gh.PullRequestListOptions{
-			State:       "all",
-			ListOptions: gh.ListOptions{PerPage: perPage},
-		}
-		prs, _, err := c.client.PullRequests.List(ctx, c.org, repo, opts)
-		if err != nil {
-			continue
-		}
-		for _, pr := range prs {
-			labels := extractLabels(pr.Labels)
-			isOutreach := false
-			for _, l := range labels {
-				if strings.Contains(strings.ToLower(l), "outreach") {
-					isOutreach = true
-					break
-				}
-			}
-			if !isOutreach {
-				continue
-			}
-			if pr.GetState() == "open" {
-				open++
-			} else if pr.GetMerged() {
-				merged++
-			}
-		}
+// SearchPRCount searches GitHub for PRs by author on repos outside the org.
+// state is "open" or "merged".
+func (c *Client) SearchPRCount(ctx context.Context, author, excludeOrg, state string) (int, error) {
+	qualifier := fmt.Sprintf("type:pr author:%s -org:%s", author, excludeOrg)
+	if state == "merged" {
+		qualifier += " is:merged"
+	} else {
+		qualifier += " is:open"
 	}
-	return open, merged, nil
+
+	result, _, err := c.client.Search.Issues(ctx, qualifier, &gh.SearchOptions{
+		ListOptions: gh.ListOptions{PerPage: 1},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("searching PRs: %w", err)
+	}
+	return result.GetTotal(), nil
 }
 
 const perPage = 100
