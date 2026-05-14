@@ -80,6 +80,10 @@ func (w *Watcher) initialClone() error {
 		return err
 	}
 
+	if info, err := os.Stat(w.localDir); err == nil && info.IsDir() {
+		os.RemoveAll(w.localDir)
+	}
+
 	cmd := exec.Command("git", "clone", "--depth", "1", w.repoURL, w.localDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git clone %s: %w\n%s", w.repoURL, err, string(out))

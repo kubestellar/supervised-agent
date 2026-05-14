@@ -841,7 +841,7 @@ func (s *Server) findAgentCLAUDEMd(name string) string {
 		if policyDir != "" {
 			paths = append(paths,
 				fmt.Sprintf("%s/examples/kubestellar/agents/%s-CLAUDE.md", policyDir, name),
-				fmt.Sprintf("%s/%s/agents/%s-CLAUDE.md", policyDir, s.deps.Config.Policies.Path, name),
+				fmt.Sprintf("%s/%s%s-CLAUDE.md", policyDir, s.deps.Config.Policies.Path, name),
 			)
 		}
 	}
@@ -850,11 +850,14 @@ func (s *Server) findAgentCLAUDEMd(name string) string {
 			return p
 		}
 	}
-	return paths[0]
+	return ""
 }
 
 func (s *Server) loadPromptTemplate(name string) string {
 	claudeMdPath := s.findAgentCLAUDEMd(name)
+	if claudeMdPath == "" {
+		return ""
+	}
 	if data, err := os.ReadFile(claudeMdPath); err == nil {
 		return string(data)
 	}
