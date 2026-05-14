@@ -259,6 +259,41 @@ func (m *Manager) Stop(name string) error {
 	return nil
 }
 
+func (m *Manager) AddAgent(name string, cfg config.AgentConfig) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.agents[name]; exists {
+		return
+	}
+
+	m.agents[name] = &AgentProcess{
+		Name:         name,
+		Config:       cfg,
+		State:        StateStopped,
+		OutputBuffer: NewRingBuffer(outputBufferCapacity),
+		tmuxSession:  "hive-" + name,
+	}
+	m.logger.Info("agent added", "name", name)
+}
+
+func (m *Manager) RemoveAgent(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return
+	}
+
+	if agent.cancel != nil {
+		agent.cancel()
+	}
+
+	delete(m.agents, name)
+	m.logger.Info("agent removed", "name", name)
+}
+
 func (m *Manager) SendKick(name string, message string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

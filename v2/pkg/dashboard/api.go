@@ -1177,11 +1177,13 @@ func (s *Server) handleGovernorAddAgent(w http.ResponseWriter, r *http.Request) 
 		body.Backend = "claude"
 	}
 
-	s.deps.Config.Agents[body.Name] = config.AgentConfig{
+	agentCfg := config.AgentConfig{
 		Backend: body.Backend,
 		Model:   body.Model,
 		Enabled: true,
 	}
+	s.deps.Config.Agents[body.Name] = agentCfg
+	s.deps.AgentMgr.AddAgent(body.Name, agentCfg)
 
 	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "added", "agent": body.Name})
@@ -1195,6 +1197,7 @@ func (s *Server) handleGovernorRemoveAgent(w http.ResponseWriter, r *http.Reques
 	}
 
 	delete(s.deps.Config.Agents, name)
+	s.deps.AgentMgr.RemoveAgent(name)
 	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "removed", "agent": name})
 }
