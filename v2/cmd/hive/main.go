@@ -199,6 +199,7 @@ func main() {
 
 	tokenCollector := tokens.NewCollector(cfg.Data.MetricsDir, logger)
 	tokenCollector.SetClaudeSessionsDir(cfg.Data.ClaudeSessionsDir)
+	tokenCollector.SetCopilotSessionsDir(cfg.Data.CopilotSessionsDir)
 	tokenStop := make(chan struct{})
 	go tokenCollector.Start(tokenStop)
 	defer close(tokenStop)

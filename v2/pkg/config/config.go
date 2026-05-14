@@ -206,9 +206,10 @@ type DashboardConfig struct {
 }
 
 type DataConfig struct {
-	MetricsDir         string `yaml:"metrics_dir"`
-	LogsDir            string `yaml:"logs_dir"`
-	ClaudeSessionsDir  string `yaml:"claude_sessions_dir"`
+	MetricsDir          string `yaml:"metrics_dir"`
+	LogsDir             string `yaml:"logs_dir"`
+	ClaudeSessionsDir   string `yaml:"claude_sessions_dir"`
+	CopilotSessionsDir  string `yaml:"copilot_sessions_dir"`
 }
 
 var envVarPattern = regexp.MustCompile(`\$\{([^}]+)\}`)
@@ -380,6 +381,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Data.ClaudeSessionsDir == "" {
 		c.Data.ClaudeSessionsDir = "/data/home/.claude/projects"
+	}
+	if c.Data.CopilotSessionsDir == "" {
+		c.Data.CopilotSessionsDir = "/data/home/.copilot/session-state"
 	}
 	for name, agent := range c.Agents {
 		if agent.BeadsDir == "" {

@@ -3327,14 +3327,14 @@ function burnAreaChart() {
         </div>`;
       }).join('');
 
-      const HIVE_AGENTS = new Set(['scanner', 'ci-maintainer', 'architect', 'outreach', 'supervisor']);
+      const HIVE_AGENTS = new Set(['scanner', 'ci-maintainer', 'architect', 'outreach', 'supervisor', 'strategist', 'sec-check', 'tester']);
       const agentSessions = sessions.filter(s => HIVE_AGENTS.has(s.agent));
       const grouped = {};
       for (const s of agentSessions) {
         if (!grouped[s.agent]) grouped[s.agent] = [];
         grouped[s.agent].push(s);
       }
-      const AGENT_ORDER = ['supervisor', 'scanner', 'ci-maintainer', 'architect', 'outreach'];
+      const AGENT_ORDER = ['supervisor', 'scanner', 'ci-maintainer', 'architect', 'outreach', 'strategist', 'sec-check', 'tester'];
       const sortedGroups = AGENT_ORDER.filter(a => grouped[a]).map(a => [a, grouped[a]]);
       const sessionRows = sortedGroups.map(([agent, grp]) => {
         const agentCls = `a-${agent}`;

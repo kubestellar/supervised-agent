@@ -67,15 +67,16 @@ const (
 )
 
 type Collector struct {
-	sessionsDir        string
-	claudeSessionsDir  string
-	persistPath        string
-	detector           func(string) string
-	logger             *slog.Logger
-	mu                 sync.RWMutex
-	latest             *AggregateSummary
-	issueCosts         map[string]int64
-	scanInterval       time.Duration
+	sessionsDir         string
+	claudeSessionsDir   string
+	copilotSessionsDir  string
+	persistPath         string
+	detector            func(string) string
+	logger              *slog.Logger
+	mu                  sync.RWMutex
+	latest              *AggregateSummary
+	issueCosts          map[string]int64
+	scanInterval        time.Duration
 }
 
 func NewCollector(sessionsDir string, logger *slog.Logger) *Collector {
@@ -96,11 +97,12 @@ func (c *Collector) SetPersistPath(path string) {
 	c.persistPath = path
 }
 
-// SetClaudeSessionsDir configures the collector to also scan Claude Code's
-// native session files. The path is the Claude projects directory, typically
-// ~/.claude/projects (or /root/.claude/projects in containers).
 func (c *Collector) SetClaudeSessionsDir(dir string) {
 	c.claudeSessionsDir = dir
+}
+
+func (c *Collector) SetCopilotSessionsDir(dir string) {
+	c.copilotSessionsDir = dir
 }
 
 func (c *Collector) Start(stop <-chan struct{}) {
@@ -124,7 +126,6 @@ func (c *Collector) scan() {
 		return
 	}
 
-	// Merge Claude Code native session data if configured
 	if c.claudeSessionsDir != "" {
 		claudeAgg, err := ScanClaudeSessionsWithPathDetection(c.claudeSessionsDir)
 		if err != nil {
@@ -133,6 +134,19 @@ func (c *Collector) scan() {
 			MergeAggregates(agg, claudeAgg)
 			c.logger.Info("merged claude sessions",
 				"claude_sessions", claudeAgg.SessionCount,
+				"total_sessions", agg.SessionCount,
+			)
+		}
+	}
+
+	if c.copilotSessionsDir != "" {
+		copilotAgg, err := ScanCopilotSessions(c.copilotSessionsDir)
+		if err != nil {
+			c.logger.Warn("copilot session scan failed", "error", err)
+		} else if copilotAgg != nil && copilotAgg.SessionCount > 0 {
+			MergeAggregates(agg, copilotAgg)
+			c.logger.Info("merged copilot sessions",
+				"copilot_sessions", copilotAgg.SessionCount,
 				"total_sessions", agg.SessionCount,
 			)
 		}
