@@ -2378,6 +2378,9 @@ func maskSecret(s string) string {
 func (s *Server) handleAuthToken(w http.ResponseWriter, r *http.Request) {
 	token := s.authToken
 	if token == "" {
+		token = os.Getenv("HIVE_DASHBOARD_TOKEN")
+	}
+	if token == "" {
 		token = "(not set)"
 	}
 	okResponse(w, map[string]string{"token": token})
