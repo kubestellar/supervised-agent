@@ -1386,6 +1386,25 @@
     .kb-empty { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 0.82rem; }
     .kb-empty-icon { font-size: 2rem; margin-bottom: 8px; }
     .kb-disabled { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .kb-setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+    @media (max-width: 640px) { .kb-setup-grid { grid-template-columns: 1fr; } }
+    .kb-setup-card { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 20px; cursor: pointer; transition: all 0.2s; text-align: left; }
+    .kb-setup-card:hover { border-color: var(--accent); box-shadow: 0 2px 12px rgba(88,166,255,0.12); }
+    .kb-setup-card-icon { font-size: 1.8rem; margin-bottom: 10px; }
+    .kb-setup-card-title { font-size: 0.88rem; font-weight: 700; color: var(--fg); margin-bottom: 6px; }
+    .kb-setup-card-desc { font-size: 0.74rem; color: var(--muted); line-height: 1.5; }
+    .kb-setup-instructions { margin-top: 16px; text-align: left; font-size: 0.78rem; line-height: 1.7; color: var(--fg); }
+    .kb-setup-instructions ol { padding-left: 20px; margin: 10px 0; }
+    .kb-setup-instructions li { margin-bottom: 10px; }
+    .kb-setup-instructions code { background: var(--bg); padding: 2px 6px; border-radius: 4px; font-size: 0.74rem; font-family: monospace; }
+    .kb-setup-instructions pre { background: var(--bg); padding: 10px 14px; border-radius: 6px; overflow-x: auto; font-size: 0.72rem; line-height: 1.5; margin: 8px 0; border: 1px solid var(--border); }
+    .kb-setup-instructions .kb-tip { background: rgba(88,166,255,0.08); border: 1px solid rgba(88,166,255,0.2); border-radius: 6px; padding: 8px 12px; font-size: 0.72rem; color: var(--muted); margin-top: 10px; }
+    .kb-setup-back { display: inline-flex; align-items: center; gap: 4px; background: none; border: none; color: var(--accent); cursor: pointer; font-size: 0.78rem; padding: 0; margin-bottom: 12px; }
+    .kb-setup-back:hover { text-decoration: underline; }
+    .kb-vault-status { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 16px; margin-top: 12px; }
+    .kb-vault-status-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .kb-vault-status-label { font-size: 0.72rem; color: var(--muted); }
+    .kb-vault-status-value { font-size: 0.78rem; font-weight: 600; color: var(--fg); }
     @media (max-width: 768px) { .kb-layout { grid-template-columns: 1fr; } }
 
     /* Right info sidebar */
@@ -4219,6 +4238,160 @@ function burnAreaChart() {
       } catch (e) { /* ignore */ }
     }
 
+    // Setup view state: 'choose' (default), 'git', 'webhook', or 'none' (skip setup, show full KB)
+    let _kbSetupView = 'choose';
+
+    function renderKnowledgeSetup(panel, badge) {
+      if (badge) {
+        badge.textContent = 'setup';
+        badge.style.background = '#d97706';
+        badge.style.color = 'white';
+      }
+
+      const hiveHost = window.location.host;
+
+      if (_kbSetupView === 'git') {
+        panel.innerHTML = renderGitSetupInstructions(hiveHost);
+        return;
+      }
+      if (_kbSetupView === 'webhook') {
+        panel.innerHTML = renderWebhookSetupInstructions(hiveHost);
+        return;
+      }
+
+      // Default: show the two-card chooser
+      let html = '<div style="text-align:center;padding:16px 0">';
+      html += '<div style="font-size:1.4rem;margin-bottom:8px">📚</div>';
+      html += '<div style="font-size:0.88rem;font-weight:600;color:var(--fg);margin-bottom:4px">Connect Your Obsidian Vault</div>';
+      html += '<div style="font-size:0.74rem;color:var(--muted);margin-bottom:4px;max-width:500px;margin-left:auto;margin-right:auto">Sync your notes as knowledge facts. Choose a connection method below.</div>';
+      html += '</div>';
+
+      html += '<div class="kb-setup-grid">';
+
+      // Git Repo card
+      html += '<div class="kb-setup-card" onclick="_kbSetupView=\'git\';renderKnowledge()">';
+      html += '<div class="kb-setup-card-icon">🔗</div>';
+      html += '<div class="kb-setup-card-title">Connect via Git Repo</div>';
+      html += '<div class="kb-setup-card-desc">Use the Obsidian Git plugin to push your vault to a repo. Hive clones it and auto-syncs every 60 seconds.</div>';
+      html += '</div>';
+
+      // Webhook card
+      html += '<div class="kb-setup-card" onclick="_kbSetupView=\'webhook\';renderKnowledge()">';
+      html += '<div class="kb-setup-card-icon">⚡</div>';
+      html += '<div class="kb-setup-card-title">Connect via Webhook</div>';
+      html += '<div class="kb-setup-card-desc">Use the Obsidian Post Webhook plugin to send individual notes instantly. No git required.</div>';
+      html += '</div>';
+
+      html += '</div>';
+
+      // Skip link to go straight to the full KB view
+      html += '<div style="text-align:center;margin-top:16px">';
+      html += '<button onclick="_kbSetupView=\'none\';renderKnowledge()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.72rem;text-decoration:underline">Skip setup and use Knowledge Base without Obsidian</button>';
+      html += '</div>';
+
+      panel.innerHTML = html;
+    }
+
+    function renderGitSetupInstructions(hiveHost, opts) {
+      const showBack = !(opts && opts.noBack);
+      const showForm = !(opts && opts.noForm);
+      let html = '<div class="kb-setup-instructions">';
+      if (showBack) html += '<button class="kb-setup-back" onclick="_kbSetupView=\'choose\';renderKnowledge()">&larr; Back to connection methods</button>';
+      html += '<div style="font-size:0.92rem;font-weight:700;color:var(--fg);margin-bottom:12px">🔗 Connect via Git Repo</div>';
+      html += '<ol>';
+      html += '<li><strong>Install the "Obsidian Git" community plugin</strong><br>';
+      html += '<span style="color:var(--muted)">Settings &rarr; Community Plugins &rarr; Browse &rarr; search "Obsidian Git"</span></li>';
+      html += '<li><strong>Initialize your vault as a git repo</strong> (or use an existing one)<br>';
+      html += '<span style="color:var(--muted)">The plugin can auto-commit and push on a configurable interval.</span></li>';
+      html += '<li><strong>Set the git repo URL on your Hive server:</strong><br>';
+      html += '<div style="margin-top:6px"><em>Option A:</em> Set the <code>HIVE_WIKI_GIT_URL</code> environment variable before starting Hive</div>';
+      html += '<div style="margin-top:6px"><em>Option B:</em> Use the API:</div>';
+      html += '<pre>curl -X POST http://' + escapeHtml(hiveHost) + '/api/knowledge/vaults \\\n';
+      html += '  -H "Content-Type: application/json" \\\n';
+      html += '  -H "Authorization: Bearer &lt;token&gt;" \\\n';
+      html += '  -d \'{"path": "/data/vaults/hive-wiki", "name": "hive-wiki"}\'</pre></li>';
+      html += '<li><strong>Hive auto-syncs every 60 seconds</strong> via <code>git pull</code><br>';
+      html += '<span style="color:var(--muted)">Changes appear in the Knowledge Base within ~30s of pushing.</span></li>';
+      html += '</ol>';
+      html += '<div class="kb-tip"><strong>Recommended plugin settings:</strong><br>';
+      html += '&bull; Auto pull interval: 1 minute<br>';
+      html += '&bull; Auto push interval: 1 minute<br>';
+      html += '&bull; Pull on startup: enabled</div>';
+      html += '</div>';
+
+      // Inline vault connect form
+      if (showForm) {
+        html += '<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:16px">';
+        html += '<div style="font-size:0.82rem;font-weight:600;color:var(--fg);margin-bottom:8px">Connect vault now</div>';
+        html += '<div style="font-size:0.7rem;color:var(--muted);margin-bottom:8px">Mount the cloned repo into the container (e.g. <code>-v /path/to/vault:/data/vaults/my-vault</code>), then enter the container path below.</div>';
+        html += '<div style="display:grid;grid-template-columns:2fr 1fr auto;gap:8px;align-items:center">';
+        html += '<input id="kb-setup-vault-path" type="text" class="kb-search-box" placeholder="/data/vaults/hive-wiki">';
+        html += '<input id="kb-setup-vault-name" type="text" class="kb-search-box" placeholder="Display name">';
+        html += '<button class="nous-btn" style="background:var(--accent);color:white;white-space:nowrap" onclick="kbSetupConnectVault()">Connect</button>';
+        html += '</div></div>';
+      }
+
+      return html;
+    }
+
+    function renderWebhookSetupInstructions(hiveHost, opts) {
+      const showBack = !(opts && opts.noBack);
+      const showDone = !(opts && opts.noDone);
+      let html = '<div class="kb-setup-instructions">';
+      if (showBack) html += '<button class="kb-setup-back" onclick="_kbSetupView=\'choose\';renderKnowledge()">&larr; Back to connection methods</button>';
+      html += '<div style="font-size:0.92rem;font-weight:700;color:var(--fg);margin-bottom:12px">⚡ Connect via Webhook</div>';
+      html += '<ol>';
+      html += '<li><strong>Install the "Post Webhook" community plugin</strong><br>';
+      html += '<span style="color:var(--muted)">Settings &rarr; Community Plugins &rarr; Browse &rarr; search "Post Webhook"</span></li>';
+      html += '<li><strong>Add a webhook in the plugin settings:</strong>';
+      html += '<div style="margin-top:6px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:0.74rem">';
+      html += '<div><strong>Name:</strong> Hive Knowledge Sync</div>';
+      html += '<div><strong>URL:</strong> <code>http://' + escapeHtml(hiveHost) + '/api/knowledge/obsidian/sync</code></div>';
+      html += '<div><strong>Method:</strong> POST</div>';
+      html += '<div><strong>Headers:</strong> <code>Authorization: Bearer &lt;your-dashboard-token&gt;</code></div>';
+      html += '</div></li>';
+      html += '<li><strong>Use it:</strong><br>';
+      html += '<span style="color:var(--muted)">Command palette &rarr; "Post Webhook: Send current note"<br>';
+      html += 'Or bind to a hotkey (e.g., Ctrl+Shift+S)</span></li>';
+      html += '<li><strong>Your note\'s frontmatter controls how it\'s stored:</strong>';
+      html += '<pre>---\n';
+      html += 'title: My Pattern\n';
+      html += 'tags: [scanner, pattern]\n';
+      html += 'type: pattern       # pattern, gotcha, decision, etc.\n';
+      html += 'layer: project      # personal, project, org, community\n';
+      html += 'confidence: 0.85\n';
+      html += '---</pre>';
+      html += '<span style="color:var(--muted)">Notes are upserted by filename -- saving the same note updates it.</span></li>';
+      html += '</ol>';
+      html += '<div class="kb-tip"><strong>Tip:</strong> The webhook endpoint is always available at <code>http://' + escapeHtml(hiveHost) + '/api/knowledge/obsidian/sync</code>. You can start sending notes immediately -- no vault connection required. Facts will appear in the Knowledge Base as soon as they arrive.</div>';
+      html += '</div>';
+
+      // Enable knowledge button for webhook (webhook works without vault connection)
+      if (showDone) {
+        html += '<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:16px;text-align:center">';
+        html += '<button onclick="_kbSetupView=\'none\';renderKnowledge()" class="nous-btn" style="background:var(--accent);color:white;padding:8px 24px;font-size:0.82rem">Done -- go to Knowledge Base</button>';
+        html += '</div>';
+      }
+
+      return html;
+    }
+
+    async function kbSetupConnectVault() {
+      const path = document.getElementById('kb-setup-vault-path')?.value?.trim();
+      const name = document.getElementById('kb-setup-vault-name')?.value?.trim();
+      if (!path) { alert('Path is required'); return; }
+
+      try {
+        const r = await fetch('/api/knowledge/vaults', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path, name: name || '' }),
+        });
+        if (!r.ok) { const e = await r.json(); alert(e.error || 'Failed to connect vault'); return; }
+        _kbSetupView = 'none';
+        await fetchKnowledgeStats();
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+
     function renderKnowledge() {
       const panel = document.getElementById('knowledge-panel');
       const badge = document.getElementById('kb-status-badge');
@@ -4227,6 +4400,13 @@ function burnAreaChart() {
       if (!_kbCache || !_kbCache.enabled) {
         if (badge) { badge.textContent = 'disabled'; badge.style.background = '#6b7280'; badge.style.color = 'white'; }
         panel.innerHTML = '<div class="kb-disabled"><div style="font-size:2rem;margin-bottom:8px">📚</div><div>Knowledge system not enabled</div><div style="font-size:0.72rem;margin-top:4px;color:var(--muted);margin-bottom:12px">Enable the knowledge base to store and retrieve facts across agents.</div><button onclick="toggleKnowledge(true)" style="padding:8px 20px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:600" title="Enable the knowledge base system. Agents will be able to store and retrieve facts (patterns, gotchas, regressions, decisions) across sessions and layers (personal, project, org, community).">Enable Knowledge</button></div>';
+        return;
+      }
+
+      // Check if any vaults are connected — if not, show the Obsidian setup panel
+      const connectedVaults = _kbCache.vaults || [];
+      if (connectedVaults.length === 0 && _kbSetupView !== 'none') {
+        renderKnowledgeSetup(panel, badge);
         return;
       }
 
@@ -4259,6 +4439,7 @@ function burnAreaChart() {
       html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenSubscriptions()" title="Manage subscriptions to external knowledge sources. Subscribed facts auto-sync on a schedule.">🔗 Subscriptions</button>';
       html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenVaults()" title="Manage knowledge vaults — collections of facts organized by topic or project. Vaults can be shared across hive instances.">📂 Vaults</button>';
       html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenHowItWorks()">📖 How it works</button>';
+      html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenObsidianSetup()" title="View step-by-step instructions for connecting Obsidian via Git sync or webhook.">🔮 Obsidian Setup</button>';
       html += '</div>';
 
       // Main layout: sidebar + content
@@ -4810,6 +4991,17 @@ function burnAreaChart() {
         </div>
       `;
       kbShowModal('📖 How Knowledge Works', body, { width: 'min(800px, 85vw)', maxHeight: '85vh' });
+    }
+
+    function kbOpenObsidianSetup() {
+      const hiveHost = window.location.host;
+      const modalOpts = { noBack: true, noForm: true, noDone: true };
+      let body = '<div style="max-height:70vh;overflow-y:auto;padding-right:16px">';
+      body += renderGitSetupInstructions(hiveHost, modalOpts);
+      body += '<div style="border-top:1px solid var(--border);margin:20px 0"></div>';
+      body += renderWebhookSetupInstructions(hiveHost, modalOpts);
+      body += '</div>';
+      kbShowModal('🔮 Obsidian Setup Guide', body, { width: 'min(800px, 85vw)', maxHeight: '85vh' });
     }
 
     // ── Vault Management ──
