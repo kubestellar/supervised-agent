@@ -243,7 +243,10 @@ func main() {
 		}, logger)
 	}
 
+	os.MkdirAll(nousSnapshotDir, 0o755)
+	os.MkdirAll(nousGovernorDir, 0o755)
 	nousState := loadNousState(logger)
+	nousState.SnapshotDir = nousSnapshotDir
 
 	dashSrv.RegisterAPI(&dashboard.Dependencies{
 		Config:           cfg,
@@ -303,7 +306,7 @@ func main() {
 		return
 	}
 
-	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, &lastActionable, logger)
+	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, nousState, &lastActionable, logger)
 
 	for {
 		select {
@@ -312,7 +315,7 @@ func main() {
 			persistState(agentMgr, gov, cfg, statePath, logger)
 			return
 		case <-ticker.C:
-			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, &lastActionable, logger)
+			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, nousState, &lastActionable, logger)
 		}
 	}
 }
@@ -329,6 +332,7 @@ func runEvalCycle(
 	beadStores map[string]*beads.Store,
 	tokenCollector *tokens.Collector,
 	metricsCollector *dashboard.MetricsCollector,
+	nousState *dashboard.NousState,
 	lastActionable *atomic.Pointer[github.ActionableResult],
 	logger *slog.Logger,
 ) {
@@ -406,6 +410,16 @@ func runEvalCycle(
 		ctx,
 		metricsCollector,
 	))
+
+	if nousState != nil {
+		var tokenSummary *tokens.AggregateSummary
+		if tokenCollector != nil {
+			tokenSummary = tokenCollector.Summary()
+		}
+		if err := nousState.RecordSnapshot(govState, actionable, agentsDue, agentStatuses, tokenSummary); err != nil {
+			logger.Warn("failed to record nous snapshot", "error", err)
+		}
+	}
 }
 
 // loginCommandForBackend returns the login instruction for a given CLI backend.
@@ -678,8 +692,8 @@ func loadNousState(logger *slog.Logger) *dashboard.NousState {
 		"snapshots":       snapshotCount,
 		"iterations":      iterationCount,
 		"principles":      len(state.Principles),
-		"baseline_target": 672,
-		"baseline_pct":    float64(snapshotCount) * 100 / 672,
+		"baseline_target": dashboard.NousBaselineTarget,
+		"baseline_pct":    float64(snapshotCount) * 100 / dashboard.NousBaselineTarget,
 	}
 
 	return state

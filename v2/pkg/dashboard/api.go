@@ -1962,7 +1962,13 @@ func (s *Server) handleNousStatus(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, map[string]string{"status": "not_configured"})
 		return
 	}
-	jsonResponse(w, s.deps.Nous.Status)
+	s.deps.Nous.Mu.Lock()
+	status := make(map[string]interface{}, len(s.deps.Nous.Status))
+	for k, v := range s.deps.Nous.Status {
+		status[k] = v
+	}
+	s.deps.Nous.Mu.Unlock()
+	jsonResponse(w, status)
 }
 
 func (s *Server) handleNousLedger(w http.ResponseWriter, r *http.Request) {
