@@ -147,7 +147,8 @@ elif [ "$EFFECTIVE_MODE" = "observe" ]; then
   AUTO_APPROVE="true"
 fi
 
-echo "[nous-runner] invoking run_campaign.py (auto_approve=$AUTO_APPROVE, timeout=${TIMEOUT_SEC}s)"
+NOUS_AGENT="${NOUS_AGENT:-cli}"
+echo "[nous-runner] invoking run_campaign.py (agent=$NOUS_AGENT, auto_approve=$AUTO_APPROVE, timeout=${TIMEOUT_SEC}s)"
 NOUS_HIVE_MODE="$EFFECTIVE_MODE" \
 NOUS_HIVE_SCOPE="$EFFECTIVE_SCOPE" \
 NOUS_GATE_SCRIPT="$GATE_SCRIPT" \
@@ -157,6 +158,7 @@ NOUS_GATE_SCRIPT="$GATE_SCRIPT" \
   --max-iterations 1 \
   --timeout "$TIMEOUT_SEC" \
   --auto-approve "$AUTO_APPROVE" \
+  --agent "$NOUS_AGENT" \
   --context-file "$WORK_DIR/hive-context.json" \
   2>&1 || {
     echo "[nous-runner] run_campaign.py exited with $?"
