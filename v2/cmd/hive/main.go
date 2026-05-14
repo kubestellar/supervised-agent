@@ -99,6 +99,16 @@ func main() {
 		}
 	}
 
+	// Restore mode history from disk so the mode timeline survives container restarts
+	const modeHistoryPath = "/data/mode-history.json"
+	if modeData, err := os.ReadFile(modeHistoryPath); err == nil {
+		var changes []governor.ModeChange
+		if err := json.Unmarshal(modeData, &changes); err == nil && len(changes) > 0 {
+			gov.SeedModeHistory(changes)
+			logger.Info("mode history restored", "entries", len(changes))
+		}
+	}
+
 	if cfg.Knowledge.Enabled {
 		layers := convertKnowledgeLayers(cfg.Knowledge.Layers)
 		primerCfg := knowledge.PrimerConfig{
@@ -436,6 +446,14 @@ func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.C
 		historyData, err := json.Marshal(history)
 		if err == nil {
 			_ = os.WriteFile("/data/sparkline-history.json", historyData, 0o644)
+		}
+	}
+
+	modeHistory := gov.ModeHistory()
+	if len(modeHistory) > 0 {
+		modeData, err := json.Marshal(modeHistory)
+		if err == nil {
+			_ = os.WriteFile("/data/mode-history.json", modeData, 0o644)
 		}
 	}
 }

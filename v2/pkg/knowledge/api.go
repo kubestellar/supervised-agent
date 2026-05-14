@@ -16,6 +16,7 @@ type KnowledgeAPI struct {
 	config        KnowledgeConfig
 	promoter      *Promoter
 	subscriptions []Subscription
+	vaults        []*FileStore
 	logger        *slog.Logger
 }
 
@@ -360,6 +361,113 @@ func (k *KnowledgeAPI) RemoveSubscription(url string) error {
 
 	k.logger.Info("subscription removed", "url", url)
 	return nil
+}
+
+// VaultInfo describes a connected Obsidian/file-based vault for the dashboard.
+type VaultInfo struct {
+	Name       string         `json:"name"`
+	RootDir    string         `json:"root_dir"`
+	Pages      int            `json:"pages"`
+	LastIndexed time.Time     `json:"last_indexed"`
+	TagCounts  map[string]int `json:"tag_counts,omitempty"`
+}
+
+// ConnectVault adds a file-based vault (Obsidian, MindStudio export, or any
+// directory of markdown files) as a knowledge source.
+func (k *KnowledgeAPI) ConnectVault(rootDir string, name string) error {
+	for _, v := range k.vaults {
+		if v.RootDir() == rootDir {
+			return fmt.Errorf("vault already connected: %s", rootDir)
+		}
+	}
+
+	store, err := NewFileStore(rootDir, name, k.logger)
+	if err != nil {
+		return fmt.Errorf("connecting vault: %w", err)
+	}
+
+	k.vaults = append(k.vaults, store)
+	k.logger.Info("vault connected", "name", name, "dir", rootDir, "pages", store.Stats().TotalPages)
+	return nil
+}
+
+// DisconnectVault removes a file-based vault by root directory.
+func (k *KnowledgeAPI) DisconnectVault(rootDir string) error {
+	found := false
+	newVaults := make([]*FileStore, 0, len(k.vaults))
+	for _, v := range k.vaults {
+		if v.RootDir() == rootDir {
+			found = true
+			continue
+		}
+		newVaults = append(newVaults, v)
+	}
+	if !found {
+		return fmt.Errorf("vault not found: %s", rootDir)
+	}
+	k.vaults = newVaults
+	k.logger.Info("vault disconnected", "dir", rootDir)
+	return nil
+}
+
+// Vaults returns info about all connected file-based vaults.
+func (k *KnowledgeAPI) Vaults() []VaultInfo {
+	infos := make([]VaultInfo, len(k.vaults))
+	for i, v := range k.vaults {
+		stats := v.Stats()
+		infos[i] = VaultInfo{
+			Name:        stats.Name,
+			RootDir:     stats.RootDir,
+			Pages:       stats.TotalPages,
+			LastIndexed: stats.LastIndexed,
+			TagCounts:   stats.TagCounts,
+		}
+	}
+	return infos
+}
+
+// ReindexVault forces a re-scan of a specific vault.
+func (k *KnowledgeAPI) ReindexVault(rootDir string) error {
+	for _, v := range k.vaults {
+		if v.RootDir() == rootDir {
+			v.Reindex()
+			return nil
+		}
+	}
+	return fmt.Errorf("vault not found: %s", rootDir)
+}
+
+// SearchAllWithVaults queries both wiki layers and file-based vaults.
+func (k *KnowledgeAPI) SearchAllWithVaults(ctx context.Context, query string, typeFilter string, limit int) []Fact {
+	results := k.SearchAll(ctx, query, typeFilter, limit)
+
+	for _, v := range k.vaults {
+		vaultResults := v.Search(query, limit)
+		results = append(results, vaultResults...)
+	}
+
+	return results
+}
+
+// VaultFacts returns all facts from a specific vault by name.
+func (k *KnowledgeAPI) VaultFacts(name string) []Fact {
+	for _, v := range k.vaults {
+		if v.Name() == name {
+			return v.ListPages("")
+		}
+	}
+	return nil
+}
+
+// VaultFact reads a single fact from any connected vault.
+func (k *KnowledgeAPI) VaultFact(slug string) (*Fact, error) {
+	for _, v := range k.vaults {
+		fact, err := v.ReadPage(slug)
+		if err == nil {
+			return fact, nil
+		}
+	}
+	return nil, fmt.Errorf("fact not found in any vault: %s", slug)
 }
 
 // Layers returns the configured layer types for the frontend.

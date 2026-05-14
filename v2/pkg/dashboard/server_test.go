@@ -47,8 +47,8 @@ func minimalPayload() *StatusPayload {
 		},
 		Tokens: FrontendTokens{
 			LookbackHours: 24,
-			Sessions:      1,
-			Totals:        FrontendTokenTotals{Input: 1000},
+			Sessions:      []FrontendSession{{ID: "test-1", Agent: "scanner", Model: "sonnet", Total: 1000, Messages: 5}},
+			Totals:        FrontendTokenTotals{Input: 1000, Sessions: 1},
 			ByAgent:       map[string]FrontendTokenBucket{"scanner": {Input: 1000}},
 			ByModel:       map[string]FrontendTokenBucket{"sonnet": {Input: 1000}},
 		},

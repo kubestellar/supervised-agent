@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -87,6 +88,11 @@ func (s *Server) RegisterAPI(deps *Dependencies) {
 	s.mux.HandleFunc("GET /api/knowledge/{layer}", s.handleKnowledgeLayer)
 	s.mux.HandleFunc("GET /api/knowledge/{layer}/{slug}", s.handleKnowledgeFact)
 	s.mux.HandleFunc("PUT /api/knowledge/enabled", s.handleKnowledgeToggle)
+	s.mux.HandleFunc("GET /api/knowledge/vaults", s.handleVaultsList)
+	s.mux.HandleFunc("POST /api/knowledge/vaults", s.handleVaultsConnect)
+	s.mux.HandleFunc("DELETE /api/knowledge/vaults", s.handleVaultsDisconnect)
+	s.mux.HandleFunc("POST /api/knowledge/vaults/reindex", s.handleVaultsReindex)
+	s.mux.HandleFunc("GET /api/knowledge/vaults/{name}/facts", s.handleVaultFacts)
 
 	s.mux.HandleFunc("POST /api/chat", s.handleChat)
 
@@ -302,6 +308,18 @@ func (s *Server) handleTimeline(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			modes = append(seedModes, modes...)
+		}
+	}
+
+	// If eval-based modes are empty, fall back to explicit mode history
+	// so the timeline always shows at least the startup mode.
+	if len(modes) == 0 {
+		modeChanges := s.deps.Governor.ModeHistory()
+		for _, mc := range modeChanges {
+			modes = append(modes, timelineMode{
+				T:    mc.Timestamp.UnixMilli(),
+				Mode: strings.ToLower(string(mc.To)),
+			})
 		}
 	}
 
@@ -1470,7 +1488,7 @@ func (s *Server) handleKnowledgeSearch(w http.ResponseWriter, r *http.Request) {
 		limit, _ = strconv.Atoi(limitStr)
 	}
 
-	results := s.deps.Knowledge.SearchAll(s.deps.Ctx, query, typeFilter, limit)
+	results := s.deps.Knowledge.SearchAllWithVaults(s.deps.Ctx, query, typeFilter, limit)
 	jsonResponse(w, map[string]interface{}{
 		"query":   query,
 		"count":   len(results),
@@ -1491,7 +1509,9 @@ func (s *Server) handleKnowledgeStats(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, map[string]interface{}{"enabled": false})
 		return
 	}
-	jsonResponse(w, s.deps.Knowledge.Stats(s.deps.Ctx))
+	stats := s.deps.Knowledge.Stats(s.deps.Ctx)
+	stats["vaults"] = s.deps.Knowledge.Vaults()
+	jsonResponse(w, stats)
 }
 
 func (s *Server) handleKnowledgeLayer(w http.ResponseWriter, r *http.Request) {
@@ -1724,6 +1744,110 @@ func (s *Server) handleKnowledgeSubsRemove(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	jsonResponse(w, map[string]interface{}{"ok": true, "removed": req.URL})
+}
+
+// --- Vault endpoints ---
+
+func (s *Server) handleVaultsList(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonResponse(w, []interface{}{})
+		return
+	}
+	jsonResponse(w, s.deps.Knowledge.Vaults())
+}
+
+func (s *Server) handleVaultsConnect(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		Path string `json:"path"`
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Path == "" {
+		jsonError(w, "path is required", http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" {
+		req.Name = filepath.Base(req.Path)
+	}
+
+	if err := s.deps.Knowledge.ConnectVault(req.Path, req.Name); err != nil {
+		jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	jsonResponse(w, map[string]interface{}{"ok": true, "name": req.Name, "path": req.Path})
+}
+
+func (s *Server) handleVaultsDisconnect(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Path == "" {
+		jsonError(w, "path is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.deps.Knowledge.DisconnectVault(req.Path); err != nil {
+		jsonError(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	jsonResponse(w, map[string]interface{}{"ok": true, "removed": req.Path})
+}
+
+func (s *Server) handleVaultsReindex(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Path == "" {
+		jsonError(w, "path is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.deps.Knowledge.ReindexVault(req.Path); err != nil {
+		jsonError(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	jsonResponse(w, map[string]interface{}{"ok": true, "reindexed": req.Path})
+}
+
+func (s *Server) handleVaultFacts(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonResponse(w, []interface{}{})
+		return
+	}
+
+	name := r.PathValue("name")
+	facts := s.deps.Knowledge.VaultFacts(name)
+	if facts == nil {
+		facts = []knowledge.Fact{}
+	}
+	jsonResponse(w, facts)
 }
 
 // --- Chat endpoint ---

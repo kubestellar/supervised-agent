@@ -98,11 +98,11 @@ type FrontendThresholds struct {
 }
 
 type FrontendTokens struct {
-	LookbackHours int                        `json:"lookbackHours"`
-	Sessions      int                        `json:"sessions"`
-	Totals        FrontendTokenTotals        `json:"totals"`
-	ByAgent       map[string]FrontendTokenBucket `json:"byAgent"`
-	ByModel       map[string]FrontendTokenBucket `json:"byModel"`
+	LookbackHours  int                            `json:"lookbackHours"`
+	Sessions       []FrontendSession              `json:"sessions"`
+	Totals         FrontendTokenTotals             `json:"totals"`
+	ByAgent        map[string]FrontendTokenBucket  `json:"byAgent"`
+	ByModel        map[string]FrontendTokenBucket  `json:"byModel"`
 }
 
 type FrontendTokenTotals struct {
@@ -111,13 +111,28 @@ type FrontendTokenTotals struct {
 	CacheRead   int64 `json:"cacheRead"`
 	CacheCreate int64 `json:"cacheCreate"`
 	Messages    int   `json:"messages"`
+	Sessions    int   `json:"sessions"`
 }
 
 type FrontendTokenBucket struct {
-	Input     int64 `json:"input"`
-	Output    int64 `json:"output"`
-	CacheRead int64 `json:"cacheRead"`
-	Messages  int   `json:"messages,omitempty"`
+	Input         int64 `json:"input"`
+	Output        int64 `json:"output"`
+	CacheRead     int64 `json:"cacheRead"`
+	CacheCreate   int64 `json:"cacheCreate,omitempty"`
+	Messages      int   `json:"messages,omitempty"`
+	Sessions      int   `json:"sessions,omitempty"`
+	AvgPerSession int64 `json:"avgPerSession,omitempty"`
+}
+
+// FrontendSession represents an individual CLI session for the Active Sessions list.
+type FrontendSession struct {
+	ID         string `json:"id"`
+	Agent      string `json:"agent"`
+	Model      string `json:"model"`
+	Total      int64  `json:"total"`
+	Messages   int    `json:"messages"`
+	LastActive string `json:"lastActive,omitempty"`
+	Estimated  bool   `json:"estimated,omitempty"`
 }
 
 type FrontendRepo struct {

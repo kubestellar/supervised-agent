@@ -272,6 +272,7 @@ func buildTokens(collector *tokens.Collector) FrontendTokens {
 	ft := FrontendTokens{
 		LookbackHours: defaultLookbackHours,
 		Totals:        FrontendTokenTotals{},
+		Sessions:      []FrontendSession{},
 		ByAgent:       make(map[string]FrontendTokenBucket),
 		ByModel:       make(map[string]FrontendTokenBucket),
 	}
@@ -285,21 +286,61 @@ func buildTokens(collector *tokens.Collector) FrontendTokens {
 		return ft
 	}
 
-	ft.Sessions = summary.SessionCount
-	ft.Totals.Input = summary.TotalTokens
+	ft.Totals.Sessions = summary.SessionCount
+	ft.Totals.Input = summary.TotalInput
+	ft.Totals.Output = summary.TotalOutput
+	ft.Totals.CacheRead = summary.TotalCacheRead
+	ft.Totals.CacheCreate = summary.TotalCacheCreate
+	ft.Totals.Messages = summary.TotalMessages
 
-	for agentName, total := range summary.ByAgent {
-		ft.ByAgent[agentName] = FrontendTokenBucket{Input: total}
-	}
-	for modelName, total := range summary.ByModel {
-		ft.ByModel[modelName] = FrontendTokenBucket{Input: total}
+	// Per-agent breakdown with full detail
+	for agentName, detail := range summary.ByAgentDetail {
+		bucket := FrontendTokenBucket{
+			Input:     detail.Input,
+			Output:    detail.Output,
+			CacheRead: detail.CacheRead,
+			CacheCreate: detail.CacheCreate,
+			Messages:  detail.Messages,
+			Sessions:  detail.Sessions,
+		}
+		if detail.Sessions > 0 {
+			totalForAgent := detail.Input + detail.Output + detail.CacheRead + detail.CacheCreate
+			bucket.AvgPerSession = totalForAgent / int64(detail.Sessions)
+		}
+		ft.ByAgent[agentName] = bucket
 	}
 
-	var totalMessages int
+	// Per-model breakdown with full detail
+	for modelName, detail := range summary.ByModelDetail {
+		bucket := FrontendTokenBucket{
+			Input:     detail.Input,
+			Output:    detail.Output,
+			CacheRead: detail.CacheRead,
+			CacheCreate: detail.CacheCreate,
+			Messages:  detail.Messages,
+			Sessions:  detail.Sessions,
+		}
+		if detail.Sessions > 0 {
+			totalForModel := detail.Input + detail.Output + detail.CacheRead + detail.CacheCreate
+			bucket.AvgPerSession = totalForModel / int64(detail.Sessions)
+		}
+		ft.ByModel[modelName] = bucket
+	}
+
+	// Build individual session list for Active Sessions
 	for _, sess := range summary.Sessions {
-		totalMessages += sess.Messages
+		fs := FrontendSession{
+			ID:       sess.SessionID,
+			Agent:    sess.Agent,
+			Model:    sess.Model,
+			Total:    sess.TotalTokens,
+			Messages: sess.Messages,
+		}
+		if sess.LastActive > 0 {
+			fs.LastActive = time.UnixMilli(sess.LastActive).UTC().Format(time.RFC3339)
+		}
+		ft.Sessions = append(ft.Sessions, fs)
 	}
-	ft.Totals.Messages = totalMessages
 
 	return ft
 }
@@ -388,10 +429,18 @@ func buildBudget(gov *governor.Governor, tokenCollector *tokens.Collector) Front
 	budget := gov.GetBudget()
 
 	var totalTokens int64
-	var hoursElapsed float64
 	if tokenCollector != nil {
 		if summary := tokenCollector.Summary(); summary != nil {
 			totalTokens = summary.TotalTokens
+		}
+	}
+
+	// Compute hours elapsed since last budget reset
+	var hoursElapsed float64
+	if !budget.ResetAt.IsZero() {
+		hoursElapsed = time.Since(budget.ResetAt).Hours()
+		if hoursElapsed < 0 {
+			hoursElapsed = 0
 		}
 	}
 

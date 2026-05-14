@@ -29,16 +29,36 @@ type SessionSummary struct {
 	Model        string `json:"model"`
 	InputTokens  int64  `json:"input_tokens"`
 	OutputTokens int64  `json:"output_tokens"`
+	CacheRead    int64  `json:"cache_read"`
+	CacheCreate  int64  `json:"cache_create"`
 	TotalTokens  int64  `json:"total_tokens"`
 	Messages     int    `json:"messages"`
+	LastActive   int64  `json:"last_active,omitempty"`
+}
+
+// AgentModelBucket holds per-agent or per-model token breakdown.
+type AgentModelBucket struct {
+	Input       int64 `json:"input"`
+	Output      int64 `json:"output"`
+	CacheRead   int64 `json:"cache_read"`
+	CacheCreate int64 `json:"cache_create"`
+	Messages    int   `json:"messages"`
+	Sessions    int   `json:"sessions"`
 }
 
 type AggregateSummary struct {
-	TotalTokens  int64                     `json:"total_tokens"`
-	ByAgent      map[string]int64          `json:"by_agent"`
-	ByModel      map[string]int64          `json:"by_model"`
-	Sessions     []SessionSummary          `json:"sessions"`
-	SessionCount int                       `json:"session_count"`
+	TotalTokens    int64                        `json:"total_tokens"`
+	TotalInput     int64                        `json:"total_input"`
+	TotalOutput    int64                        `json:"total_output"`
+	TotalCacheRead int64                        `json:"total_cache_read"`
+	TotalCacheCreate int64                      `json:"total_cache_create"`
+	TotalMessages  int                          `json:"total_messages"`
+	ByAgent        map[string]int64             `json:"by_agent"`
+	ByModel        map[string]int64             `json:"by_model"`
+	ByAgentDetail  map[string]*AgentModelBucket `json:"by_agent_detail"`
+	ByModelDetail  map[string]*AgentModelBucket `json:"by_model_detail"`
+	Sessions       []SessionSummary             `json:"sessions"`
+	SessionCount   int                          `json:"session_count"`
 }
 
 const defaultScanInterval = 30 * time.Second
@@ -112,8 +132,10 @@ func CollectFromDir(sessionsDir string, agentDetector func(firstMsg string) stri
 	}
 
 	agg := &AggregateSummary{
-		ByAgent: make(map[string]int64),
-		ByModel: make(map[string]int64),
+		ByAgent:       make(map[string]int64),
+		ByModel:       make(map[string]int64),
+		ByAgentDetail: make(map[string]*AgentModelBucket),
+		ByModelDetail: make(map[string]*AgentModelBucket),
 	}
 
 	for _, file := range files {
@@ -127,8 +149,39 @@ func CollectFromDir(sessionsDir string, agentDetector func(firstMsg string) stri
 
 		agg.Sessions = append(agg.Sessions, *summary)
 		agg.TotalTokens += summary.TotalTokens
+		agg.TotalInput += summary.InputTokens
+		agg.TotalOutput += summary.OutputTokens
+		agg.TotalCacheRead += summary.CacheRead
+		agg.TotalCacheCreate += summary.CacheCreate
+		agg.TotalMessages += summary.Messages
 		agg.ByAgent[summary.Agent] += summary.TotalTokens
 		agg.ByModel[summary.Model] += summary.TotalTokens
+
+		// Per-agent detail
+		ab, ok := agg.ByAgentDetail[summary.Agent]
+		if !ok {
+			ab = &AgentModelBucket{}
+			agg.ByAgentDetail[summary.Agent] = ab
+		}
+		ab.Input += summary.InputTokens
+		ab.Output += summary.OutputTokens
+		ab.CacheRead += summary.CacheRead
+		ab.CacheCreate += summary.CacheCreate
+		ab.Messages += summary.Messages
+		ab.Sessions++
+
+		// Per-model detail
+		mb, ok := agg.ByModelDetail[summary.Model]
+		if !ok {
+			mb = &AgentModelBucket{}
+			agg.ByModelDetail[summary.Model] = mb
+		}
+		mb.Input += summary.InputTokens
+		mb.Output += summary.OutputTokens
+		mb.CacheRead += summary.CacheRead
+		mb.CacheCreate += summary.CacheCreate
+		mb.Messages += summary.Messages
+		mb.Sessions++
 	}
 
 	agg.SessionCount = len(agg.Sessions)
@@ -153,6 +206,7 @@ func parseSessionFile(path string, agentDetector func(string) string) (*SessionS
 	scanner.Buffer(make([]byte, 0, maxScanBufSize), maxScanBufSize)
 
 	firstUserMsg := ""
+	var lastTimestamp int64
 	for scanner.Scan() {
 		var entry SessionEntry
 		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
@@ -167,15 +221,19 @@ func parseSessionFile(path string, agentDetector func(string) string) (*SessionS
 			summary.Model = entry.Model
 		}
 
-		summary.InputTokens += entry.InputTokens + entry.CacheCreation + entry.CacheRead
+		summary.InputTokens += entry.InputTokens
 		summary.OutputTokens += entry.OutputTokens
+		summary.CacheRead += entry.CacheRead
+		summary.CacheCreate += entry.CacheCreation
 
 		if entry.Role == "user" || entry.Role == "assistant" {
 			summary.Messages++
+			lastTimestamp = time.Now().UnixMilli()
 		}
 	}
 
-	summary.TotalTokens = summary.InputTokens + summary.OutputTokens
+	summary.TotalTokens = summary.InputTokens + summary.OutputTokens + summary.CacheRead + summary.CacheCreate
+	summary.LastActive = lastTimestamp
 
 	if agentDetector != nil && firstUserMsg != "" {
 		summary.Agent = agentDetector(firstUserMsg)

@@ -250,7 +250,7 @@ func TestParseSessionFile_SessionIDFromFilename(t *testing.T) {
 func TestParseSessionFile_SumsInputTokensWithCache(t *testing.T) {
 	dir := t.TempDir()
 
-	// InputTokens = input_tokens + cache_creation + cache_read
+	// InputTokens = input_tokens only; cache tracked separately
 	content := strings.Join([]string{
 		`{"model":"gpt-4","input_tokens":100,"cache_creation":30,"cache_read":20,"output_tokens":50}`,
 		`{"input_tokens":10,"cache_creation":5,"cache_read":5,"output_tokens":10}`,
@@ -262,8 +262,8 @@ func TestParseSessionFile_SumsInputTokensWithCache(t *testing.T) {
 		t.Fatalf("parseSessionFile error: %v", err)
 	}
 
-	// line1 input: 100+30+20=150, line2 input: 10+5+5=20 → total input=170
-	wantInput := int64(150 + 20)
+	// input_tokens only: 100+10=110
+	wantInput := int64(110)
 	if summary.InputTokens != wantInput {
 		t.Errorf("InputTokens = %d, want %d", summary.InputTokens, wantInput)
 	}
@@ -274,7 +274,19 @@ func TestParseSessionFile_SumsInputTokensWithCache(t *testing.T) {
 		t.Errorf("OutputTokens = %d, want %d", summary.OutputTokens, wantOutput)
 	}
 
-	// TotalTokens = 170 + 60 = 230
+	// cache_read: 20+5=25
+	wantCacheRead := int64(25)
+	if summary.CacheRead != wantCacheRead {
+		t.Errorf("CacheRead = %d, want %d", summary.CacheRead, wantCacheRead)
+	}
+
+	// cache_create: 30+5=35
+	wantCacheCreate := int64(35)
+	if summary.CacheCreate != wantCacheCreate {
+		t.Errorf("CacheCreate = %d, want %d", summary.CacheCreate, wantCacheCreate)
+	}
+
+	// TotalTokens = 110 + 60 + 25 + 35 = 230
 	wantTotal := int64(230)
 	if summary.TotalTokens != wantTotal {
 		t.Errorf("TotalTokens = %d, want %d", summary.TotalTokens, wantTotal)
@@ -650,14 +662,21 @@ func TestCollectFromDir_SessionSummaryFields(t *testing.T) {
 		t.Errorf("Model = %q, want 'claude-3-sonnet'", s.Model)
 	}
 
-	// InputTokens = 200 + 50 + 25 = 275
-	wantInput := int64(275)
+	// InputTokens = 200 (input only, cache tracked separately)
+	wantInput := int64(200)
 	if s.InputTokens != wantInput {
 		t.Errorf("InputTokens = %d, want %d", s.InputTokens, wantInput)
 	}
 	if s.OutputTokens != 100 {
 		t.Errorf("OutputTokens = %d, want 100", s.OutputTokens)
 	}
+	if s.CacheRead != 25 {
+		t.Errorf("CacheRead = %d, want 25", s.CacheRead)
+	}
+	if s.CacheCreate != 50 {
+		t.Errorf("CacheCreate = %d, want 50", s.CacheCreate)
+	}
+	// TotalTokens = 200 + 100 + 25 + 50 = 375
 	if s.TotalTokens != 375 {
 		t.Errorf("TotalTokens = %d, want 375", s.TotalTokens)
 	}

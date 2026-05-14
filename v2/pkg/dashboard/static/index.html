@@ -4253,6 +4253,7 @@ function burnAreaChart() {
       html += '<button class="nous-btn" style="background:var(--accent);color:white" onclick="kbOpenCreate()">+ New Fact</button>';
       html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenImport()">📥 Import</button>';
       html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenSubscriptions()">🔗 Subscriptions</button>';
+      html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenVaults()">📂 Vaults</button>';
       html += '</div>';
 
       // Main layout: sidebar + content
@@ -4291,6 +4292,17 @@ function burnAreaChart() {
         html += `<div class="kb-health-item"><span class="kb-health-dot" style="background:${dot}"></span>${escapeHtml(KB_LAYER_LABELS[l.type] || l.type)}: ${l.healthy ? 'healthy' : 'unreachable'}</div>`;
       }
       html += '</div>';
+
+      // Vaults section in sidebar
+      const vaults = (_kbCache.vaults || []);
+      if (vaults.length > 0) {
+        html += '<div style="margin-top:12px;font-size:0.72rem;color:var(--muted)"><strong>📂 Connected Vaults</strong></div>';
+        html += '<div class="kb-layer-list" style="margin-top:4px">';
+        for (const v of vaults) {
+          html += `<button class="kb-layer-btn${_kbSelectedLayer === 'vault:'+v.name ? ' active' : ''}" onclick="_kbSelectedLayer='vault:${escapeHtml(v.name)}';kbSearchVault('${escapeHtml(v.name)}')" title="${escapeHtml(v.root_dir)}">📂 ${escapeHtml(v.name)}<span class="kb-layer-count">${v.pages}</span></button>`;
+        }
+        html += '</div>';
+      }
 
       html += '</div>'; // kb-sidebar
 
@@ -4726,6 +4738,112 @@ function burnAreaChart() {
         kbLoadSubscriptions();
         fetchKnowledgeStats();
       } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    // ── Vault Management ──
+
+    function kbOpenVaults() {
+      kbShowModal('📂 Connected Vaults', '<div id="kb-vaults-content"><div style="text-align:center;padding:20px;color:var(--muted)">Loading...</div></div>');
+      kbLoadVaults();
+    }
+
+    async function kbLoadVaults() {
+      const el = document.getElementById('kb-vaults-content');
+      if (!el) return;
+
+      try {
+        const r = await fetch('/api/knowledge/vaults');
+        const vaults = await r.json();
+
+        let html = '';
+        if (vaults && vaults.length > 0) {
+          html += '<div style="margin-bottom:14px">';
+          for (const v of vaults) {
+            const tagList = Object.entries(v.tag_counts || {}).sort((a,b) => b[1]-a[1]).slice(0,8).map(([t,c]) => `<span style="background:var(--surface);padding:2px 6px;border-radius:4px;font-size:0.65rem;margin-right:4px">#${escapeHtml(t)} (${c})</span>`).join('');
+            html += `<div style="padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px">`;
+            html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">`;
+            html += `<div><div style="font-size:0.82rem;font-weight:600;color:var(--fg)">📂 ${escapeHtml(v.name)}</div>`;
+            html += `<div style="font-size:0.7rem;color:var(--muted)">${escapeHtml(v.root_dir)} · ${v.pages} pages</div></div>`;
+            html += `<div style="display:flex;gap:4px">`;
+            html += `<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border);font-size:0.7rem;padding:4px 8px" onclick="kbReindexVault('${escapeHtml(v.root_dir)}')">↻ Reindex</button>`;
+            html += `<button class="nous-btn" style="background:#dc2626;color:white;font-size:0.7rem;padding:4px 8px" onclick="kbDisconnectVault('${escapeHtml(v.root_dir)}')">Disconnect</button>`;
+            html += '</div></div>';
+            if (tagList) html += `<div style="margin-top:4px">${tagList}</div>`;
+            html += `<div style="font-size:0.65rem;color:var(--muted);margin-top:4px">Last indexed: ${v.last_indexed ? new Date(v.last_indexed).toLocaleTimeString() : 'never'}</div>`;
+            html += '</div>';
+          }
+          html += '</div>';
+        } else {
+          html += '<div style="text-align:center;padding:16px;color:var(--muted);font-size:0.78rem">No vaults connected. Connect an Obsidian vault or any directory of markdown files.</div>';
+        }
+
+        html += '<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:8px">';
+        html += '<div style="font-size:0.82rem;font-weight:600;color:var(--fg);margin-bottom:8px">Connect Vault</div>';
+        html += '<div style="font-size:0.7rem;color:var(--muted);margin-bottom:8px">Mount an Obsidian vault or markdown directory into the container (e.g. <code>-v /path/to/vault:/data/vaults/my-vault</code>), then enter the container path below.</div>';
+        html += '<div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:8px">';
+        html += '<input id="kb-vault-path" type="text" class="kb-search-box" placeholder="/data/vaults/my-obsidian-vault">';
+        html += '<input id="kb-vault-name" type="text" class="kb-search-box" placeholder="Display name">';
+        html += '</div>';
+        html += '<div style="display:flex;justify-content:flex-end">';
+        html += '<button class="nous-btn" style="background:var(--accent);color:white" onclick="kbConnectVault()">Connect</button>';
+        html += '</div></div>';
+
+        el.innerHTML = html;
+      } catch (e) {
+        el.innerHTML = '<div style="color:#dc2626;padding:12px">Failed to load vaults: ' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    async function kbConnectVault() {
+      const path = document.getElementById('kb-vault-path')?.value?.trim();
+      const name = document.getElementById('kb-vault-name')?.value?.trim();
+      if (!path) { alert('Path is required'); return; }
+
+      try {
+        const r = await fetch('/api/knowledge/vaults', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path, name: name || '' }),
+        });
+        if (!r.ok) { const e = await r.json(); alert(e.error || 'Failed to connect vault'); return; }
+        kbLoadVaults();
+        fetchKnowledgeStats();
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    async function kbDisconnectVault(path) {
+      if (!confirm('Disconnect vault at ' + path + '?')) return;
+      try {
+        const r = await fetch('/api/knowledge/vaults', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path }),
+        });
+        if (!r.ok) { const e = await r.json(); alert(e.error || 'Failed to disconnect'); return; }
+        kbLoadVaults();
+        fetchKnowledgeStats();
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    async function kbReindexVault(path) {
+      try {
+        const r = await fetch('/api/knowledge/vaults/reindex', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path }),
+        });
+        if (!r.ok) { const e = await r.json(); alert(e.error || 'Failed to reindex'); return; }
+        kbLoadVaults();
+        fetchKnowledgeStats();
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    async function kbSearchVault(name) {
+      const el = document.getElementById('kb-fact-list');
+      if (!el) return;
+      try {
+        const r = await fetch('/api/knowledge/vaults/' + encodeURIComponent(name) + '/facts');
+        if (!r.ok) { _kbFacts = []; renderKnowledgeFacts(); return; }
+        _kbFacts = await r.json();
+        renderKnowledgeFacts();
+      } catch (e) { _kbFacts = []; renderKnowledgeFacts(); }
     }
 
     fetchKnowledgeStats();

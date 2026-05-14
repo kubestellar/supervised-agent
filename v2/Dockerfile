@@ -61,6 +61,7 @@ RUN cd /opt/hive/proxy && npm install --omit=dev
 
 COPY v2/pkg/dashboard/static/index.html /opt/hive/proxy/public/
 
+COPY examples/kubestellar/hive-project.yaml /etc/hive/hive-project.yaml
 COPY v2/deploy/data/ /opt/hive/seed-data/
 COPY v2/deploy/ttyd-tmux.sh /usr/local/bin/ttyd-tmux.sh
 COPY bin/gh-app-token.sh bin/hive-config.sh bin/agent-launch.sh /usr/local/bin/

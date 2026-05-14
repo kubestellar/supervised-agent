@@ -99,6 +99,14 @@ type Governor struct {
 }
 
 func New(cfg config.GovernorConfig, agents map[string]config.AgentConfig, logger *slog.Logger) *Governor {
+	// Record the initial mode so the timeline always has at least one entry.
+	initialChange := ModeChange{
+		Timestamp: time.Now(),
+		From:      "",
+		To:        ModeIdle,
+		Reason:    "startup",
+	}
+
 	return &Governor{
 		cfg:    cfg,
 		agents: agents,
@@ -108,7 +116,7 @@ func New(cfg config.GovernorConfig, agents map[string]config.AgentConfig, logger
 			LastKick: make(map[string]time.Time),
 		},
 		logger:      logger,
-		modeHistory: make([]ModeChange, 0, modeHistoryCapacity),
+		modeHistory: []ModeChange{initialChange},
 		evalHistory: make([]EvalSnapshot, 0, evalHistoryCapacity),
 		kickHistory: make([]KickRecord, 0, kickHistoryCapacity),
 		budget: BudgetInfo{
@@ -364,6 +372,18 @@ func (g *Governor) SeedEvalHistory(snapshots []EvalSnapshot) {
 	}
 	g.evalHistory = make([]EvalSnapshot, len(snapshots), evalHistoryCapacity)
 	copy(g.evalHistory, snapshots)
+}
+
+// SeedModeHistory loads previously persisted mode changes so the mode
+// timeline survives container restarts.
+func (g *Governor) SeedModeHistory(changes []ModeChange) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if len(changes) > modeHistoryCapacity {
+		changes = changes[len(changes)-modeHistoryCapacity:]
+	}
+	g.modeHistory = make([]ModeChange, len(changes), modeHistoryCapacity)
+	copy(g.modeHistory, changes)
 }
 
 func (g *Governor) KickHistory() []KickRecord {
