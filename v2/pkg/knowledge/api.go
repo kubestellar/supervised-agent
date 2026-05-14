@@ -426,6 +426,17 @@ func (k *KnowledgeAPI) Vaults() []VaultInfo {
 	return infos
 }
 
+// GetVaultStore returns the underlying FileStore for a vault by root directory.
+// This is used by the git syncer to trigger reindex after pulls.
+func (k *KnowledgeAPI) GetVaultStore(rootDir string) *FileStore {
+	for _, v := range k.vaults {
+		if v.RootDir() == rootDir {
+			return v
+		}
+	}
+	return nil
+}
+
 // ReindexVault forces a re-scan of a specific vault.
 func (k *KnowledgeAPI) ReindexVault(rootDir string) error {
 	for _, v := range k.vaults {
@@ -481,6 +492,187 @@ func (k *KnowledgeAPI) Layers() []LayerType {
 		}
 	}
 	return result
+}
+
+// ObsidianSyncRequest is the payload from the Obsidian Post Webhook plugin.
+type ObsidianSyncRequest struct {
+	Filename    string                 `json:"filename"`
+	Path        string                 `json:"path"`
+	Vault       string                 `json:"vault"`
+	Content     string                 `json:"content"`
+	Frontmatter map[string]interface{} `json:"frontmatter"`
+	Modified    string                 `json:"modified"`
+}
+
+// ObsidianSyncResult describes the outcome of an Obsidian sync operation.
+type ObsidianSyncResult struct {
+	Slug    string    `json:"slug"`
+	Action  string    `json:"action"` // "created" or "updated"
+	Fact    Fact      `json:"fact"`
+}
+
+// defaultObsidianConfidence is used when frontmatter omits a confidence value.
+const defaultObsidianConfidence = 0.7
+
+// ObsidianSync accepts a Post Webhook payload and upserts it as a knowledge fact.
+func (k *KnowledgeAPI) ObsidianSync(ctx context.Context, req ObsidianSyncRequest) (*ObsidianSyncResult, error) {
+	// Derive slug from filename (strip .md extension)
+	slug := strings.TrimSuffix(req.Filename, ".md")
+	slug = strings.TrimSuffix(slug, ".markdown")
+	// Normalize path separators to forward slashes for consistency
+	slug = strings.ReplaceAll(slug, "\\", "/")
+
+	// Extract metadata from frontmatter with defaults
+	title := extractFrontmatterString(req.Frontmatter, "title", "")
+	if title == "" {
+		title = extractTitleFromContent(req.Content, slug)
+	}
+
+	tags := extractFrontmatterStringSlice(req.Frontmatter, "tags")
+	factType := extractFrontmatterString(req.Frontmatter, "type", "pattern")
+	layer := extractFrontmatterString(req.Frontmatter, "layer", "project")
+	confidence := extractFrontmatterFloat(req.Frontmatter, "confidence", defaultObsidianConfidence)
+
+	layerType := LayerType(layer)
+	client := k.clientForLayer(layerType)
+	if client == nil {
+		return nil, fmt.Errorf("layer %s has no configured endpoint", layer)
+	}
+
+	// Try to read existing fact to determine create vs update
+	_, readErr := client.ReadPage(ctx, slug)
+	action := "created"
+
+	if readErr == nil {
+		// Fact exists — update it
+		action = "updated"
+		update := pageUpdateRequest{
+			Title:      title,
+			Body:       req.Content,
+			Type:       factType,
+			Confidence: confidence,
+			Tags:       tags,
+		}
+		if err := client.UpdatePage(ctx, slug, update); err != nil {
+			return nil, fmt.Errorf("updating fact %s: %w", slug, err)
+		}
+	} else {
+		// Fact does not exist — create it
+		fact := ExtractedFact{
+			Title:      title,
+			Body:       req.Content,
+			Type:       FactType(factType),
+			Confidence: confidence,
+			Tags:       tags,
+			SourcePR:   "obsidian:" + req.Vault,
+			SourceDate: time.Now(),
+		}
+		if err := client.IngestFacts(ctx, []ExtractedFact{fact}); err != nil {
+			return nil, fmt.Errorf("creating fact %s: %w", slug, err)
+		}
+	}
+
+	resultFact := Fact{
+		Slug:       slug,
+		Title:      title,
+		Type:       FactType(factType),
+		Body:       req.Content,
+		Confidence: confidence,
+		Tags:       tags,
+		Layer:      layerType,
+	}
+
+	k.logger.Info("obsidian sync", "slug", slug, "action", action, "vault", req.Vault, "layer", layer)
+
+	return &ObsidianSyncResult{
+		Slug:   slug,
+		Action: action,
+		Fact:   resultFact,
+	}, nil
+}
+
+// extractTitleFromContent extracts a title from the first # heading in markdown
+// content, or falls back to the slug basename.
+func extractTitleFromContent(content string, fallbackSlug string) string {
+	lines := strings.SplitN(content, "\n", 10)
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "# ") {
+			return strings.TrimSpace(trimmed[2:])
+		}
+	}
+	// Use the last path component of the slug as fallback
+	parts := strings.Split(fallbackSlug, "/")
+	return parts[len(parts)-1]
+}
+
+// extractFrontmatterString reads a string value from frontmatter, returning
+// the default if missing or wrong type.
+func extractFrontmatterString(fm map[string]interface{}, key string, defaultVal string) string {
+	if fm == nil {
+		return defaultVal
+	}
+	v, ok := fm[key]
+	if !ok {
+		return defaultVal
+	}
+	s, ok := v.(string)
+	if !ok {
+		return defaultVal
+	}
+	return s
+}
+
+// extractFrontmatterStringSlice reads a []string from frontmatter. Accepts
+// both []interface{} (JSON arrays) and []string.
+func extractFrontmatterStringSlice(fm map[string]interface{}, key string) []string {
+	if fm == nil {
+		return nil
+	}
+	v, ok := fm[key]
+	if !ok {
+		return nil
+	}
+	switch typed := v.(type) {
+	case []interface{}:
+		result := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	case []string:
+		return typed
+	default:
+		return nil
+	}
+}
+
+// extractFrontmatterFloat reads a float64 from frontmatter, returning the
+// default if missing or wrong type.
+func extractFrontmatterFloat(fm map[string]interface{}, key string, defaultVal float64) float64 {
+	if fm == nil {
+		return defaultVal
+	}
+	v, ok := fm[key]
+	if !ok {
+		return defaultVal
+	}
+	switch typed := v.(type) {
+	case float64:
+		return typed
+	case int:
+		return float64(typed)
+	case json.Number:
+		f, err := typed.Float64()
+		if err != nil {
+			return defaultVal
+		}
+		return f
+	default:
+		return defaultVal
+	}
 }
 
 func (k *KnowledgeAPI) clientForLayer(layer LayerType) *Client {

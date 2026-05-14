@@ -93,6 +93,7 @@ func (s *Server) RegisterAPI(deps *Dependencies) {
 	s.mux.HandleFunc("DELETE /api/knowledge/vaults", s.handleVaultsDisconnect)
 	s.mux.HandleFunc("POST /api/knowledge/vaults/reindex", s.handleVaultsReindex)
 	s.mux.HandleFunc("GET /api/knowledge/vaults/{name}/facts", s.handleVaultFacts)
+	s.mux.HandleFunc("POST /api/knowledge/obsidian/sync", s.handleObsidianSync)
 
 	s.mux.HandleFunc("GET /api/hive-id", s.handleHiveIDGet)
 	s.mux.HandleFunc("PUT /api/hive-id", s.handleHiveIDSet)
@@ -1934,6 +1935,43 @@ func (s *Server) handleVaultFacts(w http.ResponseWriter, r *http.Request) {
 		facts = []knowledge.Fact{}
 	}
 	jsonResponse(w, facts)
+}
+
+// --- Obsidian sync endpoint ---
+
+func (s *Server) handleObsidianSync(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Knowledge == nil {
+		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req knowledge.ObsidianSyncRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Filename == "" {
+		jsonError(w, "filename is required", http.StatusBadRequest)
+		return
+	}
+	if req.Content == "" {
+		jsonError(w, "content is required", http.StatusBadRequest)
+		return
+	}
+
+	result, err := s.deps.Knowledge.ObsidianSync(s.deps.Ctx, req)
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonResponse(w, map[string]interface{}{
+		"ok":     true,
+		"slug":   result.Slug,
+		"action": result.Action,
+		"fact":   result.Fact,
+	})
 }
 
 // --- Hive ID endpoints ---
