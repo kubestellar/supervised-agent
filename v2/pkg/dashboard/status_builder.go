@@ -258,29 +258,33 @@ func buildRepos(cfg *config.Config, actionable *github.ActionableResult) []Front
 
 	issuesByRepo := make(map[string][]any)
 	prsByRepo := make(map[string][]any)
-	issueCounts := make(map[string]int)
-	prCounts := make(map[string]int)
 
 	if actionable != nil {
 		for _, issue := range actionable.Issues.Items {
-			repo := issue.Repo
-			issueCounts[repo]++
-			issuesByRepo[repo] = append(issuesByRepo[repo], issue)
+			issuesByRepo[issue.Repo] = append(issuesByRepo[issue.Repo], issue)
 		}
 		for _, pr := range actionable.PRs.Items {
-			repo := pr.Repo
-			prCounts[repo]++
-			prsByRepo[repo] = append(prsByRepo[repo], pr)
+			prsByRepo[pr.Repo] = append(prsByRepo[pr.Repo], pr)
 		}
 	}
 
 	for _, repoName := range cfg.Project.Repos {
 		full := cfg.Project.Org + "/" + repoName
+
+		issueCount := 0
+		prCount := 0
+		if actionable != nil && actionable.TotalByRepo != nil {
+			if counts, ok := actionable.TotalByRepo[repoName]; ok {
+				issueCount = counts.Issues
+				prCount = counts.PRs
+			}
+		}
+
 		r := FrontendRepo{
 			Name:             repoName,
 			Full:             full,
-			Issues:           issueCounts[repoName],
-			PRs:              prCounts[repoName],
+			Issues:           issueCount,
+			PRs:              prCount,
 			ActionableIssues: issuesByRepo[repoName],
 			OpenPrs:          prsByRepo[repoName],
 		}

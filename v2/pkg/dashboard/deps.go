@@ -23,6 +23,7 @@ type Dependencies struct {
 	Logger      *slog.Logger
 	Ctx         context.Context
 	RefreshFunc func()
+	PersistFunc func()
 }
 
 type NousState struct {

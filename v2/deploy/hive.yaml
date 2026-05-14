@@ -11,7 +11,6 @@ project:
     - kubestellar-mcp
     - console-marketplace
     - homebrew-tap
-    - hive
   ai_author: clubanderson
   primary_repo: console
 
@@ -181,7 +180,7 @@ governor:
     restart_cooldown: 60
     model_lock: false
   budget:
-    total_tokens: 0
+    total_tokens: 200000000
     period_days: 7
     critical_pct: 90
 

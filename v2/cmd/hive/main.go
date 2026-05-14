@@ -135,6 +135,10 @@ func main() {
 		}
 	}
 
+	if gov.GetBudget().WeeklyLimit == 0 && cfg.Governor.Budget.TotalTokens > 0 {
+		gov.SetBudgetLimit(cfg.Governor.Budget.TotalTokens)
+	}
+
 	// Go binary serves the internal API without auth — the Node.js proxy
 	// on port 3001 handles public-facing authentication.
 	dashSrv := dashboard.NewServer(cfg.Dashboard.Port, logger)
@@ -192,6 +196,9 @@ func main() {
 		Logger:      logger,
 		Ctx:         ctx,
 		RefreshFunc: refreshDashboard,
+		PersistFunc: func() {
+			persistState(agentMgr, gov, statePath, logger)
+		},
 	})
 
 	if cfg.Policies.Repo != "" {

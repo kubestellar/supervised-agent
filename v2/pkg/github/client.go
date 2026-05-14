@@ -46,11 +46,17 @@ type PullRequest struct {
 }
 
 type ActionableResult struct {
-	GeneratedAt   time.Time     `json:"generated_at"`
-	Issues        IssueResult   `json:"issues"`
-	PRs           PRResult      `json:"prs"`
-	Hold          HoldResult    `json:"hold"`
-	Clusters      []IssueCluster `json:"clusters,omitempty"`
+	GeneratedAt   time.Time          `json:"generated_at"`
+	Issues        IssueResult        `json:"issues"`
+	PRs           PRResult           `json:"prs"`
+	Hold          HoldResult         `json:"hold"`
+	Clusters      []IssueCluster     `json:"clusters,omitempty"`
+	TotalByRepo   map[string]RepoCounts `json:"total_by_repo,omitempty"`
+}
+
+type RepoCounts struct {
+	Issues int `json:"issues"`
+	PRs    int `json:"prs"`
 }
 
 type IssueResult struct {
@@ -109,9 +115,10 @@ func (c *Client) EnumerateActionable(ctx context.Context) (*ActionableResult, er
 	var allIssues []Issue
 	var allPRs []PullRequest
 	var holdItems []HoldItem
+	totalByRepo := make(map[string]RepoCounts)
 
 	for _, repo := range c.repos {
-		issues, held, err := c.fetchIssues(ctx, repo, now)
+		issues, held, issueTotal, err := c.fetchIssues(ctx, repo, now)
 		if err != nil {
 			c.logger.Warn("failed to fetch issues", "repo", repo, "error", err)
 			continue
@@ -119,13 +126,15 @@ func (c *Client) EnumerateActionable(ctx context.Context) (*ActionableResult, er
 		allIssues = append(allIssues, issues...)
 		holdItems = append(holdItems, held...)
 
-		prs, heldPRs, err := c.fetchPRs(ctx, repo)
+		prs, heldPRs, prTotal, err := c.fetchPRs(ctx, repo)
 		if err != nil {
 			c.logger.Warn("failed to fetch PRs", "repo", repo, "error", err)
 			continue
 		}
 		allPRs = append(allPRs, prs...)
 		holdItems = append(holdItems, heldPRs...)
+
+		totalByRepo[repo] = RepoCounts{Issues: issueTotal, PRs: prTotal}
 	}
 
 	sort.Slice(allIssues, func(i, j int) bool {
@@ -164,11 +173,12 @@ func (c *Client) EnumerateActionable(ctx context.Context) (*ActionableResult, er
 		Total:  len(holdItems),
 		Items:  holdItems,
 	}
+	result.TotalByRepo = totalByRepo
 
 	return result, nil
 }
 
-func (c *Client) fetchIssues(ctx context.Context, repo string, now time.Time) (actionable []Issue, held []HoldItem, err error) {
+func (c *Client) fetchIssues(ctx context.Context, repo string, now time.Time) (actionable []Issue, held []HoldItem, totalIssues int, err error) {
 	opts := &gh.IssueListByRepoOptions{
 		State:       "open",
 		ListOptions: gh.ListOptions{PerPage: 100},
@@ -176,7 +186,7 @@ func (c *Client) fetchIssues(ctx context.Context, repo string, now time.Time) (a
 
 	issues, _, err := c.client.Issues.ListByRepo(ctx, c.org, repo, opts)
 	if err != nil {
-		return nil, nil, fmt.Errorf("listing issues for %s/%s: %w", c.org, repo, err)
+		return nil, nil, 0, fmt.Errorf("listing issues for %s/%s: %w", c.org, repo, err)
 	}
 
 	for _, issue := range issues {
@@ -184,6 +194,7 @@ func (c *Client) fetchIssues(ctx context.Context, repo string, now time.Time) (a
 			continue
 		}
 
+		totalIssues++
 		labels := extractLabels(issue.Labels)
 
 		if isHeld(labels) {
@@ -215,10 +226,10 @@ func (c *Client) fetchIssues(ctx context.Context, repo string, now time.Time) (a
 		})
 	}
 
-	return actionable, held, nil
+	return actionable, held, totalIssues, nil
 }
 
-func (c *Client) fetchPRs(ctx context.Context, repo string) (actionable []PullRequest, held []HoldItem, err error) {
+func (c *Client) fetchPRs(ctx context.Context, repo string) (actionable []PullRequest, held []HoldItem, totalPRs int, err error) {
 	opts := &gh.PullRequestListOptions{
 		State:       "open",
 		ListOptions: gh.ListOptions{PerPage: 100},
@@ -226,10 +237,11 @@ func (c *Client) fetchPRs(ctx context.Context, repo string) (actionable []PullRe
 
 	prs, _, err := c.client.PullRequests.List(ctx, c.org, repo, opts)
 	if err != nil {
-		return nil, nil, fmt.Errorf("listing PRs for %s/%s: %w", c.org, repo, err)
+		return nil, nil, 0, fmt.Errorf("listing PRs for %s/%s: %w", c.org, repo, err)
 	}
 
 	for _, pr := range prs {
+		totalPRs++
 		labels := extractPRLabels(pr.Labels)
 
 		if isHeld(labels) {
@@ -259,7 +271,7 @@ func (c *Client) fetchPRs(ctx context.Context, repo string) (actionable []PullRe
 		})
 	}
 
-	return actionable, held, nil
+	return actionable, held, totalPRs, nil
 }
 
 func extractLabels(labels []*gh.Label) []string {

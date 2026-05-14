@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kubestellar/hive/v2/pkg/config"
-	"github.com/kubestellar/hive/v2/pkg/governor"
 	"github.com/kubestellar/hive/v2/pkg/knowledge"
 )
 
@@ -86,6 +85,7 @@ func (s *Server) RegisterAPI(deps *Dependencies) {
 	s.mux.HandleFunc("DELETE /api/knowledge/{layer}/{slug}", s.handleKnowledgeDelete)
 	s.mux.HandleFunc("GET /api/knowledge/{layer}", s.handleKnowledgeLayer)
 	s.mux.HandleFunc("GET /api/knowledge/{layer}/{slug}", s.handleKnowledgeFact)
+	s.mux.HandleFunc("PUT /api/knowledge/enabled", s.handleKnowledgeToggle)
 
 	s.mux.HandleFunc("POST /api/chat", s.handleChat)
 
@@ -145,6 +145,17 @@ func (s *Server) refreshAfterMutation() {
 	if s.deps != nil && s.deps.RefreshFunc != nil {
 		go s.deps.RefreshFunc()
 	}
+}
+
+func (s *Server) persistAfterMutation() {
+	if s.deps != nil && s.deps.PersistFunc != nil {
+		go s.deps.PersistFunc()
+	}
+}
+
+func (s *Server) refreshAndPersist() {
+	s.refreshAfterMutation()
+	s.persistAfterMutation()
 }
 
 func decodeBody(r *http.Request, v interface{}) error {
@@ -208,14 +219,14 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	history := s.deps.Governor.EvalHistory()
 
-	// Prepend seed data from old hive so sparklines have historical context
 	seedData, err := os.ReadFile("/data/sparkline-history.json")
 	if err == nil {
-		var seed []governor.EvalSnapshot
+		var seed []json.RawMessage
 		if json.Unmarshal(seedData, &seed) == nil && len(seed) > 0 {
-			combined := make([]governor.EvalSnapshot, 0, len(seed)+len(history))
-			combined = append(combined, seed...)
-			combined = append(combined, history...)
+			liveData, _ := json.Marshal(history)
+			var liveEntries []json.RawMessage
+			_ = json.Unmarshal(liveData, &liveEntries)
+			combined := append(seed, liveEntries...)
 			jsonResponse(w, combined)
 			return
 		}
@@ -247,7 +258,7 @@ func (s *Server) handleTrends(w http.ResponseWriter, r *http.Request) {
 	evals := s.deps.Governor.EvalHistory()
 	filtered := make([]interface{}, 0)
 	for _, e := range evals {
-		if e.Timestamp.After(cutoff) {
+		if e.Timestamp > cutoff.UnixMilli() {
 			filtered = append(filtered, e)
 		}
 	}
@@ -257,7 +268,42 @@ func (s *Server) handleTrends(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTimeline(w http.ResponseWriter, r *http.Request) {
 	kicks := s.deps.Governor.KickHistory()
-	modes := s.deps.Governor.ModeHistory()
+
+	evals := s.deps.Governor.EvalHistory()
+	type timelineMode struct {
+		T    int64  `json:"t"`
+		Mode string `json:"mode"`
+	}
+	modes := make([]timelineMode, 0, len(evals))
+	for _, e := range evals {
+		modes = append(modes, timelineMode{
+			T:    e.Timestamp,
+			Mode: strings.ToLower(string(e.Mode)),
+		})
+	}
+
+	seedData, err := os.ReadFile("/data/sparkline-history.json")
+	if err == nil {
+		var seed []json.RawMessage
+		if json.Unmarshal(seedData, &seed) == nil && len(seed) > 0 {
+			var seedModes []timelineMode
+			for _, raw := range seed {
+				var entry struct {
+					T       int64  `json:"t"`
+					GovMode string `json:"govMode"`
+				}
+				if json.Unmarshal(raw, &entry) == nil && entry.T > 0 {
+					m := strings.ToLower(entry.GovMode)
+					if m == "" {
+						m = "idle"
+					}
+					seedModes = append(seedModes, timelineMode{T: entry.T, Mode: m})
+				}
+			}
+			modes = append(seedModes, modes...)
+		}
+	}
+
 	jsonResponse(w, map[string]interface{}{
 		"kicks": kicks,
 		"modes": modes,
@@ -340,7 +386,7 @@ func (s *Server) handleSwitch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.refreshAfterMutation()
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "switched", "agent": name, "backend": backend})
 }
 
@@ -353,7 +399,7 @@ func (s *Server) handleModelSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.refreshAfterMutation()
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "model_set", "agent": name, "model": model})
 }
 
@@ -365,7 +411,7 @@ func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.refreshAfterMutation()
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "paused", "agent": name})
 }
 
@@ -377,7 +423,7 @@ func (s *Server) handleResume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.refreshAfterMutation()
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "resumed", "agent": name})
 }
 
@@ -426,7 +472,7 @@ func (s *Server) handlePin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.refreshAfterMutation()
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "pinned", "agent": name, "dimension": dimension, "value": body.Value})
 }
 
@@ -450,7 +496,7 @@ func (s *Server) handleUnpin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.refreshAfterMutation()
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "unpinned", "agent": name, "dimension": dimension})
 }
 
@@ -462,7 +508,7 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.refreshAfterMutation()
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "restarted", "agent": name})
 }
 
@@ -474,6 +520,7 @@ func (s *Server) handleResetRestarts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "reset", "agent": name})
 }
 
@@ -754,7 +801,7 @@ func (s *Server) loadAgentRestrictions(name string) map[string]interface{} {
 	// Old hive extracts lines containing policy-relevant keywords, including
 	// markdown-formatted lines with ** bold markers and numbered list items.
 	policyRestrictions := []any{}
-	claudeMdPath := fmt.Sprintf("/data/agents/%s/CLAUDE.md", name)
+	claudeMdPath := s.findAgentCLAUDEMd(name)
 	if data, err := os.ReadFile(claudeMdPath); err == nil {
 		content := string(data)
 		for _, line := range strings.Split(content, "\n") {
@@ -793,9 +840,30 @@ func (s *Server) loadAgentRestrictions(name string) map[string]interface{} {
 	return result
 }
 
+func (s *Server) findAgentCLAUDEMd(name string) string {
+	paths := []string{
+		fmt.Sprintf("/data/agents/%s/CLAUDE.md", name),
+		fmt.Sprintf("/data/policies/examples/kubestellar/agents/%s-CLAUDE.md", name),
+	}
+	if s.deps != nil && s.deps.Config != nil {
+		policyDir := s.deps.Config.Policies.LocalDir
+		if policyDir != "" {
+			paths = append(paths,
+				fmt.Sprintf("%s/examples/kubestellar/agents/%s-CLAUDE.md", policyDir, name),
+				fmt.Sprintf("%s/%s/agents/%s-CLAUDE.md", policyDir, s.deps.Config.Policies.Path, name),
+			)
+		}
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return paths[0]
+}
+
 func (s *Server) loadPromptTemplate(name string) string {
-	// Try agent's CLAUDE.md first
-	claudeMdPath := fmt.Sprintf("/data/agents/%s/CLAUDE.md", name)
+	claudeMdPath := s.findAgentCLAUDEMd(name)
 	if data, err := os.ReadFile(claudeMdPath); err == nil {
 		return string(data)
 	}
@@ -901,9 +969,10 @@ func (s *Server) handleAgentPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	template := s.loadPromptTemplate(name)
 	jsonResponse(w, map[string]interface{}{
 		"agent":  name,
-		"prompt": fmt.Sprintf("Agent %s policy (loaded from CLAUDE.md)", name),
+		"prompt": template,
 	})
 }
 
@@ -950,8 +1019,8 @@ func (s *Server) handleGovernorConfigGet(w http.ResponseWriter, r *http.Request)
 		"hasDiscord":     false,
 	}
 	if cfg.Notifications.Ntfy != nil {
-		notifications["ntfyServer"] = maskSecret(cfg.Notifications.Ntfy.Server)
-		notifications["ntfyTopic"] = maskSecret(cfg.Notifications.Ntfy.Topic)
+		notifications["ntfyServer"] = cfg.Notifications.Ntfy.Server
+		notifications["ntfyTopic"] = cfg.Notifications.Ntfy.Topic
 		notifications["hasNtfy"] = cfg.Notifications.Ntfy.Server != ""
 	}
 	if cfg.Notifications.Discord != nil {
@@ -1114,6 +1183,7 @@ func (s *Server) handleGovernorAddAgent(w http.ResponseWriter, r *http.Request) 
 		Enabled: true,
 	}
 
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "added", "agent": body.Name})
 }
 
@@ -1125,6 +1195,7 @@ func (s *Server) handleGovernorRemoveAgent(w http.ResponseWriter, r *http.Reques
 	}
 
 	delete(s.deps.Config.Agents, name)
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "removed", "agent": name})
 }
 
@@ -1137,7 +1208,17 @@ func (s *Server) handleGovernorRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.deps.Config.Project.Repos = body.Repos
+	org := s.deps.Config.Project.Org
+	stripped := make([]string, 0, len(body.Repos))
+	for _, repo := range body.Repos {
+		if org != "" && strings.HasPrefix(repo, org+"/") {
+			stripped = append(stripped, strings.TrimPrefix(repo, org+"/"))
+		} else {
+			stripped = append(stripped, repo)
+		}
+	}
+	s.deps.Config.Project.Repos = stripped
+	s.refreshAfterMutation()
 	okResponse(w, map[string]string{"status": "updated"})
 }
 
@@ -1178,6 +1259,40 @@ func (s *Server) handleBackends(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Knowledge endpoints ---
+
+func (s *Server) handleKnowledgeToggle(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := decodeBody(r, &body); err != nil {
+		jsonError(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	s.deps.Config.Knowledge.Enabled = body.Enabled
+
+	if body.Enabled && s.deps.Knowledge == nil {
+		layers := make([]knowledge.LayerConfig, len(s.deps.Config.Knowledge.Layers))
+		for i, l := range s.deps.Config.Knowledge.Layers {
+			layers[i] = knowledge.LayerConfig{Type: knowledge.LayerType(l.Type), Path: l.Path, URL: l.URL, Shared: l.Shared}
+		}
+		kcfg := knowledge.KnowledgeConfig{
+			Enabled: true,
+			Layers:  layers,
+			Primer: knowledge.PrimerConfig{
+				MaxFacts:      s.deps.Config.Knowledge.Primer.MaxFacts,
+				MergeStrategy: s.deps.Config.Knowledge.Primer.MergeStrategy,
+			},
+		}
+		api := knowledge.NewKnowledgeAPI(layers, kcfg, s.deps.Logger)
+		s.deps.Knowledge = api
+	} else if !body.Enabled {
+		s.deps.Knowledge = nil
+	}
+
+	s.refreshAfterMutation()
+	okResponse(w, map[string]string{"status": "updated", "enabled": fmt.Sprintf("%v", body.Enabled)})
+}
 
 func (s *Server) handleKnowledgeList(w http.ResponseWriter, r *http.Request) {
 	if s.deps.Knowledge == nil {

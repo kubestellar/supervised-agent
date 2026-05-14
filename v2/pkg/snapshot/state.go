@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const maxStateAge = 1 * time.Hour
+const maxStateAge = 7 * 24 * time.Hour
 
 type PersistedState struct {
 	SavedAt       time.Time                  `json:"saved_at"`

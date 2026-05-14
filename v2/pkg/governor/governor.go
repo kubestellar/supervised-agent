@@ -32,13 +32,26 @@ type ModeChange struct {
 }
 
 type EvalSnapshot struct {
-	Timestamp     time.Time `json:"timestamp"`
-	Mode          Mode      `json:"mode"`
-	QueueIssues   int       `json:"queue_issues"`
-	QueuePRs      int       `json:"queue_prs"`
-	QueueHold     int       `json:"queue_hold"`
-	SLAViolations int       `json:"sla_violations"`
-	AgentsKicked  []string  `json:"agents_kicked,omitempty"`
+	Timestamp     int64             `json:"t"`
+	Mode          Mode              `json:"govMode"`
+	QueueIssues   int               `json:"govIssues"`
+	QueuePRs      int               `json:"govPrs"`
+	QueueTotal    int               `json:"govTotal"`
+	QueueHold     int               `json:"govHold"`
+	QueueActive   int               `json:"govActive"`
+	SLAViolations int               `json:"sla_violations,omitempty"`
+	AgentsKicked  []string          `json:"agents_kicked,omitempty"`
+	Actionable    int               `json:"actionableCount"`
+	OpenPRs       int               `json:"openPrCount"`
+	Mergeable     int               `json:"mergeableCount"`
+	BeadsWorkers  int               `json:"beadsWorkers"`
+	BeadsSupervisor int             `json:"beadsSupervisor"`
+	Repos         map[string]RepoSnapshot `json:"repos,omitempty"`
+}
+
+type RepoSnapshot struct {
+	Issues int `json:"issues"`
+	PRs    int `json:"prs"`
 }
 
 type KickRecord struct {
@@ -138,13 +151,17 @@ func (g *Governor) Evaluate(queueIssues, queuePRs, queueHold, slaViolations int)
 	due := g.agentsDueForKick()
 
 	snap := EvalSnapshot{
-		Timestamp:     time.Now(),
+		Timestamp:     time.Now().UnixMilli(),
 		Mode:          g.state.Mode,
 		QueueIssues:   queueIssues,
 		QueuePRs:      queuePRs,
+		QueueTotal:    queueIssues + queuePRs,
 		QueueHold:     queueHold,
+		QueueActive:   queueIssues + queuePRs,
 		SLAViolations: slaViolations,
 		AgentsKicked:  due,
+		Actionable:    queueIssues,
+		OpenPRs:       queuePRs,
 	}
 	g.appendEvalHistory(snap)
 

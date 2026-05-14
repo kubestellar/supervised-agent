@@ -36,7 +36,7 @@ RUN ARCH=$(uname -m) && \
 
 # --- Layer 4: IBM Bob Shell (moderate release cadence) ---
 ARG BOB_VERSION=latest
-RUN curl -fsSL https://bob.ibm.com/download/bobshell.sh | bash -s -- --pm npm
+RUN curl -fsSL --connect-timeout 10 https://bob.ibm.com/download/bobshell.sh | bash -s -- --pm npm || echo "WARN: bob shell install skipped (network unavailable)"
 
 # --- Layer 5: Gemini CLI (moderate release cadence) ---
 ARG GEMINI_CLI_VERSION=latest

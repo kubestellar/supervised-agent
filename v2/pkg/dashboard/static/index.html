@@ -1064,12 +1064,12 @@
     .config-stat-row .config-field label { font-size: 0.65rem; margin-bottom: 2px; }
     .config-stat-row .config-field input,
     .config-stat-row .config-field select { padding: 4px 6px; font-size: 0.75rem; }
-    .btn-sm { padding: 2px 6px; font-size: 0.7rem; background: var(--card-bg); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; color: var(--text); }
+    .btn-sm { padding: 2px 6px; font-size: 0.7rem; background: var(--surface); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; color: var(--text); }
     .btn-sm:hover { background: var(--border); }
     .btn-sm:disabled { opacity: 0.3; cursor: default; }
     .btn-sm.btn-danger { color: var(--red); border-color: var(--red); }
     .btn-sm.btn-danger:hover { background: rgba(248,81,73,0.15); }
-    .btn-add { padding: 6px 14px; font-size: 0.8rem; background: var(--card-bg); border: 1px solid var(--blue); border-radius: 4px; cursor: pointer; color: var(--blue); }
+    .btn-add { padding: 6px 14px; font-size: 0.8rem; background: var(--surface); border: 1px solid var(--blue); border-radius: 4px; cursor: pointer; color: var(--blue); }
     .btn-add:hover { background: rgba(88,166,255,0.1); }
     .config-stats-list { max-height: 400px; overflow-y: auto; }
 
@@ -1203,7 +1203,7 @@
     .hive-chat-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 10px 14px; border-bottom: 1px solid var(--border);
-      background: var(--card); font-size: 0.8rem; font-weight: 600;
+      background: var(--surface); font-size: 0.8rem; font-weight: 600;
     }
     .hive-chat-header .chat-title { display: flex; align-items: center; gap: 6px; }
     .hive-chat-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 4px; }
@@ -1218,12 +1218,12 @@
       font-size: 0.75rem; line-height: 1.5; word-break: break-word; white-space: pre-wrap;
     }
     .chat-msg.user { align-self: flex-end; background: var(--purple); color: #fff; border-bottom-right-radius: 2px; }
-    .chat-msg.system { align-self: flex-start; background: var(--card); color: var(--text); border-bottom-left-radius: 2px; border: 1px solid var(--border); }
+    .chat-msg.system { align-self: flex-start; background: var(--surface); color: var(--text); border-bottom-left-radius: 2px; border: 1px solid var(--border); }
     .chat-msg.system a { color: var(--cyan); }
-    .chat-msg.thinking { align-self: flex-start; background: var(--card); color: var(--muted); font-style: italic; border: 1px dashed var(--border); }
+    .chat-msg.thinking { align-self: flex-start; background: var(--surface); color: var(--muted); font-style: italic; border: 1px dashed var(--border); }
     .hive-chat-input-row {
       display: flex; gap: 8px; padding: 10px 14px;
-      border-top: 1px solid var(--border); background: var(--card);
+      border-top: 1px solid var(--border); background: var(--surface);
     }
     .hive-chat-input {
       flex: 1; background: var(--bg); color: var(--text);
@@ -1249,10 +1249,10 @@
     }
 
     /* Strategy Lab (Nous) */
-    .nous-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+    .nous-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
     .nous-card h3 { font-size: 0.85rem; margin: 0 0 8px 0; color: var(--fg); }
     .nous-mode-toggle { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
-    .nous-mode-btn { flex: 1; padding: 8px 12px; text-align: center; font-size: 0.78rem; cursor: pointer; border: none; background: var(--card); color: var(--muted); transition: all 0.2s; }
+    .nous-mode-btn { flex: 1; padding: 8px 12px; text-align: center; font-size: 0.78rem; cursor: pointer; border: none; background: var(--surface); color: var(--muted); transition: all 0.2s; }
     .nous-mode-btn:not(:last-child) { border-right: 1px solid var(--border); }
     .nous-mode-btn.active-observe { background: #2563eb; color: white; }
     .nous-mode-btn.active-suggest { background: #d97706; color: white; }
@@ -1286,7 +1286,7 @@
 
     /* Nous Config Panel */
     .nous-config-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: flex; align-items: center; justify-content: center; }
-    .nous-config-dialog { background: var(--card); border: 1px solid var(--border); border-radius: 12px; width: 720px; max-width: 95vw; max-height: 85vh; overflow-y: auto; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    .nous-config-dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 720px; max-width: 95vw; max-height: 85vh; overflow-y: auto; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
     .nous-config-dialog h2 { font-size: 1.1rem; margin: 0 0 16px 0; display: flex; align-items: center; gap: 8px; }
     .nous-config-section { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
     .nous-config-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
@@ -1335,7 +1335,7 @@
     .kb-layout { display: grid; grid-template-columns: 240px 1fr; gap: 16px; min-height: 320px; }
     .kb-sidebar { display: flex; flex-direction: column; gap: 10px; }
     .kb-layer-list { display: flex; flex-direction: column; gap: 4px; }
-    .kb-layer-btn { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--fg); font-size: 0.78rem; cursor: pointer; transition: all 0.15s; }
+    .kb-layer-btn { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--fg); font-size: 0.78rem; cursor: pointer; transition: all 0.15s; }
     .kb-layer-btn:hover { border-color: var(--accent); }
     .kb-layer-btn.active { background: rgba(88,166,255,0.12); border-color: var(--accent); color: var(--accent); font-weight: 600; }
     .kb-layer-count { font-size: 0.7rem; color: var(--muted); padding: 2px 6px; background: var(--bg); border-radius: 4px; }
@@ -1348,7 +1348,7 @@
     .kb-filter-pill.active { background: rgba(88,166,255,0.12); border-color: var(--accent); color: var(--accent); }
     .kb-main { display: flex; flex-direction: column; gap: 10px; }
     .kb-fact-list { display: flex; flex-direction: column; gap: 6px; max-height: 500px; overflow-y: auto; }
-    .kb-fact-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); cursor: pointer; transition: all 0.15s; }
+    .kb-fact-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); cursor: pointer; transition: all 0.15s; }
     .kb-fact-item:hover { border-color: var(--accent); background: rgba(88,166,255,0.04); }
     .kb-fact-item.selected { border-color: var(--accent); background: rgba(88,166,255,0.08); }
     .kb-fact-meta { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 50px; }
@@ -1372,13 +1372,13 @@
     .kb-layer-project { background: #d1fae5; color: #065f46; }
     .kb-layer-org { background: #fef3c7; color: #92400e; }
     .kb-layer-community { background: #ede9fe; color: #5b21b6; }
-    .kb-detail { border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 16px; }
+    .kb-detail { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 16px; }
     .kb-detail-title { font-size: 1rem; font-weight: 700; color: var(--fg); margin-bottom: 8px; }
     .kb-detail-body { font-size: 0.8rem; color: var(--fg); line-height: 1.6; margin-bottom: 12px; white-space: pre-wrap; }
     .kb-detail-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.72rem; color: var(--muted); }
     .kb-detail-label { font-weight: 600; color: var(--fg); }
     .kb-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
-    .kb-stat { text-align: center; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+    .kb-stat { text-align: center; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
     .kb-stat .val { font-size: 1.2rem; font-weight: 700; color: var(--fg); }
     .kb-stat .lbl { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
     .kb-health-item { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; padding: 4px 0; }
@@ -1475,6 +1475,7 @@
       <a class="oc-nav-item" data-section="repos-section" onclick="ocNavigate('repos-section')">📦 Repos</a>
       <a class="oc-nav-item" data-section="beads-section" onclick="ocNavigate('beads-section')">🔮 Beads</a>
       <a class="oc-nav-item" data-section="knowledge-section" onclick="ocNavigate('knowledge-section')">📚 Knowledge</a>
+      <a class="oc-nav-item" data-section="nous-section" onclick="ocNavigate('nous-section')">🧪 Strategy Lab</a>
     </div>
     <div class="oc-sidebar-footer">
     </div>
@@ -2226,8 +2227,6 @@
         }
       }
 
-      html += `<a class="oc-nav-item" data-section="knowledge-section" onclick="ocNavigate('knowledge-section')">📚 Knowledge</a>`;
-      html += `<a class="oc-nav-item" data-section="nous-section" onclick="ocNavigate('nous-section')">🧪 Strategy Lab</a>`;
       html += `<div id="nous-sidebar-config" style="padding:2px 8px 6px 24px;font-size:0.65rem;color:var(--muted);line-height:1.5;display:none">`;
       html += `<div><span id="nous-sb-scope" style="font-weight:600"></span> · <span id="nous-sb-mode"></span></div>`;
       html += `<div id="nous-sb-phase" style="opacity:0.8"></div></div>`;
@@ -4150,6 +4149,13 @@ function burnAreaChart() {
       return '#dc2626';
     }
 
+    async function toggleKnowledge(enabled) {
+      try {
+        await fetch('/api/knowledge/enabled', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({enabled}) });
+        await fetchKnowledgeStats();
+      } catch (e) { console.error('toggle knowledge failed', e); }
+    }
+
     async function fetchKnowledgeStats() {
       try {
         const r = await fetch('/api/knowledge/stats');
@@ -4206,7 +4212,7 @@ function burnAreaChart() {
 
       if (!_kbCache || !_kbCache.enabled) {
         if (badge) { badge.textContent = 'disabled'; badge.style.background = '#6b7280'; badge.style.color = 'white'; }
-        panel.innerHTML = '<div class="kb-disabled"><div style="font-size:2rem;margin-bottom:8px">📚</div><div>Knowledge system not enabled</div><div style="font-size:0.72rem;margin-top:4px;color:var(--muted)">Set <code>knowledge.enabled: true</code> in hive.yaml</div></div>';
+        panel.innerHTML = '<div class="kb-disabled"><div style="font-size:2rem;margin-bottom:8px">📚</div><div>Knowledge system not enabled</div><div style="font-size:0.72rem;margin-top:4px;color:var(--muted);margin-bottom:12px">Enable the knowledge base to store and retrieve facts across agents.</div><button onclick="toggleKnowledge(true)" style="padding:8px 20px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:600">Enable Knowledge</button></div>';
         return;
       }
 
@@ -4218,7 +4224,7 @@ function burnAreaChart() {
         badge.style.color = 'white';
       }
 
-      let html = '';
+      let html = '<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button onclick="toggleKnowledge(false)" style="padding:4px 12px;background:none;border:1px solid #dc2626;color:#dc2626;border-radius:4px;cursor:pointer;font-size:0.72rem">Disable</button></div>';
 
       // Stats row
       const totalPages = layers.reduce((sum, l) => sum + (l.total_pages || 0), 0);
@@ -4235,8 +4241,8 @@ function burnAreaChart() {
       // Action buttons
       html += '<div style="display:flex;gap:8px;margin-bottom:14px">';
       html += '<button class="nous-btn" style="background:var(--accent);color:white" onclick="kbOpenCreate()">+ New Fact</button>';
-      html += '<button class="nous-btn" style="background:var(--card);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenImport()">📥 Import</button>';
-      html += '<button class="nous-btn" style="background:var(--card);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenSubscriptions()">🔗 Subscriptions</button>';
+      html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenImport()">📥 Import</button>';
+      html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenSubscriptions()">🔗 Subscriptions</button>';
       html += '</div>';
 
       // Main layout: sidebar + content
@@ -5558,7 +5564,7 @@ function burnAreaChart() {
           h += `<div style="display:flex;gap:6px;margin-top:6px">`;
           h += `<input type="text" id="cfg-restriction-pattern" placeholder="glob pattern, e.g. gh issue list*" style="flex:2;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:0.78rem;background:var(--bg);color:var(--fg)">`;
           h += `<input type="text" id="cfg-restriction-reason" placeholder="reason (optional)" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:0.78rem;background:var(--bg);color:var(--fg)">`;
-          h += `<button onclick="addRestriction()" style="padding:6px 12px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--fg);cursor:pointer;font-size:0.78rem;white-space:nowrap">+ Add</button>`;
+          h += `<button onclick="addRestriction()" style="padding:6px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--fg);cursor:pointer;font-size:0.78rem;white-space:nowrap">+ Add</button>`;
           h += '</div>';
         }
         h += '</div>';
