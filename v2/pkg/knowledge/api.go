@@ -136,6 +136,9 @@ func (k *KnowledgeAPI) ReadFact(ctx context.Context, slug string) (*Fact, error)
 			Layer:      lc.layerType,
 		}, nil
 	}
+	if f, err := k.VaultFact(slug); err == nil {
+		return f, nil
+	}
 	return nil, nil
 }
 
@@ -499,13 +502,65 @@ func (k *KnowledgeAPI) Layers() []LayerType {
 }
 
 // ObsidianSyncRequest is the payload from the Obsidian Post Webhook plugin.
+// The plugin flattens frontmatter into the top level alongside content/filename.
 type ObsidianSyncRequest struct {
 	Filename    string                 `json:"filename"`
-	Path        string                 `json:"path"`
-	Vault       string                 `json:"vault"`
+	Filepath    string                 `json:"filepath"`
 	Content     string                 `json:"content"`
 	Frontmatter map[string]interface{} `json:"frontmatter"`
-	Modified    string                 `json:"modified"`
+	Timestamp   json.Number            `json:"timestamp,omitempty"`
+	CreatedAt   json.Number            `json:"createdAt,omitempty"`
+	ModifiedAt  json.Number            `json:"modifiedAt,omitempty"`
+	Overflow    map[string]interface{} `json:"-"`
+}
+
+// UnmarshalJSON captures the flat frontmatter fields the plugin sends at top level.
+func (r *ObsidianSyncRequest) UnmarshalJSON(data []byte) error {
+	type plain ObsidianSyncRequest
+	if err := json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	known := map[string]bool{
+		"filename": true, "filepath": true, "content": true,
+		"frontmatter": true, "timestamp": true, "createdAt": true,
+		"modifiedAt": true, "attachments": true, "renderedHtml": true,
+		"path": true, "vault": true, "modified": true,
+	}
+	if r.Frontmatter == nil {
+		r.Frontmatter = make(map[string]interface{})
+	}
+	for k, v := range raw {
+		if !known[k] {
+			r.Frontmatter[k] = v
+		}
+	}
+	if v, ok := raw["vault"]; ok {
+		if s, ok := v.(string); ok {
+			r.Overflow = map[string]interface{}{"vault": s}
+		}
+	}
+	if v, ok := raw["path"]; ok {
+		if s, ok := v.(string); ok && r.Filepath == "" {
+			r.Filepath = s
+		}
+	}
+	return nil
+}
+
+// Vault returns the vault name from either the explicit vault field or overflow.
+func (r *ObsidianSyncRequest) Vault() string {
+	if r.Overflow != nil {
+		if v, ok := r.Overflow["vault"]; ok {
+			if s, ok := v.(string); ok {
+				return s
+			}
+		}
+	}
+	return ""
 }
 
 // ObsidianSyncResult describes the outcome of an Obsidian sync operation.
@@ -564,7 +619,7 @@ func (k *KnowledgeAPI) ObsidianSync(ctx context.Context, req ObsidianSyncRequest
 				Type:       FactType(factType),
 				Confidence: confidence,
 				Tags:       tags,
-				SourcePR:   "obsidian:" + req.Vault,
+				SourcePR:   "obsidian:" + req.Vault(),
 				SourceDate: time.Now(),
 			}
 			if err := client.IngestFacts(ctx, []ExtractedFact{fact}); err != nil {
@@ -585,7 +640,7 @@ func (k *KnowledgeAPI) ObsidianSync(ctx context.Context, req ObsidianSyncRequest
 		Layer:      layerType,
 	}
 
-	k.logger.Info("obsidian sync", "slug", slug, "action", action, "vault", req.Vault, "layer", layer)
+	k.logger.Info("obsidian sync", "slug", slug, "action", action, "vault", req.Vault(), "layer", layer)
 
 	return &ObsidianSyncResult{
 		Slug:   slug,
@@ -611,7 +666,7 @@ func (k *KnowledgeAPI) obsidianSyncToFile(slug, title, factType, layer string, c
 	if len(tags) > 0 {
 		fmt.Fprintf(&buf, "tags: [%s]\n", strings.Join(tags, ", "))
 	}
-	fmt.Fprintf(&buf, "source: obsidian:%s\n", req.Vault)
+	fmt.Fprintf(&buf, "source: obsidian:%s\n", req.Vault())
 	fmt.Fprintf(&buf, "synced: %s\n", time.Now().UTC().Format(time.RFC3339))
 	buf.WriteString("---\n\n")
 	buf.WriteString(req.Content)

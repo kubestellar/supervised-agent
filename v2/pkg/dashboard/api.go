@@ -1614,13 +1614,13 @@ func (s *Server) handleKnowledgeToggle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleKnowledgeList(w http.ResponseWriter, r *http.Request) {
-	if s.deps.Knowledge == nil {
+	if !s.ensureKnowledge() {
 		jsonResponse(w, map[string]interface{}{"enabled": false, "facts": []interface{}{}})
 		return
 	}
 
 	typeFilter := r.URL.Query().Get("type")
-	facts := s.deps.Knowledge.SearchAll(s.deps.Ctx, "", typeFilter, 0)
+	facts := s.deps.Knowledge.SearchAllWithVaults(s.deps.Ctx, "", typeFilter, 0)
 	jsonResponse(w, map[string]interface{}{
 		"enabled": true,
 		"count":   len(facts),
@@ -1629,7 +1629,7 @@ func (s *Server) handleKnowledgeList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleKnowledgeSearch(w http.ResponseWriter, r *http.Request) {
-	if s.deps.Knowledge == nil {
+	if !s.ensureKnowledge() {
 		jsonResponse(w, map[string]interface{}{"results": []interface{}{}})
 		return
 	}
@@ -1695,7 +1695,7 @@ func (s *Server) handleKnowledgeLayer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleKnowledgeFact(w http.ResponseWriter, r *http.Request) {
-	if s.deps.Knowledge == nil {
+	if !s.ensureKnowledge() {
 		jsonError(w, "knowledge not enabled", http.StatusNotFound)
 		return
 	}
@@ -2011,14 +2011,21 @@ func (s *Server) handleVaultFacts(w http.ResponseWriter, r *http.Request) {
 
 // --- Obsidian sync endpoint ---
 
-func (s *Server) handleObsidianSync(w http.ResponseWriter, r *http.Request) {
+func (s *Server) ensureKnowledge() bool {
 	if s.deps == nil {
-		jsonError(w, "server not initialized", http.StatusServiceUnavailable)
-		return
+		return false
 	}
 	if s.deps.Knowledge == nil {
 		s.deps.Knowledge = knowledge.NewKnowledgeAPI(nil, knowledge.KnowledgeConfig{Enabled: true, Engine: "file"}, s.logger)
-		s.logger.Info("created file-based knowledge API for obsidian sync")
+		s.logger.Info("created file-based knowledge API for vault/obsidian access")
+	}
+	return true
+}
+
+func (s *Server) handleObsidianSync(w http.ResponseWriter, r *http.Request) {
+	if !s.ensureKnowledge() {
+		jsonError(w, "server not initialized", http.StatusServiceUnavailable)
+		return
 	}
 
 	var req knowledge.ObsidianSyncRequest

@@ -54,6 +54,9 @@ app.use((req, res, next) => {
 });
 
 app.use((req, res, next) => {
+  if (req.url.includes('obsidian')) {
+    console.log(`[obsidian-debug] ${req.method} ${req.url} content-type=${req.headers['content-type']} auth=${req.headers['authorization'] ? 'present' : 'missing'}`);
+  }
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
     return requireAuth(req, res, next);
   }
