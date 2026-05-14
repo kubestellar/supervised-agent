@@ -63,14 +63,22 @@ COPY v2/pkg/dashboard/static/index.html /opt/hive/proxy/public/
 
 COPY v2/deploy/data/ /opt/hive/seed-data/
 COPY v2/deploy/ttyd-tmux.sh /usr/local/bin/ttyd-tmux.sh
-RUN chmod +x /usr/local/bin/ttyd-tmux.sh
+COPY bin/gh-app-token.sh bin/hive-config.sh bin/agent-launch.sh /usr/local/bin/
+COPY bin/gh-wrapper.sh /usr/local/bin/gh
+RUN chmod +x /usr/local/bin/ttyd-tmux.sh /usr/local/bin/gh-app-token.sh \
+    /usr/local/bin/hive-config.sh /usr/local/bin/agent-launch.sh /usr/local/bin/gh
 
 # --- Nous framework (strategist experiment engine) ---
-RUN apt-get update && apt-get install -y --no-install-recommends python3 jq && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-venv python3-pip jq && rm -rf /var/lib/apt/lists/*
 COPY bin/nous-runner.sh bin/nous-sync.py bin/nous-hive-gate.py bin/nous-install.sh /tmp/hive/bin/
 RUN chmod +x /tmp/hive/bin/*.sh
 COPY examples/kubestellar/nous-campaign.yaml examples/kubestellar/nous-governor-campaign.yaml examples/kubestellar/nous-repo-campaign.yaml /etc/hive/
-RUN mkdir -p /var/run/nous/governor /var/run/nous/repo
+RUN mkdir -p /var/run/nous/governor /var/run/nous/repo /var/run/nous/snapshots /opt/nous
+RUN git clone https://github.com/AI-native-Systems-Research/agentic-strategy-evolution /opt/nous && \
+    python3 -m venv /opt/nous/venv && \
+    /opt/nous/venv/bin/pip install --no-cache-dir -e /opt/nous 2>&1 || \
+    echo "WARN: Nous pip install failed — run_campaign.py may not work"
 
 EXPOSE 3001 3002 7681
 VOLUME ["/data", "/secrets"]

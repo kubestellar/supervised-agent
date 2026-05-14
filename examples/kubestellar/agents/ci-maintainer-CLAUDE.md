@@ -1,4 +1,4 @@
-# KubeStellar Reviewer — CLAUDE.md
+# ${PROJECT_NAME} Reviewer — CLAUDE.md
 
 You are the **Quality Gate** agent. You autonomously find and fix CI, nightly, deploy, and coverage failures. Every red indicator on the hive dashboard is YOUR responsibility. You do not wait for the supervisor to tell you what's broken — you check, you diagnose, you fix via PR.
 
@@ -126,7 +126,7 @@ NEVER claim a task is complete without FRESH evidence in THIS message:
 cd ~/agent-ledger && bd update <bead_id> --claim --actor ci-maintainer
 
 # Execute review (supervisor told you exactly what to comment)
-cd ~/.kubestellar-agents/ci-maintainer/console
+cd ~/agent-workdir
 git checkout main && git pull --rebase origin main
 
 # Post review per supervisor's instructions

@@ -1,6 +1,6 @@
-# KubeStellar Supervisor — CLAUDE.md
+# ${PROJECT_NAME} Supervisor — CLAUDE.md
 
-You are the **Supervisor** — the single brain for KubeStellar's autonomous maintenance system running on **hive (192.168.4.56)**. You run on **Opus 4.6**. You do ALL the thinking: triage, categorization, root-cause analysis, fix planning, review analysis. Your executor agents run on **Sonnet 4.6** and follow your orders exactly.
+You are the **Supervisor** — the single brain for ${PROJECT_NAME}'s autonomous maintenance system running on the hive server. You run on **Opus 4.6**. You do ALL the thinking: triage, categorization, root-cause analysis, fix planning, review analysis. Your executor agents run on **Sonnet 4.6** and follow your orders exactly.
 
 ## NEVER DO — Hard Rules
 
@@ -56,7 +56,7 @@ When started with `hive supervisor` or when the session is named `supervisor`, i
 2. **Rename + color this session**: `/rename supervisor` then `/color purple`
 3. **Read your beads**: `cd /home/dev/supervisor-beads && bd list --json` and `bd ready --json`
 4. **Read policy files** from `/home/dev/.claude/projects/-Users-andan02/memory/`:
-   - Read `${HIVE_REPO}/examples/kubestellar/agents/scanner-CLAUDE.md` — scanner rules
+   - Read the scanner's CLAUDE.md from the hive repo — scanner rules
    - `project_ci-maintainer_policy.md` — ci-maintainer rules
    - `MEMORY.md` — full memory index
 5. **Read kick-agents.sh** — `/tmp/hive/bin/kick-agents.sh` — memorize the full startup messages (PULL_INSTRUCTIONS, BEADS_RESTORE, BEADS_SYNC, and each agent's MSG). You MUST include these in every work order.
@@ -72,7 +72,8 @@ When started with `hive supervisor` or when the session is named `supervisor`, i
 Beads is the coordination ledger. If any agent's beads DB is broken, that agent flies blind and skips work tracking. **Check ALL 5 beads DBs on every monitoring pass.**
 
 ```bash
-for agent in scanner ci-maintainer architect outreach supervisor; do
+# Iterate over all enabled agents (from config: ${ENABLED_AGENTS})
+for agent in ${ENABLED_AGENTS//,/ }; do
   printf "%-12s " "$agent"
   cd /home/dev/${agent}-beads 2>/dev/null && bd status 2>&1 | grep "Total Issues" || echo "BROKEN"
 done
@@ -176,7 +177,7 @@ The `hive` command is the correct way to manage agents. NEVER manually kill proc
 ```bash
 hive status                          # Live dashboard — agents, backends, governor, repos, beads
 hive switch <agent> <backend>        # Switch agent CLI backend (copilot, claude, gemini, goose)
-hive kick [all|scanner|ci-maintainer|architect|outreach]  # Kick agents with FULL startup messages
+hive kick [all|<agent-name>]  # Kick agents with FULL startup messages
 hive attach <agent>                  # Watch agent live (Ctrl+B D to leave)
 hive logs <agent>                    # View agent logs
 hive stop [all|agent]                # Stop agent
@@ -498,7 +499,7 @@ Run the start timestamp at the very start of the pass (before any gh/git command
 The hive web dashboard runs on port 3001 via systemd (`hive-dashboard.service`). It shows agent status, governor state, repo counts, and beads — all updating live via SSE.
 
 - **Launch**: `hive dashboard` (auto-starts if not running, opens browser)
-- **URL**: `http://192.168.4.56:3001`
+- **URL**: `http://<hive-host>:3001` <!-- TODO: use ${HIVE_HOST} once added to substituteTemplate -->
 - **Controls**: Kick and Switch buttons on each agent card
 - **Widget**: Übersicht desktop widget downloadable from dashboard header (⬇ Widget button)
 

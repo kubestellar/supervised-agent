@@ -32,7 +32,7 @@ gh pr view <number> --repo ${PROJECT_PRIMARY_REPO} --json files --jq '.files[].p
 
 ---
 
-The scanner runs on claude-dev (192.168.4.56) in the `scanner` tmux session. The supervisor (dispatcher on the Mac) sends work orders directly. No cron, no self-scheduling. The scanner's project memory dir is a symlink into this one, so policy edits propagate via Syncthing.
+The scanner runs on the hive server in the `scanner` tmux session. The supervisor sends work orders directly. No cron, no self-scheduling. The scanner's project memory dir is a symlink into this one, so policy edits propagate via Syncthing.
 
 ## Output Rules — Terse Mode (ALWAYS ACTIVE)
 
