@@ -4348,7 +4348,10 @@ function burnAreaChart() {
       html += '<div><strong>Name:</strong> Hive Knowledge Sync</div>';
       html += '<div><strong>URL:</strong> <code>http://' + escapeHtml(hiveHost) + '/api/knowledge/obsidian/sync</code></div>';
       html += '<div><strong>Method:</strong> POST</div>';
-      html += '<div><strong>Headers:</strong> <code>Authorization: Bearer &lt;your-dashboard-token&gt;</code></div>';
+      html += '<div><strong>Headers:</strong> <code>Authorization: Bearer <span id="kb-token-display">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span></code>';
+      html += ' <button onclick="kbToggleToken()" id="kb-token-toggle" style="font-size:0.65rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);cursor:pointer;margin-left:4px">show</button>';
+      html += ' <button onclick="kbCopyToken()" style="font-size:0.65rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);cursor:pointer;margin-left:2px">copy</button>';
+      html += '</div>';
       html += '</div></li>';
       html += '<li><strong>Use it:</strong><br>';
       html += '<span style="color:var(--muted)">Command palette &rarr; "Post Webhook: Send current note"<br>';
@@ -4374,6 +4377,42 @@ function burnAreaChart() {
       }
 
       return html;
+    }
+
+    let _kbTokenValue = null;
+    let _kbTokenVisible = false;
+    async function kbFetchToken() {
+      if (_kbTokenValue) return _kbTokenValue;
+      try {
+        const r = await fetch('/api/auth/token');
+        const d = await r.json();
+        _kbTokenValue = d.token || '(not set)';
+      } catch { _kbTokenValue = '(error)'; }
+      return _kbTokenValue;
+    }
+    async function kbToggleToken() {
+      const el = document.getElementById('kb-token-display');
+      const btn = document.getElementById('kb-token-toggle');
+      if (!el || !btn) return;
+      if (_kbTokenVisible) {
+        el.textContent = '•'.repeat(8);
+        btn.textContent = 'show';
+        _kbTokenVisible = false;
+      } else {
+        const t = await kbFetchToken();
+        el.textContent = t;
+        btn.textContent = 'hide';
+        _kbTokenVisible = true;
+      }
+    }
+    async function kbCopyToken() {
+      const t = await kbFetchToken();
+      if (t && t !== '(not set)' && t !== '(error)') {
+        navigator.clipboard.writeText(t);
+        const btn = event.target;
+        btn.textContent = 'copied!';
+        setTimeout(() => { btn.textContent = 'copy'; }, 1500);
+      }
     }
 
     async function kbSetupConnectVault() {

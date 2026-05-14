@@ -121,6 +121,8 @@ func (s *Server) RegisterAPI(deps *Dependencies) {
 	s.mux.HandleFunc("PUT /api/nous/config/controllables", s.handleNousConfigControllables)
 	s.mux.HandleFunc("PUT /api/nous/config/principles", s.handleNousConfigPrinciples)
 	s.mux.HandleFunc("DELETE /api/nous/principles/{id}", s.handleNousDeletePrinciple)
+
+	s.mux.HandleFunc("GET /api/auth/token", s.handleAuthToken)
 }
 
 var (
@@ -2371,6 +2373,14 @@ func maskSecret(s string) string {
 	}
 	masked := strings.Repeat("•", len(s)-visibleSuffix)
 	return masked + s[len(s)-visibleSuffix:]
+}
+
+func (s *Server) handleAuthToken(w http.ResponseWriter, r *http.Request) {
+	token := s.authToken
+	if token == "" {
+		token = "(not set)"
+	}
+	okResponse(w, map[string]string{"token": token})
 }
 
 // suppress unused import warnings
