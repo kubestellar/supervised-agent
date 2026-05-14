@@ -17,13 +17,15 @@ fi
 if [ -d /etc/hive/agents ] || [ -d /data/beads ]; then
   mkdir -p /home/dev /data/beads
   # Discover agent names from .env files if present
-  for envfile in /etc/hive/agents/*.env 2>/dev/null; do
-    [ -f "$envfile" ] || continue
-    agent="$(basename "$envfile" .env)"
-    mkdir -p "/data/beads/${agent}"
-    ln -sfn "/data/beads/${agent}" "/home/dev/${agent}-beads"
-    echo "[entrypoint] Beads symlink: /home/dev/${agent}-beads -> /data/beads/${agent}"
-  done
+  if [ -d /etc/hive/agents ]; then
+    for envfile in /etc/hive/agents/*.env; do
+      [ -f "$envfile" ] || continue
+      agent="$(basename "$envfile" .env)"
+      mkdir -p "/data/beads/${agent}"
+      ln -sfn "/data/beads/${agent}" "/home/dev/${agent}-beads"
+      echo "[entrypoint] Beads symlink: /home/dev/${agent}-beads -> /data/beads/${agent}"
+    done
+  fi
   # Also create symlinks for any existing beads directories not covered by .env files
   for beaddir in /data/beads/*/; do
     [ -d "$beaddir" ] || continue
