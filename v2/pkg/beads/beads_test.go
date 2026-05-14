@@ -619,3 +619,31 @@ func TestList_CombinedFilter(t *testing.T) {
 		t.Errorf("unexpected bead: %+v", result[0])
 	}
 }
+
+func TestNewStore_MkdirError(t *testing.T) {
+	// Try to create a store in a path that can't be created
+	_, err := NewStore("/dev/null/impossible")
+	if err == nil {
+		t.Error("expected error for invalid directory path")
+	}
+}
+
+func TestNewStore_CorruptJSON(t *testing.T) {
+	dir := t.TempDir()
+	// Write a corrupt beads.json
+	os.WriteFile(dir+"/beads.json", []byte(`{not json`), 0o644)
+	_, err := NewStore(dir)
+	if err == nil {
+		t.Error("expected error for corrupt beads.json")
+	}
+}
+
+func TestNewStore_ReadError(t *testing.T) {
+	dir := t.TempDir()
+	// Create beads.json as a directory to cause read error
+	os.Mkdir(dir+"/beads.json", 0o755)
+	_, err := NewStore(dir)
+	if err == nil {
+		t.Error("expected error when beads.json is a directory")
+	}
+}

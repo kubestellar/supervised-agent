@@ -1,0 +1,237 @@
+package agent
+
+import (
+	"testing"
+
+	"github.com/kubestellar/hive/v2/pkg/config"
+)
+
+func TestAddAgent(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
+	m.AddAgent("new-agent", config.AgentConfig{Backend: "claude", Model: "sonnet"})
+
+	status, err := m.GetStatus("new-agent")
+	if err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+	if status.State != StateStopped {
+		t.Errorf("state = %q", status.State)
+	}
+	if status.Config.Backend != "claude" {
+		t.Errorf("backend = %q", status.Config.Backend)
+	}
+}
+
+func TestAddAgent_Duplicate(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{
+		"scanner": {Backend: "claude"},
+	}, discardLogger())
+
+	// Should not overwrite
+	m.AddAgent("scanner", config.AgentConfig{Backend: "gemini"})
+	status, _ := m.GetStatus("scanner")
+	if status.Config.Backend != "claude" {
+		t.Errorf("backend = %q, want claude (should not overwrite)", status.Config.Backend)
+	}
+}
+
+func TestRemoveAgent(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{
+		"scanner": {Backend: "claude"},
+	}, discardLogger())
+
+	m.RemoveAgent("scanner")
+	_, err := m.GetStatus("scanner")
+	if err == nil {
+		t.Error("expected error for removed agent")
+	}
+}
+
+func TestRemoveAgent_NotFound(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
+	// Should not panic
+	m.RemoveAgent("nonexistent")
+}
+
+func TestResetRestartCount(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{
+		"scanner": {Backend: "claude"},
+	}, discardLogger())
+
+	m.mu.Lock()
+	m.agents["scanner"].RestartCount = 5
+	m.mu.Unlock()
+
+	err := m.ResetRestartCount("scanner")
+	if err != nil {
+		t.Fatalf("ResetRestartCount: %v", err)
+	}
+	status, _ := m.GetStatus("scanner")
+	if status.RestartCount != 0 {
+		t.Errorf("restart count = %d", status.RestartCount)
+	}
+}
+
+func TestResetRestartCount_NotFound(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
+	err := m.ResetRestartCount("nonexistent")
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestUnpinCLI(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{
+		"scanner": {Backend: "claude"},
+	}, discardLogger())
+
+	m.PinCLI("scanner", "claude-v2")
+	err := m.UnpinCLI("scanner")
+	if err != nil {
+		t.Fatalf("UnpinCLI: %v", err)
+	}
+	status, _ := m.GetStatus("scanner")
+	if status.PinnedCLI != "" {
+		t.Errorf("pinned CLI = %q", status.PinnedCLI)
+	}
+}
+
+func TestUnpinCLI_NotFound(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
+	err := m.UnpinCLI("nonexistent")
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestUnpinModel(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{
+		"scanner": {Backend: "claude"},
+	}, discardLogger())
+
+	m.PinModel("scanner", "opus")
+	err := m.UnpinModel("scanner")
+	if err != nil {
+		t.Fatalf("UnpinModel: %v", err)
+	}
+	status, _ := m.GetStatus("scanner")
+	if status.PinnedModel != "" {
+		t.Errorf("pinned model = %q", status.PinnedModel)
+	}
+}
+
+func TestUnpinModel_NotFound(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
+	err := m.UnpinModel("nonexistent")
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestGetOutput_NotFound(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
+	_, err := m.GetOutput("nonexistent", 10)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestGetOutput_WithBuffer(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{
+		"scanner": {Backend: "claude"},
+	}, discardLogger())
+
+	// Write some output to the buffer
+	m.mu.Lock()
+	m.agents["scanner"].OutputBuffer.Write("line 1")
+	m.agents["scanner"].OutputBuffer.Write("line 2")
+	m.agents["scanner"].OutputBuffer.Write("line 3")
+	m.mu.Unlock()
+
+	output, err := m.GetOutput("scanner", 2)
+	if err != nil {
+		t.Fatalf("GetOutput: %v", err)
+	}
+	if len(output) != 2 {
+		t.Errorf("output lines = %d, want 2", len(output))
+	}
+}
+
+func TestIsPaused(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{
+		"scanner": {Backend: "claude"},
+	}, discardLogger())
+
+	if m.IsPaused("scanner") {
+		t.Error("scanner should not be paused initially")
+	}
+
+	m.Pause("scanner")
+	if !m.IsPaused("scanner") {
+		t.Error("scanner should be paused")
+	}
+}
+
+func TestIsPaused_NotFound(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
+	if m.IsPaused("nonexistent") {
+		t.Error("nonexistent agent should return false")
+	}
+}
+
+func TestTmuxSession(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{
+		"scanner": {Backend: "claude"},
+	}, discardLogger())
+
+	session := m.TmuxSession("scanner")
+	if session != "hive-scanner" {
+		t.Errorf("session = %q, want hive-scanner", session)
+	}
+}
+
+func TestTmuxSession_NotFound(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
+	session := m.TmuxSession("nonexistent")
+	if session != "" {
+		t.Errorf("session = %q, want empty", session)
+	}
+}
+
+func TestBuildEnvPrefix(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{
+		"scanner": {Backend: "claude", Model: "sonnet"},
+	}, discardLogger())
+
+	m.mu.RLock()
+	agent := m.agents["scanner"]
+	m.mu.RUnlock()
+
+	prefix := m.buildEnvPrefix(agent)
+	if prefix == "" {
+		t.Error("expected non-empty env prefix")
+	}
+}
+
+func TestBuildEnvPrefix_EmptyVars(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{}, discardLogger())
+
+	agent := &AgentProcess{Name: "test"}
+	prefix := m.buildEnvPrefix(agent)
+	// agentEnvVars returns at least HIVE_AGENT, so prefix should be non-empty
+	if prefix == "" {
+		t.Error("expected env prefix to at least include HIVE_AGENT")
+	}
+}
+
+func TestSetModelOverride_Pinned(t *testing.T) {
+	m := NewManager(map[string]config.AgentConfig{
+		"scanner": {Backend: "claude", Model: "sonnet"},
+	}, discardLogger())
+
+	m.PinModel("scanner", "opus")
+	err := m.SetModelOverride("scanner", "haiku")
+	if err == nil {
+		t.Error("expected error when model is pinned")
+	}
+}

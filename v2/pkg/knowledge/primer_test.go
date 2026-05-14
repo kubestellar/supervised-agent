@@ -194,6 +194,41 @@ func TestPrimeGracefulDegradation(t *testing.T) {
 	}
 }
 
+func TestPrime_TruncatesToMaxFacts(t *testing.T) {
+	// Return 5 results but set MaxFacts to 2 — should truncate
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := searchResponse{
+			Total: 5,
+			Results: []searchResult{
+				{Slug: "fact-1", Title: "Fact 1", Score: 0.9, Type: "gotcha", Status: "verified", Confidence: 0.9},
+				{Slug: "fact-2", Title: "Fact 2", Score: 0.8, Type: "gotcha", Status: "verified", Confidence: 0.8},
+				{Slug: "fact-3", Title: "Fact 3", Score: 0.7, Type: "pattern", Status: "verified", Confidence: 0.7},
+				{Slug: "fact-4", Title: "Fact 4", Score: 0.6, Type: "pattern", Status: "verified", Confidence: 0.6},
+				{Slug: "fact-5", Title: "Fact 5", Score: 0.5, Type: "pattern", Status: "verified", Confidence: 0.5},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	logger := slog.Default()
+	layers := []LayerConfig{
+		{Type: LayerProject, URL: srv.URL, Shared: true},
+	}
+	config := PrimerConfig{
+		MaxFacts: 2,
+		Priority: []string{"gotcha"},
+	}
+
+	primer := NewPrimer(layers, config, logger)
+	result := primer.Prime(context.Background(), []string{"file.go"}, nil)
+
+	if len(result.Facts) != 2 {
+		t.Errorf("expected 2 facts (MaxFacts=2), got %d", len(result.Facts))
+	}
+}
+
 func TestFormatForPromptEmpty(t *testing.T) {
 	pk := &PrimedKnowledge{}
 	if pk.FormatForPrompt() != "" {

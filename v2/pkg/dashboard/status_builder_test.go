@@ -1,0 +1,881 @@
+package dashboard
+
+import (
+	"log/slog"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/kubestellar/hive/v2/pkg/agent"
+	"github.com/kubestellar/hive/v2/pkg/beads"
+	"github.com/kubestellar/hive/v2/pkg/config"
+	"github.com/kubestellar/hive/v2/pkg/github"
+	"github.com/kubestellar/hive/v2/pkg/governor"
+	"github.com/kubestellar/hive/v2/pkg/tokens"
+)
+
+func TestFormatHumanTime(t *testing.T) {
+	ts := time.Date(2025, 6, 15, 14, 30, 0, 0, time.UTC)
+	result := formatHumanTime(ts)
+	if result == "" {
+		t.Error("expected non-empty formatted time")
+	}
+}
+
+func TestParseCadenceDuration(t *testing.T) {
+	tests := []struct {
+		input string
+		want  time.Duration
+	}{
+		{"15m", 15 * time.Minute},
+		{"1h", time.Hour},
+		{"30s", 30 * time.Second},
+		{"5min", 5 * time.Minute},
+		{"off", 0},
+		{"pause", 0},
+		{"", 0},
+		{"invalid", 0},
+	}
+	for _, tt := range tests {
+		got := parseCadenceDuration(tt.input)
+		if got != tt.want {
+			t.Errorf("parseCadenceDuration(%q) = %v, want %v", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestComputeNextKick(t *testing.T) {
+	// off cadence
+	result := computeNextKick(nil, "off")
+	if result != "" {
+		t.Errorf("expected empty for off cadence, got %q", result)
+	}
+
+	// pause cadence
+	result = computeNextKick(nil, "pause")
+	if result != "" {
+		t.Errorf("expected empty for pause cadence, got %q", result)
+	}
+
+	// empty cadence
+	result = computeNextKick(nil, "")
+	if result != "" {
+		t.Errorf("expected empty for empty cadence, got %q", result)
+	}
+
+	// valid cadence with no last kick
+	result = computeNextKick(nil, "15m")
+	if result == "" {
+		t.Error("expected non-empty for valid cadence")
+	}
+
+	// valid cadence with last kick
+	now := time.Now()
+	result = computeNextKick(&now, "15m")
+	if result == "" {
+		t.Error("expected non-empty for valid cadence with last kick")
+	}
+}
+
+func TestLookupCadence(t *testing.T) {
+	cfg := &config.Config{
+		Governor: config.GovernorConfig{
+			Modes: map[string]config.ModeConfig{
+				"idle": {Cadences: map[string]string{"scanner": "15m"}},
+			},
+		},
+	}
+	result := lookupCadence("scanner", cfg)
+	if result != "15m" {
+		t.Errorf("lookupCadence = %q, want 15m", result)
+	}
+
+	result = lookupCadence("nonexistent", cfg)
+	if result != "" {
+		t.Errorf("lookupCadence nonexistent = %q, want empty", result)
+	}
+}
+
+func TestLookupCadenceForMode(t *testing.T) {
+	cfg := &config.Config{
+		Governor: config.GovernorConfig{
+			Modes: map[string]config.ModeConfig{
+				"busy": {Cadences: map[string]string{"scanner": "5m"}},
+			},
+		},
+	}
+	result := lookupCadenceForMode("scanner", "busy", cfg)
+	if result != "5m" {
+		t.Errorf("got %q, want 5m", result)
+	}
+
+	result = lookupCadenceForMode("scanner", "nonexistent", cfg)
+	if result != "" {
+		t.Errorf("got %q, want empty", result)
+	}
+}
+
+func TestBuildGovernor(t *testing.T) {
+	cfg := &config.Config{
+		Governor: config.GovernorConfig{
+			EvalIntervalS: 300,
+			Modes: map[string]config.ModeConfig{
+				"quiet": {Threshold: 3},
+				"busy":  {Threshold: 8},
+				"surge": {Threshold: 15},
+			},
+		},
+	}
+	state := governor.State{Mode: governor.ModeBusy, QueueIssues: 12, QueuePRs: 3}
+	result := buildGovernor(state, cfg)
+	if !result.Active {
+		t.Error("expected Active=true")
+	}
+	if result.Mode != "busy" {
+		t.Errorf("mode = %q, want busy", result.Mode)
+	}
+	if result.Issues != 12 {
+		t.Errorf("issues = %d, want 12", result.Issues)
+	}
+	if result.Thresholds.Quiet != 3 {
+		t.Errorf("quiet = %d, want 3", result.Thresholds.Quiet)
+	}
+}
+
+func TestBuildGovernor_DefaultThresholds(t *testing.T) {
+	cfg := &config.Config{
+		Governor: config.GovernorConfig{
+			EvalIntervalS: 0,
+			Modes:         map[string]config.ModeConfig{},
+		},
+	}
+	state := governor.State{Mode: governor.ModeIdle}
+	result := buildGovernor(state, cfg)
+	// Default thresholds: quiet=2, busy=10, surge=20
+	if result.Thresholds.Quiet != 2 {
+		t.Errorf("default quiet = %d, want 2", result.Thresholds.Quiet)
+	}
+	if result.NextKick != "" {
+		t.Errorf("nextKick should be empty with 0 interval, got %q", result.NextKick)
+	}
+}
+
+func TestBuildTokens_NilCollector(t *testing.T) {
+	ft := buildTokens(nil)
+	if ft.LookbackHours != defaultLookbackHours {
+		t.Errorf("lookbackHours = %d", ft.LookbackHours)
+	}
+	if ft.Totals.Input != 0 {
+		t.Errorf("input = %d", ft.Totals.Input)
+	}
+}
+
+func TestBuildRepos(t *testing.T) {
+	cfg := &config.Config{
+		Project: config.ProjectConfig{Org: "myorg", Repos: []string{"repo1", "repo2"}},
+	}
+	actionable := &github.ActionableResult{
+		Issues: github.IssueResult{
+			Items: []github.Issue{
+				{Repo: "repo1", Number: 1, Title: "issue1"},
+			},
+		},
+		PRs: github.PRResult{
+			Items: []github.PullRequest{
+				{Repo: "repo2", Number: 10, Title: "pr1"},
+			},
+		},
+		TotalByRepo: map[string]github.RepoCounts{
+			"repo1": {Issues: 1, PRs: 0},
+			"repo2": {Issues: 0, PRs: 1},
+		},
+	}
+
+	repos := buildRepos(cfg, actionable)
+	if len(repos) != 2 {
+		t.Fatalf("repos len = %d, want 2", len(repos))
+	}
+	if repos[0].Name != "repo1" {
+		t.Errorf("name = %q", repos[0].Name)
+	}
+	if repos[0].Full != "myorg/repo1" {
+		t.Errorf("full = %q", repos[0].Full)
+	}
+	if repos[0].Issues != 1 {
+		t.Errorf("issues = %d", repos[0].Issues)
+	}
+}
+
+func TestBuildRepos_NilActionable(t *testing.T) {
+	cfg := &config.Config{
+		Project: config.ProjectConfig{Org: "myorg", Repos: []string{"repo1"}},
+	}
+	repos := buildRepos(cfg, nil)
+	if len(repos) != 1 {
+		t.Fatalf("repos len = %d", len(repos))
+	}
+	if repos[0].Issues != 0 {
+		t.Errorf("issues = %d", repos[0].Issues)
+	}
+}
+
+func TestBuildBeads(t *testing.T) {
+	// nil stores
+	fb := buildBeads(nil)
+	if fb.Workers != 0 || fb.Supervisor != 0 {
+		t.Error("expected zero beads for nil stores")
+	}
+
+	// with stores
+	stores := map[string]*beads.Store{}
+	fb = buildBeads(stores)
+	if fb.Workers != 0 {
+		t.Errorf("workers = %d", fb.Workers)
+	}
+}
+
+func TestBuildHealth_NilClient(t *testing.T) {
+	health := buildHealth(nil, nil)
+	if health == nil {
+		t.Fatal("expected non-nil health map")
+	}
+}
+
+func TestBuildBudget(t *testing.T) {
+	cfg := config.GovernorConfig{}
+	gov := governor.New(cfg, map[string]config.AgentConfig{}, nil)
+	gov.SetBudgetLimit(1000000)
+
+	fb := buildBudget(gov, nil)
+	if fb.WeeklyBudget != 1000000 {
+		t.Errorf("weekly budget = %d", fb.WeeklyBudget)
+	}
+}
+
+func TestBuildCadenceMatrix(t *testing.T) {
+	cfg := &config.Config{
+		Agents: map[string]config.AgentConfig{
+			"scanner":    {Backend: "claude"},
+			"supervisor": {Backend: "claude"},
+		},
+		Governor: config.GovernorConfig{
+			Modes: map[string]config.ModeConfig{
+				"idle":  {Cadences: map[string]string{"scanner": "15m", "supervisor": "pause"}},
+				"quiet": {Cadences: map[string]string{"scanner": "10m"}},
+				"busy":  {Cadences: map[string]string{}},
+				"surge": {Cadences: map[string]string{}},
+			},
+		},
+	}
+	statuses := map[string]*agent.AgentProcess{
+		"scanner":    {Paused: false},
+		"supervisor": {Paused: true},
+	}
+	matrix := buildCadenceMatrix(cfg, statuses)
+	if len(matrix) != 2 {
+		t.Fatalf("matrix len = %d", len(matrix))
+	}
+}
+
+func TestBuildHold_Nil(t *testing.T) {
+	h := buildHold(nil)
+	if h.Total != 0 {
+		t.Errorf("total = %d", h.Total)
+	}
+	if h.Items == nil {
+		t.Error("items should be non-nil slice")
+	}
+}
+
+func TestBuildHold_WithItems(t *testing.T) {
+	actionable := &github.ActionableResult{
+		Hold: github.HoldResult{
+			Total: 3,
+			Items: []github.HoldItem{
+				{Number: 1, Type: "issue"},
+				{Number: 2, Type: "pr"},
+				{Number: 3, Type: "issue"},
+			},
+		},
+	}
+	h := buildHold(actionable)
+	if h.Total != 3 {
+		t.Errorf("total = %d", h.Total)
+	}
+	if h.Issues != 2 {
+		t.Errorf("issues = %d, want 2", h.Issues)
+	}
+	if h.PRs != 1 {
+		t.Errorf("prs = %d, want 1", h.PRs)
+	}
+}
+
+func TestBuildGHRateLimits_NilClient(t *testing.T) {
+	cfg := &config.Config{
+		GitHub: config.GitHubConfig{Token: "tok"},
+	}
+	result := buildGHRateLimits(nil, nil, cfg)
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	identity := result["identity"].(map[string]any)
+	if identity["type"] != "token" {
+		t.Errorf("type = %v", identity["type"])
+	}
+}
+
+func TestBuildGHRateLimits_AppAuth(t *testing.T) {
+	cfg := &config.Config{
+		Project: config.ProjectConfig{Org: "myorg"},
+		GitHub:  config.GitHubConfig{AppID: 123},
+	}
+	result := buildGHRateLimits(nil, nil, cfg)
+	identity := result["identity"].(map[string]any)
+	if identity["type"] != "app" {
+		t.Errorf("type = %v", identity["type"])
+	}
+}
+
+func TestBuildAgents(t *testing.T) {
+	now := time.Now()
+	buf := agent.NewRingBuffer(10)
+	buf.Write("test output line")
+
+	statuses := map[string]*agent.AgentProcess{
+		"scanner": {
+			Name:     "scanner",
+			Config:   config.AgentConfig{Backend: "claude", Model: "sonnet"},
+			State:    agent.StateRunning,
+			LastKick: &now,
+			OutputBuffer: buf,
+		},
+		"supervisor": {
+			Name:     "supervisor",
+			Config:   config.AgentConfig{Backend: "claude", Model: "opus"},
+			State:    agent.StatePaused,
+			Paused:   true,
+			PinnedCLI:   "claude",
+			PinnedModel: "opus",
+			OutputBuffer: agent.NewRingBuffer(10),
+		},
+	}
+
+	cfg := &config.Config{
+		Agents: map[string]config.AgentConfig{
+			"scanner":    {Backend: "claude", Model: "sonnet"},
+			"supervisor": {Backend: "claude", Model: "opus"},
+		},
+		Governor: config.GovernorConfig{
+			Modes: map[string]config.ModeConfig{
+				"idle": {Cadences: map[string]string{"scanner": "15m"}},
+			},
+		},
+	}
+
+	govState := governor.State{Mode: governor.ModeIdle}
+	agents := buildAgents(statuses, cfg, govState)
+
+	if len(agents) != 2 {
+		t.Fatalf("agents len = %d, want 2", len(agents))
+	}
+	// supervisor should be first (sorted first)
+	if agents[0].Name != "supervisor" {
+		t.Errorf("first agent = %q, want supervisor", agents[0].Name)
+	}
+	if !agents[0].PinnedCli {
+		t.Error("supervisor should have pinnedCli=true")
+	}
+	if !agents[0].PinnedBoth {
+		t.Error("supervisor should have pinnedBoth=true")
+	}
+}
+
+func TestBuildFrontendStatus(t *testing.T) {
+	cfg := &config.Config{
+		Project: config.ProjectConfig{Org: "myorg", Repos: []string{"repo1"}},
+		Agents: map[string]config.AgentConfig{
+			"scanner": {Backend: "claude", Model: "sonnet"},
+		},
+		Governor: config.GovernorConfig{
+			Modes: map[string]config.ModeConfig{
+				"idle": {Cadences: map[string]string{"scanner": "15m"}},
+			},
+		},
+		GitHub: config.GitHubConfig{Token: "tok"},
+	}
+
+	gov := governor.New(cfg.Governor, cfg.Agents, nil)
+	govState := gov.GetState()
+
+	statuses := map[string]*agent.AgentProcess{
+		"scanner": {
+			Name:   "scanner",
+			Config: config.AgentConfig{Backend: "claude", Model: "sonnet"},
+			State:  agent.StateRunning,
+			OutputBuffer: agent.NewRingBuffer(10),
+		},
+	}
+
+	payload := BuildFrontendStatus(govState, nil, statuses, cfg, nil, gov, nil, nil, nil, nil)
+	if payload == nil {
+		t.Fatal("expected non-nil payload")
+	}
+	if payload.Timestamp == "" {
+		t.Error("expected non-empty timestamp")
+	}
+	if len(payload.Agents) != 1 {
+		t.Errorf("agents len = %d", len(payload.Agents))
+	}
+}
+
+func TestBuildBudget_WithSpend(t *testing.T) {
+	cfg := config.GovernorConfig{}
+	gov := governor.New(cfg, map[string]config.AgentConfig{}, nil)
+	gov.SetBudgetLimit(1000000)
+	gov.UpdateBudget(250000, nil, nil)
+
+	fb := buildBudget(gov, nil)
+	if fb.WeeklyBudget != 1000000 {
+		t.Errorf("weekly = %d", fb.WeeklyBudget)
+	}
+	if fb.Used != 250000 {
+		t.Errorf("used = %d, want 250000", fb.Used)
+	}
+	if fb.Remaining != 750000 {
+		t.Errorf("remaining = %d, want 750000", fb.Remaining)
+	}
+}
+
+func TestBuildBudget_OverSpend(t *testing.T) {
+	cfg := config.GovernorConfig{}
+	gov := governor.New(cfg, map[string]config.AgentConfig{}, nil)
+	gov.SetBudgetLimit(1000)
+	gov.UpdateBudget(2000, nil, nil)
+
+	fb := buildBudget(gov, nil)
+	if fb.Remaining != 0 {
+		t.Errorf("remaining = %d, want 0", fb.Remaining)
+	}
+}
+
+func TestBuildBudget_NoBudget(t *testing.T) {
+	cfg := config.GovernorConfig{}
+	gov := governor.New(cfg, map[string]config.AgentConfig{}, nil)
+
+	fb := buildBudget(gov, nil)
+	if fb.WeeklyBudget != 0 {
+		t.Errorf("weekly = %d", fb.WeeklyBudget)
+	}
+	if fb.PctUsed != 0 {
+		t.Errorf("pctUsed = %f", fb.PctUsed)
+	}
+}
+
+func TestBuildBeads_EmptyStores(t *testing.T) {
+	fb := buildBeads(map[string]*beads.Store{})
+	if fb.Workers != 0 || fb.Supervisor != 0 {
+		t.Errorf("beads = %+v", fb)
+	}
+}
+
+func TestBuildHealth_WithCachedHealth(t *testing.T) {
+	// Set cached health and then call with nil client
+	cachedHealthMu.Lock()
+	cachedHealth = map[string]any{"ci": 95, "tests": 100}
+	cachedHealthMu.Unlock()
+
+	defer func() {
+		cachedHealthMu.Lock()
+		cachedHealth = nil
+		cachedHealthMu.Unlock()
+	}()
+
+	health := buildHealth(nil, nil)
+	if health["ci"] != 95 {
+		t.Errorf("ci = %v, want 95", health["ci"])
+	}
+}
+
+func TestBuildAgents_WithOverrides(t *testing.T) {
+	statuses := map[string]*agent.AgentProcess{
+		"scanner": {
+			Name:            "scanner",
+			Config:          config.AgentConfig{Backend: "claude", Model: "sonnet"},
+			State:           agent.StateRunning,
+			BackendOverride: "aider",
+			ModelOverride:   "opus",
+			OutputBuffer:    agent.NewRingBuffer(10),
+		},
+	}
+	cfg := &config.Config{
+		Agents: map[string]config.AgentConfig{
+			"scanner": {Backend: "claude", Model: "sonnet"},
+		},
+		Governor: config.GovernorConfig{
+			Modes: map[string]config.ModeConfig{},
+		},
+	}
+	agents := buildAgents(statuses, cfg, governor.State{Mode: governor.ModeIdle})
+	if len(agents) != 1 {
+		t.Fatalf("len = %d", len(agents))
+	}
+	if agents[0].CLI != "aider" {
+		t.Errorf("cli = %q, want aider", agents[0].CLI)
+	}
+	if agents[0].Model != "opus" {
+		t.Errorf("model = %q, want opus", agents[0].Model)
+	}
+}
+
+func TestBuildCadenceMatrix_PausedWithCadence(t *testing.T) {
+	cfg := &config.Config{
+		Agents: map[string]config.AgentConfig{
+			"scanner": {},
+		},
+		Governor: config.GovernorConfig{
+			Modes: map[string]config.ModeConfig{
+				"idle":  {Cadences: map[string]string{"scanner": "15m"}},
+				"busy":  {Cadences: map[string]string{"scanner": "5m"}},
+				"quiet": {Cadences: map[string]string{"scanner": "30m"}},
+				"surge": {Cadences: map[string]string{"scanner": "2m"}},
+			},
+		},
+	}
+	statuses := map[string]*agent.AgentProcess{
+		"scanner": {Paused: true},
+	}
+	matrix := buildCadenceMatrix(cfg, statuses)
+	if len(matrix) != 1 {
+		t.Fatalf("len = %d", len(matrix))
+	}
+	// All cadences should be "paused" since the agent is paused and has non-off cadences
+	if matrix[0].Idle != "paused" {
+		t.Errorf("idle = %q, want paused", matrix[0].Idle)
+	}
+	if matrix[0].Busy != "paused" {
+		t.Errorf("busy = %q, want paused", matrix[0].Busy)
+	}
+}
+
+func TestBuildRepos_WithActionable(t *testing.T) {
+	cfg := &config.Config{
+		Project: config.ProjectConfig{Org: "myorg", Repos: []string{"repo1"}},
+	}
+	actionable := &github.ActionableResult{
+		Issues: github.IssueResult{
+			Items: []github.Issue{{Repo: "repo1", Number: 1, Title: "bug"}},
+		},
+		PRs: github.PRResult{
+			Items: []github.PullRequest{{Repo: "repo1", Number: 2, Title: "fix"}},
+		},
+		TotalByRepo: map[string]github.RepoCounts{
+			"repo1": {Issues: 5, PRs: 3},
+		},
+	}
+	repos := buildRepos(cfg, actionable)
+	if len(repos) != 1 {
+		t.Fatalf("len = %d", len(repos))
+	}
+	if repos[0].Issues != 5 {
+		t.Errorf("issues = %d, want 5", repos[0].Issues)
+	}
+	if repos[0].PRs != 3 {
+		t.Errorf("prs = %d, want 3", repos[0].PRs)
+	}
+}
+
+func TestBuildBeads_WithData(t *testing.T) {
+	dir := t.TempDir()
+	s1, err := beads.NewStore(dir + "/supervisor")
+	if err != nil {
+		t.Fatalf("creating store: %v", err)
+	}
+	s2, err := beads.NewStore(dir + "/worker")
+	if err != nil {
+		t.Fatalf("creating store: %v", err)
+	}
+	stores := map[string]*beads.Store{
+		"supervisor": s1,
+		"worker":     s2,
+	}
+	fb := buildBeads(stores)
+	// Empty stores, count should be 0 for both
+	if fb.Supervisor != 0 {
+		t.Errorf("supervisor = %d", fb.Supervisor)
+	}
+	if fb.Workers != 0 {
+		t.Errorf("workers = %d", fb.Workers)
+	}
+}
+
+func TestBuildFrontendStatus_WithMetrics(t *testing.T) {
+	cfg := &config.Config{
+		Project: config.ProjectConfig{Org: "myorg", Repos: []string{"repo1"}},
+		Agents:  map[string]config.AgentConfig{"scanner": {Backend: "claude"}},
+		Governor: config.GovernorConfig{
+			Modes: map[string]config.ModeConfig{
+				"idle": {Cadences: map[string]string{"scanner": "15m"}},
+			},
+		},
+		GitHub: config.GitHubConfig{Token: "tok"},
+	}
+	gov := governor.New(cfg.Governor, cfg.Agents, nil)
+	govState := gov.GetState()
+	statuses := map[string]*agent.AgentProcess{
+		"scanner": {
+			Name:         "scanner",
+			Config:       config.AgentConfig{Backend: "claude"},
+			State:        agent.StateRunning,
+			OutputBuffer: agent.NewRingBuffer(10),
+		},
+	}
+	// Test with non-nil metrics collector (just to hit the non-nil branch)
+	// We create a minimal one without GH client
+	mc := &MetricsCollector{
+		metrics: map[string]any{"outreach": map[string]any{"stars": 42}},
+	}
+	payload := BuildFrontendStatus(govState, nil, statuses, cfg, nil, gov, nil, nil, nil, mc)
+	if payload == nil {
+		t.Fatal("expected non-nil payload")
+	}
+	if payload.AgentMetrics == nil {
+		t.Error("expected non-nil agent metrics")
+	}
+	if payload.AgentMetrics["outreach"] == nil {
+		t.Error("expected outreach in metrics")
+	}
+}
+
+func TestComputeNextKick_WithDuration(t *testing.T) {
+	// Cover the parseCadenceDuration returning 0 branch
+	result := computeNextKick(nil, "invalid-cadence")
+	if result != "" {
+		t.Errorf("result = %q, want empty", result)
+	}
+}
+
+func TestBuildTokens_NilSummary(t *testing.T) {
+	dir := t.TempDir()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	c := tokens.NewCollector(dir, logger)
+
+	// The collector's Summary() returns nil until scan runs, so this tests the nil branch
+	ft := buildTokens(c)
+	if ft.Totals.Input != 0 {
+		t.Errorf("input = %d, want 0", ft.Totals.Input)
+	}
+}
+
+func TestBuildTokens_WithSessionData(t *testing.T) {
+	dir := t.TempDir()
+	// Create a fake session JSONL file
+	sessionData := `{"role":"user","message":"[agent:scanner] Fix bug","input_tokens":100,"output_tokens":50,"model":"sonnet"}
+{"role":"assistant","message":"Fixed","input_tokens":200,"output_tokens":100,"model":"sonnet"}
+`
+	os.WriteFile(dir+"/session1.jsonl", []byte(sessionData), 0o644)
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	c := tokens.NewCollector(dir, logger)
+
+	// Trigger a scan by calling Start with an immediate stop
+	stop := make(chan struct{})
+	go func() {
+		close(stop)
+	}()
+	c.Start(stop)
+
+	ft := buildTokens(c)
+	if ft.Totals.Input <= 0 {
+		t.Errorf("expected positive total input, got %d", ft.Totals.Input)
+	}
+	if len(ft.Sessions) != 1 {
+		t.Errorf("sessions len = %d, want 1", len(ft.Sessions))
+	}
+	if ft.Totals.Sessions != 1 {
+		t.Errorf("totals.sessions = %d, want 1", ft.Totals.Sessions)
+	}
+	if len(ft.ByModel) == 0 {
+		t.Error("expected non-empty ByModel")
+	}
+	if ft.Totals.Messages != 2 {
+		t.Errorf("messages = %d, want 2", ft.Totals.Messages)
+	}
+}
+
+func TestFormatCadenceDuration_Table(t *testing.T) {
+	tests := []struct {
+		seconds int64
+		want    string
+	}{
+		{3600, "1h"},
+		{7200, "2h"},
+		{60, "1m"},
+		{300, "5m"},
+		{45, "45s"},
+		{90, "90s"},
+	}
+	for _, tt := range tests {
+		got := formatCadenceDuration(tt.seconds)
+		if got != tt.want {
+			t.Errorf("formatCadenceDuration(%d) = %q, want %q", tt.seconds, got, tt.want)
+		}
+	}
+}
+
+func TestLoadStatsConfig_MissingFile(t *testing.T) {
+	result := loadStatsConfig("nonexistent-agent-xyz")
+	if len(result) != 0 {
+		t.Errorf("expected empty slice, got %d items", len(result))
+	}
+}
+
+func TestBuildCadenceMatrix_PauseCadence(t *testing.T) {
+	cfg := &config.Config{
+		Agents: map[string]config.AgentConfig{
+			"scanner": {},
+		},
+		Governor: config.GovernorConfig{
+			Modes: map[string]config.ModeConfig{
+				"idle":  {Cadences: map[string]string{"scanner": "pause"}},
+				"quiet": {Cadences: map[string]string{"scanner": ""}},
+				"busy":  {Cadences: map[string]string{}},
+				"surge": {Cadences: map[string]string{}},
+			},
+		},
+	}
+	statuses := map[string]*agent.AgentProcess{}
+	matrix := buildCadenceMatrix(cfg, statuses)
+	if len(matrix) != 1 {
+		t.Fatalf("len = %d", len(matrix))
+	}
+	// "pause" cadence should be mapped to "off"
+	if matrix[0].Idle != "off" {
+		t.Errorf("idle = %q, want off", matrix[0].Idle)
+	}
+}
+
+func TestBuildBudget_BurnRate(t *testing.T) {
+	cfg := config.GovernorConfig{}
+	gov := governor.New(cfg, map[string]config.AgentConfig{}, nil)
+	gov.SetBudgetLimit(1000000)
+	gov.UpdateBudget(100000, nil, nil)
+	// Set reset time to 10 hours ago to trigger burn rate calculation
+	gov.SetBudgetResetAt(time.Now().Add(-10 * time.Hour))
+
+	fb := buildBudget(gov, nil)
+	if fb.WeeklyBudget != 1000000 {
+		t.Errorf("weekly = %d", fb.WeeklyBudget)
+	}
+	if fb.Used != 100000 {
+		t.Errorf("used = %d, want 100000", fb.Used)
+	}
+	if fb.BurnRateHourly <= 0 {
+		t.Errorf("burn rate hourly = %f, want > 0", fb.BurnRateHourly)
+	}
+	if fb.HoursElapsed < 9.9 {
+		t.Errorf("hours elapsed = %f, want ~10", fb.HoursElapsed)
+	}
+	if fb.ProjectedWeekly <= 0 {
+		t.Errorf("projected weekly = %d, want > 0", fb.ProjectedWeekly)
+	}
+	if fb.HoursRemaining <= 0 {
+		t.Errorf("hours remaining = %f, want > 0", fb.HoursRemaining)
+	}
+}
+
+func TestBuildBudget_WithTokenCollectorSummary(t *testing.T) {
+	cfg := config.GovernorConfig{}
+	gov := governor.New(cfg, map[string]config.AgentConfig{}, nil)
+	// No weekly limit — should use totalTokens as used but no percentage calc
+	collector := tokens.NewCollector("/nonexistent", nil)
+	fb := buildBudget(gov, collector)
+	// With no spend and no limit, used should be 0 or whatever the collector says
+	if fb.PctUsed != 0 {
+		t.Errorf("pctUsed = %f, want 0 (no limit)", fb.PctUsed)
+	}
+}
+
+func TestBuildHealth_NilClient_NoCached(t *testing.T) {
+	// Clear any cached state
+	cachedHealthMu.Lock()
+	cachedHealth = nil
+	cachedHealthMu.Unlock()
+
+	health := buildHealth(nil, nil)
+	if health["ci"] != 100 {
+		t.Errorf("ci = %v, want 100 (default fallback)", health["ci"])
+	}
+}
+
+func TestBuildCadenceMatrix_PausedAgent(t *testing.T) {
+	cfg := &config.Config{
+		Agents: map[string]config.AgentConfig{
+			"scanner": {},
+		},
+		Governor: config.GovernorConfig{
+			Modes: map[string]config.ModeConfig{
+				"idle":  {Cadences: map[string]string{"scanner": "15m"}},
+				"quiet": {Cadences: map[string]string{"scanner": "10m"}},
+				"busy":  {Cadences: map[string]string{"scanner": "5m"}},
+				"surge": {Cadences: map[string]string{"scanner": "2m"}},
+			},
+		},
+	}
+	statuses := map[string]*agent.AgentProcess{
+		"scanner": {Paused: true},
+	}
+	matrix := buildCadenceMatrix(cfg, statuses)
+	if len(matrix) != 1 {
+		t.Fatalf("len = %d", len(matrix))
+	}
+	// All cadences should be "paused" for a paused agent
+	if matrix[0].Idle != "paused" {
+		t.Errorf("idle = %q, want paused", matrix[0].Idle)
+	}
+	if matrix[0].Surge != "paused" {
+		t.Errorf("surge = %q, want paused", matrix[0].Surge)
+	}
+}
+
+func TestLoadStatsConfig_NoFile(t *testing.T) {
+	stats := loadStatsConfig("nonexistent-agent-xyz")
+	if len(stats) != 0 {
+		t.Errorf("expected empty stats for missing file, got %d", len(stats))
+	}
+}
+
+func TestComputeNextKick_OffCadence(t *testing.T) {
+	result := computeNextKick(nil, "off")
+	if result != "" {
+		t.Errorf("expected empty for off cadence, got %q", result)
+	}
+}
+
+func TestComputeNextKick_PauseCadence(t *testing.T) {
+	result := computeNextKick(nil, "pause")
+	if result != "" {
+		t.Errorf("expected empty for pause cadence, got %q", result)
+	}
+}
+
+func TestComputeNextKick_EmptyCadence(t *testing.T) {
+	result := computeNextKick(nil, "")
+	if result != "" {
+		t.Errorf("expected empty for empty cadence, got %q", result)
+	}
+}
+
+func TestComputeNextKick_ValidCadenceWithLastKick(t *testing.T) {
+	lastKick := time.Now().Add(-5 * time.Minute)
+	result := computeNextKick(&lastKick, "10m")
+	if result == "" {
+		t.Error("expected non-empty result for valid cadence with last kick")
+	}
+}
+
+func TestComputeNextKick_ValidCadenceNoLastKick(t *testing.T) {
+	result := computeNextKick(nil, "15m")
+	if result == "" {
+		t.Error("expected non-empty result for valid cadence without last kick")
+	}
+}
