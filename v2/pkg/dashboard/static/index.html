@@ -4755,10 +4755,10 @@ function burnAreaChart() {
 
     function kbOpenHowItWorks() {
       const body = `
-        <div style="max-height:70vh;overflow-y:auto;font-size:0.82rem;line-height:1.6;color:var(--fg)">
+        <div style="max-height:70vh;overflow-y:auto;font-size:0.82rem;line-height:1.6;color:var(--fg);padding-right:16px">
           <div style="margin-bottom:18px">
             <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">How Knowledge Works</h3>
-            <p style="margin:0 0 6px 0">Hive uses a <strong>4-layer knowledge system</strong> with precedence-based deduplication:</p>
+            <p style="margin:0 0 6px 0">Hive organizes knowledge into <strong>4 layers</strong>, listed from highest to lowest priority:</p>
             <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap">
               <span style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:0.75rem">personal (highest)</span>
               <span style="color:var(--muted)">&rarr;</span>
@@ -4768,55 +4768,50 @@ function burnAreaChart() {
               <span style="color:var(--muted)">&rarr;</span>
               <span style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:0.75rem">community (lowest)</span>
             </div>
-            <p style="margin:0;color:var(--muted);font-size:0.78rem">Higher layers override lower ones. Pages are Markdown with YAML frontmatter containing tags and maturity levels.</p>
+            <p style="margin:0;color:var(--muted);font-size:0.78rem">When the same page exists in multiple layers, the higher-priority layer wins. Each page is a Markdown file with optional tags.</p>
           </div>
 
           <div style="margin-bottom:18px">
             <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">Adding & Removing Pages</h3>
-            <p style="margin:0 0 6px 0">Pages can be added via the wiki API or by connecting an Obsidian vault directory.</p>
-            <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:monospace;font-size:0.75rem;margin:6px 0">
-              POST /api/knowledge/pages &nbsp;&mdash;&nbsp; create a page<br>
-              DELETE /api/knowledge/pages/{id} &nbsp;&mdash;&nbsp; remove a page
-            </div>
-            <p style="margin:6px 0 0 0;color:var(--muted);font-size:0.78rem">Pages have maturity stages: <strong>draft</strong> &rarr; <strong>reviewed</strong> &rarr; <strong>canonical</strong>.</p>
+            <p style="margin:0 0 6px 0">Click <strong>+ New Fact</strong> to create a page — give it a title, pick a layer, add tags, and write your content. To remove a page, click the trash icon next to it in the list.</p>
+            <p style="margin:0;color:var(--muted);font-size:0.78rem">You can also bulk-add pages using the <strong>Import</strong> button or by connecting an Obsidian vault.</p>
           </div>
 
           <div style="margin-bottom:18px">
             <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">Linting & Promotion</h3>
-            <p style="margin:0">Pages go through a lint/promotion pipeline. The system checks for completeness (title, tags, body length) and promotes pages through maturity stages automatically. Incomplete pages stay at <strong>draft</strong> until they meet the quality bar.</p>
+            <p style="margin:0">Every page starts as a <strong>draft</strong>. The system automatically checks quality (title, tags, body length) and promotes pages through <strong>draft</strong> &rarr; <strong>reviewed</strong> &rarr; <strong>canonical</strong>. No action needed on your part — just write good content and the system handles the rest.</p>
           </div>
 
           <div style="margin-bottom:18px">
-            <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">Subscribing to Remote Layers</h3>
-            <p style="margin:0 0 6px 0">Layers can be HTTP endpoints or file-based. Subscribe to a remote wiki by adding its URL as a layer in the knowledge config.</p>
-            <p style="margin:0;color:var(--muted);font-size:0.78rem">The system periodically syncs content from remote sources. Manage subscriptions via the <strong>Subscriptions</strong> button above.</p>
+            <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">Subscribing to Remote Sources</h3>
+            <p style="margin:0 0 6px 0">Click <strong>Subscriptions</strong> to follow a remote knowledge source. Paste the URL of another Hive instance or knowledge feed, and new content will sync automatically.</p>
+            <p style="margin:0;color:var(--muted);font-size:0.78rem">Subscriptions are checked periodically so your knowledge stays up to date without manual refreshes.</p>
           </div>
 
           <div style="margin-bottom:18px">
             <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">Obsidian Vault Integration</h3>
-            <p style="margin:0 0 6px 0">Connect local Obsidian vaults via the <strong>Vaults</strong> panel. The FileStore reads <code style="background:var(--surface);padding:1px 4px;border-radius:3px">.md</code> files, parses YAML frontmatter and inline <code style="background:var(--surface);padding:1px 4px;border-radius:3px">#tags</code>, and auto-reindexes every 30 seconds.</p>
-            <p style="margin:0;color:var(--muted);font-size:0.78rem">Vaults appear as an additional knowledge source alongside wiki layers.</p>
+            <p style="margin:0 0 6px 0">Click <strong>Vaults</strong>, enter the path to your Obsidian vault folder, and click <strong>Connect</strong>. Hive will read all your <code style="background:var(--surface);padding:1px 4px;border-radius:3px">.md</code> files, pick up any <code style="background:var(--surface);padding:1px 4px;border-radius:3px">#tags</code>, and re-scan automatically every 30 seconds.</p>
+            <p style="margin:0;color:var(--muted);font-size:0.78rem">Your vault pages appear alongside wiki pages in the knowledge list.</p>
           </div>
 
           <div style="margin-bottom:18px">
             <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">How Sources Combine</h3>
-            <p style="margin:0 0 6px 0">Pages from all layers (wiki + vaults) are merged with precedence:</p>
-            <p style="margin:0;font-weight:600;font-size:0.78rem">personal &gt; project &gt; org &gt; community</p>
-            <p style="margin:6px 0 0 0;color:var(--muted);font-size:0.78rem">Duplicate pages (same title) are deduped, with higher-precedence layers winning.</p>
+            <p style="margin:0 0 6px 0">Pages from all sources (wiki pages, vaults, and subscriptions) are merged together. If two pages share the same title, the one from the higher-priority layer is used.</p>
+            <p style="margin:0;color:var(--muted);font-size:0.78rem">Priority order: personal &gt; project &gt; org &gt; community.</p>
           </div>
 
           <div style="margin-bottom:18px">
             <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">Sharing Knowledge</h3>
-            <p style="margin:0">Knowledge can be shared by exporting pages or by pointing multiple Hive instances at the same wiki endpoint or vault directory. This lets teams maintain a shared knowledge base across environments.</p>
+            <p style="margin:0">Point multiple Hive instances at the same vault folder, or use subscriptions to share knowledge across teams and environments. Everyone sees the same facts without copying files around.</p>
           </div>
 
           <div style="margin-bottom:4px">
             <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">How Agents Use Knowledge</h3>
-            <p style="margin:0">Before each agent kick, the scheduler queries the knowledge system for pages matching the agent's domain. Relevant knowledge is injected into the agent's prompt as context, helping agents make more informed decisions without manual prompt engineering.</p>
+            <p style="margin:0">Before each agent run, Hive automatically finds knowledge pages that match the agent's domain and includes them as context. This means your agents get smarter as you add knowledge — no prompt editing required.</p>
           </div>
         </div>
       `;
-      kbShowModal('📖 How Knowledge Works', body);
+      kbShowModal('📖 How Knowledge Works', body, { width: 'min(800px, 85vw)', maxHeight: '85vh' });
     }
 
     // ── Vault Management ──
