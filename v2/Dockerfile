@@ -5,6 +5,7 @@ COPY v2/ .
 ARG GIT_HASH=unknown
 ARG GIT_SHORT=unknown
 RUN CGO_ENABLED=0 go build -ldflags "-X main.gitHash=${GIT_HASH} -X main.gitShort=${GIT_SHORT}" -o /hive ./cmd/hive
+RUN CGO_ENABLED=0 go build -o /bd ./cmd/bd
 
 FROM node:24-slim
 
@@ -56,6 +57,7 @@ ENV HOME=/data/home
 RUN mkdir -p /data/home
 
 COPY --from=builder /hive /usr/local/bin/hive
+COPY --from=builder /bd /usr/local/bin/bd
 
 COPY v2/proxy/ /opt/hive/proxy/
 RUN cd /opt/hive/proxy && npm install --omit=dev

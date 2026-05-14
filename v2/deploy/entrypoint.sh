@@ -12,6 +12,29 @@ if [ -d /opt/hive/seed-data ]; then
   cp -rn /opt/hive/seed-data/* /data/ 2>/dev/null || true
 fi
 
+# Create beads symlinks: /home/dev/<agent>-beads -> /data/beads/<agent>
+# Agents reference ~/scanner-beads etc. in their loop prompts.
+if [ -d /etc/hive/agents ] || [ -d /data/beads ]; then
+  mkdir -p /home/dev /data/beads
+  # Discover agent names from .env files if present
+  for envfile in /etc/hive/agents/*.env 2>/dev/null; do
+    [ -f "$envfile" ] || continue
+    agent="$(basename "$envfile" .env)"
+    mkdir -p "/data/beads/${agent}"
+    ln -sfn "/data/beads/${agent}" "/home/dev/${agent}-beads"
+    echo "[entrypoint] Beads symlink: /home/dev/${agent}-beads -> /data/beads/${agent}"
+  done
+  # Also create symlinks for any existing beads directories not covered by .env files
+  for beaddir in /data/beads/*/; do
+    [ -d "$beaddir" ] || continue
+    agent="$(basename "$beaddir")"
+    if [ ! -L "/home/dev/${agent}-beads" ]; then
+      ln -sfn "/data/beads/${agent}" "/home/dev/${agent}-beads"
+      echo "[entrypoint] Beads symlink: /home/dev/${agent}-beads -> /data/beads/${agent}"
+    fi
+  done
+fi
+
 echo "[entrypoint] Starting Go binary on :${HIVE_API_PORT}"
 hive "$@" &
 HIVE_PID=$!
