@@ -2012,9 +2012,13 @@ func (s *Server) handleVaultFacts(w http.ResponseWriter, r *http.Request) {
 // --- Obsidian sync endpoint ---
 
 func (s *Server) handleObsidianSync(w http.ResponseWriter, r *http.Request) {
-	if s.deps.Knowledge == nil {
-		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
+	if s.deps == nil {
+		jsonError(w, "server not initialized", http.StatusServiceUnavailable)
 		return
+	}
+	if s.deps.Knowledge == nil {
+		s.deps.Knowledge = knowledge.NewKnowledgeAPI(nil, knowledge.KnowledgeConfig{Enabled: true, Engine: "file"}, s.logger)
+		s.logger.Info("created file-based knowledge API for obsidian sync")
 	}
 
 	var req knowledge.ObsidianSyncRequest

@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
+
+const localKnowledgeDir = "/data/knowledge"
 
 // KnowledgeAPI provides a unified interface for dashboard endpoints to query
 // across all configured wiki layers.
@@ -535,41 +539,40 @@ func (k *KnowledgeAPI) ObsidianSync(ctx context.Context, req ObsidianSyncRequest
 
 	layerType := LayerType(layer)
 	client := k.clientForLayer(layerType)
-	if client == nil {
-		return nil, fmt.Errorf("layer %s has no configured endpoint", layer)
-	}
 
-	// Try to read existing fact to determine create vs update
-	_, readErr := client.ReadPage(ctx, slug)
-	action := "created"
+	var action string
+	if client != nil {
+		_, readErr := client.ReadPage(ctx, slug)
+		action = "created"
 
-	if readErr == nil {
-		// Fact exists — update it
-		action = "updated"
-		update := pageUpdateRequest{
-			Title:      title,
-			Body:       req.Content,
-			Type:       factType,
-			Confidence: confidence,
-			Tags:       tags,
-		}
-		if err := client.UpdatePage(ctx, slug, update); err != nil {
-			return nil, fmt.Errorf("updating fact %s: %w", slug, err)
+		if readErr == nil {
+			action = "updated"
+			update := pageUpdateRequest{
+				Title:      title,
+				Body:       req.Content,
+				Type:       factType,
+				Confidence: confidence,
+				Tags:       tags,
+			}
+			if err := client.UpdatePage(ctx, slug, update); err != nil {
+				return nil, fmt.Errorf("updating fact %s: %w", slug, err)
+			}
+		} else {
+			fact := ExtractedFact{
+				Title:      title,
+				Body:       req.Content,
+				Type:       FactType(factType),
+				Confidence: confidence,
+				Tags:       tags,
+				SourcePR:   "obsidian:" + req.Vault,
+				SourceDate: time.Now(),
+			}
+			if err := client.IngestFacts(ctx, []ExtractedFact{fact}); err != nil {
+				return nil, fmt.Errorf("creating fact %s: %w", slug, err)
+			}
 		}
 	} else {
-		// Fact does not exist — create it
-		fact := ExtractedFact{
-			Title:      title,
-			Body:       req.Content,
-			Type:       FactType(factType),
-			Confidence: confidence,
-			Tags:       tags,
-			SourcePR:   "obsidian:" + req.Vault,
-			SourceDate: time.Now(),
-		}
-		if err := client.IngestFacts(ctx, []ExtractedFact{fact}); err != nil {
-			return nil, fmt.Errorf("creating fact %s: %w", slug, err)
-		}
+		action = k.obsidianSyncToFile(slug, title, factType, layer, confidence, tags, req)
 	}
 
 	resultFact := Fact{
@@ -589,6 +592,55 @@ func (k *KnowledgeAPI) ObsidianSync(ctx context.Context, req ObsidianSyncRequest
 		Action: action,
 		Fact:   resultFact,
 	}, nil
+}
+
+func (k *KnowledgeAPI) obsidianSyncToFile(slug, title, factType, layer string, confidence float64, tags []string, req ObsidianSyncRequest) string {
+	dir := filepath.Join(localKnowledgeDir, layer)
+	_ = os.MkdirAll(dir, 0o755)
+
+	filename := slug + ".md"
+	filename = strings.ReplaceAll(filename, "/", "_")
+	path := filepath.Join(dir, filename)
+
+	var buf strings.Builder
+	buf.WriteString("---\n")
+	fmt.Fprintf(&buf, "title: %s\n", title)
+	fmt.Fprintf(&buf, "type: %s\n", factType)
+	fmt.Fprintf(&buf, "layer: %s\n", layer)
+	fmt.Fprintf(&buf, "confidence: %.2f\n", confidence)
+	if len(tags) > 0 {
+		fmt.Fprintf(&buf, "tags: [%s]\n", strings.Join(tags, ", "))
+	}
+	fmt.Fprintf(&buf, "source: obsidian:%s\n", req.Vault)
+	fmt.Fprintf(&buf, "synced: %s\n", time.Now().UTC().Format(time.RFC3339))
+	buf.WriteString("---\n\n")
+	buf.WriteString(req.Content)
+
+	_, err := os.Stat(path)
+	action := "created"
+	if err == nil {
+		action = "updated"
+	}
+
+	if err := os.WriteFile(path, []byte(buf.String()), 0o644); err != nil {
+		k.logger.Warn("obsidian file sync failed", "path", path, "error", err)
+	}
+
+	k.triggerVaultReindex(dir)
+	return action
+}
+
+func (k *KnowledgeAPI) triggerVaultReindex(dir string) {
+	for _, v := range k.vaults {
+		if v.RootDir() == dir {
+			v.reindex()
+			return
+		}
+	}
+	store, err := NewFileStore(dir, filepath.Base(dir), k.logger)
+	if err == nil {
+		k.vaults = append(k.vaults, store)
+	}
 }
 
 // extractTitleFromContent extracts a title from the first # heading in markdown

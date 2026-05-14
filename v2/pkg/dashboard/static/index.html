@@ -4421,10 +4421,13 @@ function burnAreaChart() {
       html += '<div><strong>Name:</strong> Hive Knowledge Sync</div>';
       html += '<div><strong>URL:</strong> <code>http://' + escapeHtml(hiveHost) + '/api/knowledge/obsidian/sync</code></div>';
       html += '<div><strong>Method:</strong> POST</div>';
-      html += '<div><strong>Headers:</strong> <code>Authorization: Bearer <span id="kb-token-display">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span></code>';
-      html += ' <button onclick="kbToggleToken()" id="kb-token-toggle" style="font-size:0.65rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);cursor:pointer;margin-left:4px">show</button>';
-      html += ' <button onclick="kbCopyToken()" style="font-size:0.65rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);cursor:pointer;margin-left:2px">copy</button>';
-      html += '</div>';
+      html += '<div><strong>Custom Headers</strong> (paste into the plugin\'s Custom Headers field):</div>';
+      html += '<div style="position:relative;margin-top:4px">';
+      html += '<pre id="kb-headers-block" style="margin:0;font-size:0.72rem;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;white-space:pre;overflow-x:auto">{\n  "Authorization": "Bearer <span id="kb-token-display">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span>",\n  "Content-Type": "application/json"\n}</pre>';
+      html += '<div style="position:absolute;top:4px;right:6px;display:flex;gap:3px">';
+      html += '<button onclick="kbToggleToken()" id="kb-token-toggle" style="font-size:0.6rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);cursor:pointer">show</button>';
+      html += '<button onclick="kbCopyHeaders()" id="kb-headers-copy" style="font-size:0.6rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);cursor:pointer">copy</button>';
+      html += '</div></div>';
       html += '</div></li>';
       html += '<li><strong>Use it:</strong><br>';
       html += '<span style="color:var(--muted)">Command palette &rarr; "Post Webhook: Send current note"<br>';
@@ -4486,6 +4489,13 @@ function burnAreaChart() {
         btn.textContent = 'copied!';
         setTimeout(() => { btn.textContent = 'copy'; }, 1500);
       }
+    }
+    async function kbCopyHeaders() {
+      const t = await kbFetchToken();
+      const block = JSON.stringify({"Authorization": "Bearer " + t, "Content-Type": "application/json"}, null, 2);
+      navigator.clipboard.writeText(block);
+      const btn = document.getElementById('kb-headers-copy');
+      if (btn) { btn.textContent = 'copied!'; setTimeout(() => { btn.textContent = 'copy'; }, 1500); }
     }
 
     async function kbSetupConnectVault() {
