@@ -38,6 +38,7 @@ type Server struct {
 // StatusPayload matches the JSON contract the dashboard frontend render() expects.
 type StatusPayload struct {
 	Timestamp     string              `json:"timestamp"`
+	HiveID        string              `json:"hiveId"`
 	Agents        []FrontendAgent     `json:"agents"`
 	Governor      FrontendGovernor    `json:"governor"`
 	Tokens        FrontendTokens      `json:"tokens"`

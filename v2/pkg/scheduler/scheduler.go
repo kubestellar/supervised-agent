@@ -84,6 +84,7 @@ func (s *Scheduler) substituteTemplate(template string, actionable *github.Actio
 		"${PROJECT_REPOS_LIST}", reposList,
 		"${PROJECT_HOMEBREW_REPO}", fmt.Sprintf("%s/homebrew-tap", s.cfg.Project.Org),
 		"${HIVE_REPO}", fmt.Sprintf("%s/hive", s.cfg.Project.Org),
+		"${HIVE_ID}", s.cfg.HiveID,
 		"${AGENT_LIST}", agentList,
 		"${AGENT_ROLES}", agentRoles,
 		"${ENABLED_AGENTS}", agentList,

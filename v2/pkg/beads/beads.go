@@ -60,9 +60,10 @@ type Bead struct {
 }
 
 type Store struct {
-	dir   string
-	beads map[string]*Bead
-	mu    sync.RWMutex
+	dir    string
+	hiveID string
+	beads  map[string]*Bead
+	mu     sync.RWMutex
 }
 
 func NewStore(dir string) (*Store, error) {
@@ -82,11 +83,26 @@ func NewStore(dir string) (*Store, error) {
 	return s, nil
 }
 
+// SetHiveID configures the Hive ID that will be stamped into new bead metadata.
+func (s *Store) SetHiveID(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.hiveID = id
+}
+
+// hiveIDMetadataKey is the metadata key used to record which hive instance created a bead.
+const hiveIDMetadataKey = "hive_id"
+
 func (s *Store) Create(title string, beadType BeadType, priority Priority, actor string, externalRef string) (*Bead, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	now := time.Now().UTC()
+	metadata := make(map[string]string)
+	if s.hiveID != "" {
+		metadata[hiveIDMetadataKey] = s.hiveID
+	}
+
 	b := &Bead{
 		ID:          uuid.New().String()[:12],
 		Title:       title,
@@ -95,7 +111,7 @@ func (s *Store) Create(title string, beadType BeadType, priority Priority, actor
 		Priority:    priority,
 		Actor:       actor,
 		ExternalRef: externalRef,
-		Metadata:    make(map[string]string),
+		Metadata:    metadata,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}

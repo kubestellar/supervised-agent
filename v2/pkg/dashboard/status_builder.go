@@ -44,6 +44,7 @@ func BuildFrontendStatus(
 
 	payload := &StatusPayload{
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		HiveID:       cfg.HiveID,
 		Agents:       buildAgents(agentStatuses, cfg, govState),
 		Governor:     buildGovernor(govState, cfg),
 		Tokens:       buildTokens(tokenCollector),

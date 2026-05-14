@@ -1490,10 +1490,11 @@
       <span class="oc-tb-link" onclick="openConfigDialog('governor')">⚙️ Config</span>
       <span class="oc-tb-link" onclick="ocNavigate('debug-section')">🔍 Debug</span>
       <span class="oc-tb-link" onclick="ocNavigate('logs-section')">📋 Logs</span>
-      <button class="layout-toggle" onclick="toggleLayout()" title="Switch layout">☰ Classic View</button>
+      <button class="layout-toggle" onclick="toggleLayout()" title="Switch to Classic layout — dark theme with compact agent cards in a grid. Best for quick overview of all agents at once.">☰ Classic View</button>
     </div>
     <div class="oc-topbar-right">
       <span class="oc-health-badge" id="oc-health">● Health OK</span>
+      <span id="oc-hive-id" class="git-version" title="Hive Instance ID" style="cursor:pointer;border:1px solid #e5e7eb;padding:2px 8px;border-radius:4px" onclick="openConfigDialog('governor')"></span>
       <span class="oc-topbar-ts" id="oc-ts"></span>
       <span id="oc-git-version" class="git-version"></span>
       <a href="/api/widget" class="widget-dl" title="Download Übersicht widget">⬇ Widget</a>
@@ -1506,7 +1507,8 @@
 
   <h1><span class="bee">🐝</span> KubeStellar Hive Dashboard&nbsp;<span id="project-name">for KubeStellar/Console</span> <span class="timestamp" id="ts"></span>
     <span class="git-version" id="git-version"></span>
-    <button class="layout-toggle" id="layout-toggle" onclick="toggleLayout()" title="Switch layout">☰ Classic</button>
+    <span class="git-version" id="hive-id-badge" title="Hive Instance ID" style="cursor:pointer;border:1px solid var(--border);padding:2px 8px;border-radius:4px" onclick="openConfigDialog('governor')"></span>
+    <button class="layout-toggle" id="layout-toggle" onclick="toggleLayout()" title="Switch between Light layout (sidebar + detail panel) and Classic layout (dark theme grid). Your preference is saved in the browser.">☰ Classic</button>
     <a href="/api/widget" class="widget-dl" title="Download Übersicht widget">⬇ Widget</a>
   </h1>
 
@@ -1543,10 +1545,10 @@
   <div id="logs-section" style="margin-top: 16px; margin-bottom: 24px;">
     <h2 style="font-size: 0.95rem; color: var(--muted); margin-bottom: 12px;">📋 Agent Logs</h2>
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-      <select id="logs-agent-select" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.82rem; background: var(--surface); color: var(--text); cursor: pointer;">
+      <select id="logs-agent-select" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.82rem; background: var(--surface); color: var(--text); cursor: pointer;" title="Filter logs to a specific agent or view all agents combined">
         <option value="all">All Agents</option>
       </select>
-      <label style="display: flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--muted); cursor: pointer;">
+      <label style="display: flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--muted); cursor: pointer;" title="When enabled, the log output auto-scrolls to show the most recent entries as they arrive">
         <input type="checkbox" id="logs-follow" checked> Follow
       </label>
     </div>
@@ -1836,33 +1838,33 @@
           <span style="font-size:0.78rem;color:#6b7280;margin-left:auto">${stateLabel}</span>
         </div>
         <div class="oc-detail-actions">
-          <button class="btn-toggle ${isPaused ? 'paused' : isOff ? 'off' : 'running'}" data-action="toggleAgent" data-agent="${esc(a.name)}" data-paused="${isPaused}">${isPaused ? '▶ resume' : isOff ? '▶ start' : '⏸ pause'}</button>
-          <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link">▶ terminal</a>
-          <button class="restart-btn" data-action="restartAgent" data-agent="${esc(a.name)}">↻ restart</button>
-          <button class="config-gear" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" style="font-size:1rem;opacity:0.7">⚙️</button>
-          <button class="btn" data-action="kickEmpty" data-agent="${esc(a.name)}" style="margin-left:auto">kick</button>
-          <select class="btn backend-select" data-change-action="switchCli" data-agent="${esc(a.name)}">
+          <button class="btn-toggle ${isPaused ? 'paused' : isOff ? 'off' : 'running'}" data-action="toggleAgent" data-agent="${esc(a.name)}" data-paused="${isPaused}" title="${isPaused ? 'Resume this agent — it will start running on its configured cadence' : isOff ? 'Start this agent — it is currently off in this governor mode' : 'Pause this agent — stops governor from kicking it until resumed'}">${isPaused ? '▶ resume' : isOff ? '▶ start' : '⏸ pause'}</button>
+          <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open the live tmux terminal session for this agent in a new tab">▶ terminal</a>
+          <button class="restart-btn" data-action="restartAgent" data-agent="${esc(a.name)}" title="Kill this agent's tmux session — supervisor will respawn it with fresh context">↻ restart</button>
+          <button class="config-gear" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" style="font-size:1rem;opacity:0.7" title="Open configuration dialog for this agent (cadences, model, pipeline, hooks, etc.)">⚙️</button>
+          <button class="btn" data-action="kickEmpty" data-agent="${esc(a.name)}" style="margin-left:auto" title="Kick this agent now with its default prompt, bypassing the governor cadence timer">kick</button>
+          <select class="btn backend-select" data-change-action="switchCli" data-agent="${esc(a.name)}" title="Switch this agent to a different CLI backend">
             <option value="" disabled selected>cli ▾</option>
             ${KNOWN_BACKENDS.map(b => `<option value="${b}" ${a.cli === b ? 'disabled' : ''}>${b}</option>`).join('')}
           </select>
-          <select class="btn backend-select" data-change-action="switchModel" data-agent="${esc(a.name)}">
+          <select class="btn backend-select" data-change-action="switchModel" data-agent="${esc(a.name)}" title="Switch this agent to a different LLM model">
             <option value="" disabled selected>model ▾</option>
             ${KNOWN_MODELS.map(m => `<option value="${m.value}">${m.label}</option>`).join('')}
           </select>
         </div>
         <div class="oc-detail-fields">
-          <div class="oc-detail-field"><div class="label">CLI</div><div class="value">${esc(a.cli || '—')}</div></div>
-          <div class="oc-detail-field"><div class="label">Model</div><div class="value">${esc(a.model || '—')}</div></div>
-          <div class="oc-detail-field"><div class="label">Interval</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : esc(a.cadence || '—')}</div></div>
-          <div class="oc-detail-field"><div class="label">Last Run</div><div class="value">${esc(a.lastKick || '—')}</div></div>
-          <div class="oc-detail-field"><div class="label">Next Run</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : esc(a.nextKick || '—')}</div></div>
-          <div class="oc-detail-field"><div class="label">Tokens (24h)</div><div class="value">${_tokTotal > 0 ? fmtTokens(_tokTotal) : (_tok.sessions > 0 ? _tok.sessions + ' sess' : '—')}</div></div>
+          <div class="oc-detail-field"><div class="label" title="The CLI backend running this agent (e.g. claude, copilot, gemini)">CLI</div><div class="value">${esc(a.cli || '—')}</div></div>
+          <div class="oc-detail-field"><div class="label" title="The LLM model powering this agent. Governor may change it based on budget.">Model</div><div class="value">${esc(a.model || '—')}</div></div>
+          <div class="oc-detail-field"><div class="label" title="Time between governor kicks in the current mode. Configured per mode (idle/quiet/busy/surge).">Interval</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : esc(a.cadence || '—')}</div></div>
+          <div class="oc-detail-field"><div class="label" title="When the governor last kicked (started a work pass for) this agent.">Last Run</div><div class="value">${esc(a.lastKick || '—')}</div></div>
+          <div class="oc-detail-field"><div class="label" title="When the governor will next kick this agent based on its cadence interval.">Next Run</div><div class="value">${isPaused ? 'paused' : isOff ? 'off' : esc(a.nextKick || '—')}</div></div>
+          <div class="oc-detail-field"><div class="label" title="Total tokens consumed by this agent in the last 24 hours across all sessions.">Tokens (24h)</div><div class="value">${_tokTotal > 0 ? fmtTokens(_tokTotal) : (_tok.sessions > 0 ? _tok.sessions + ' sess' : '—')}</div></div>
           ${a.name === 'scanner' ? `<div class="oc-detail-field"><div class="label">Actionable</div><div class="value"><div class="spark-row"><span style="color:#f85149">${_ocSparkCounts.actionable}</span>${sparkSvg(historyData.map(s => s.actionableCount ?? 0), '#f85149')}</div></div></div>` : ''}
-          <div class="oc-detail-field"><div class="label">Restarts</div><div class="value">${a.restarts ?? 0}</div></div>
-          <div class="oc-detail-field"><div class="label">Avg/Pass</div><div class="value">${_tokAvg > 0 ? fmtTokens(_tokAvg) : '—'}</div></div>
+          <div class="oc-detail-field"><div class="label" title="Number of times this agent has been restarted in the last 24 hours. High counts may indicate instability.">Restarts</div><div class="value">${a.restarts ?? 0}</div></div>
+          <div class="oc-detail-field"><div class="label" title="Average tokens consumed per work pass (kick session). Lower is more efficient.">Avg/Pass</div><div class="value">${_tokAvg > 0 ? fmtTokens(_tokAvg) : '—'}</div></div>
           ${a.name === 'scanner' ? `<div class="oc-detail-field"><div class="label">Open PRs</div><div class="value"><div class="spark-row"><span style="color:#bc8cff">${_ocSparkCounts.openPrs}</span>${sparkSvg(historyData.map(s => s.openPrCount ?? 0), '#bc8cff')}</div></div></div>` : ''}
-          <div class="oc-detail-field"><div class="label">Sessions</div><div class="value">${_tok.sessions ?? '—'}</div></div>
-          <div class="oc-detail-field"><div class="label">Messages</div><div class="value">${_tok.messages ?? '—'}</div></div>
+          <div class="oc-detail-field"><div class="label" title="Number of separate CLI sessions this agent has had in the last 24 hours.">Sessions</div><div class="value">${_tok.sessions ?? '—'}</div></div>
+          <div class="oc-detail-field"><div class="label" title="Total number of messages (prompts + responses) across all sessions in the last 24 hours.">Messages</div><div class="value">${_tok.messages ?? '—'}</div></div>
           ${a.name === 'scanner' ? `<div class="oc-detail-field"><div class="label">Mergeable</div><div class="value"><div class="spark-row"><span style="color:#3fb950">${_ocSparkCounts.mergeable}</span>${sparkSvg(historyData.map(s => s.mergeableCount ?? 0), '#3fb950')}</div></div></div>` : ''}
         </div>
         <div class="oc-detail-indicators">${agentIndicators(a.name)}</div>
@@ -2590,8 +2592,8 @@
         const dotCls = a.state === 'stopped' ? 'stopped' : 'running';
         const canToggle = a.name !== 'supervisor';
         const toggleBtn = canToggle ? (isOff
-          ? `<button class="btn-toggle off" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Agent is off in this mode — click to configure cadences">⚙ off</button>`
-          : `<button class="btn-toggle ${isPaused ? 'paused' : 'running'}" data-action="toggleAgent" data-agent="${esc(a.name)}" data-paused="${isPaused}">${isPaused ? '▶ resume' : '⏸ pause'}</button>`) : '';
+          ? `<button class="btn-toggle off" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Agent is off in this governor mode — click to configure per-mode cadences">⚙ off</button>`
+          : `<button class="btn-toggle ${isPaused ? 'paused' : 'running'}" data-action="toggleAgent" data-agent="${esc(a.name)}" data-paused="${isPaused}" title="${isPaused ? 'Resume this agent — it will start running on its configured cadence' : 'Pause this agent — stops governor from kicking it until resumed'}">${isPaused ? '▶ resume' : '⏸ pause'}</button>`) : '';
         // liveSummary is pushed via SSE every 5s — no separate fetch needed
         let summaryEl = '';
         if (a.liveSummary) {
@@ -2611,13 +2613,13 @@
         return `<div class="agent-card ${cls}" data-agent="${esc(a.name)}">
           <span class="working-indicator"></span>
           <div class="agent-name"><span class="dot ${dotCls}"></span>${esc(a.displayName || a.name)} ${toggleBtn} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a> <button class="restart-btn" data-action="restartAgent" data-agent="${esc(a.name)}" title="Kill tmux session — supervisor will respawn with fresh context">↻ restart</button> <button class="config-gear" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Configure ${esc(a.name)}">⚙️</button></div>
-          <div class="agent-field"><span class="label">cli</span><span class="value">${cliChip(a.cli, a.pinnedBoth || a.pinnedCli, a.name)}${(a.pinnedBoth || a.pinnedCli) ? '' : ` <button class="pin-toggle" data-action="togglePin" data-agent="${esc(a.name)}" data-pin-type="cli" data-unpin="false" title="Pin CLI — lock current backend">📌</button>`}</span></div>
-          <div class="agent-field"><span class="label">model</span><span class="value">${modelChip(a.model, a.govReason, a.pinnedBoth || a.pinnedModel, a.name)}${(a.pinnedBoth || a.pinnedModel) ? '' : ` <button class="pin-toggle" data-action="togglePin" data-agent="${esc(a.name)}" data-pin-type="model" data-unpin="false" title="Pin model — lock current model">📌</button>`}</span></div>
-          <div class="agent-field"><span class="label">interval</span><span class="value">${isPaused ? 'paused' : isOff ? 'off' : a.cadence}</span></div>
-          <div class="agent-field"><span class="label">last run</span><span class="value">${a.lastKick || '—'}</span></div>
-          <div class="agent-field"><span class="label">next run</span><span class="value">${isPaused ? 'paused' : isOff ? 'off' : (a.nextKick || '—')}</span></div>
+          <div class="agent-field"><span class="label" title="The CLI backend running this agent (e.g. claude, copilot). Pin to prevent governor from switching it.">cli</span><span class="value">${cliChip(a.cli, a.pinnedBoth || a.pinnedCli, a.name)}${(a.pinnedBoth || a.pinnedCli) ? '' : ` <button class="pin-toggle" data-action="togglePin" data-agent="${esc(a.name)}" data-pin-type="cli" data-unpin="false" title="Pin CLI — lock current backend so governor cannot change it">📌</button>`}</span></div>
+          <div class="agent-field"><span class="label" title="The LLM model powering this agent. Governor may change it based on budget or mode. Pin to lock.">model</span><span class="value">${modelChip(a.model, a.govReason, a.pinnedBoth || a.pinnedModel, a.name)}${(a.pinnedBoth || a.pinnedModel) ? '' : ` <button class="pin-toggle" data-action="togglePin" data-agent="${esc(a.name)}" data-pin-type="model" data-unpin="false" title="Pin model — lock current model so governor cannot downgrade it">📌</button>`}</span></div>
+          <div class="agent-field"><span class="label" title="Time between governor kicks for this agent in the current mode. Configured per governor mode (idle/quiet/busy/surge).">interval</span><span class="value">${isPaused ? 'paused' : isOff ? 'off' : a.cadence}</span></div>
+          <div class="agent-field"><span class="label" title="When the governor last kicked (started a work pass for) this agent.">last run</span><span class="value">${a.lastKick || '—'}</span></div>
+          <div class="agent-field"><span class="label" title="When the governor will next kick this agent based on its cadence interval.">next run</span><span class="value">${isPaused ? 'paused' : isOff ? 'off' : (a.nextKick || '—')}</span></div>
           ${agentTokenRow(a.name, a.cadence)}
-          <div class="agent-field"><span class="label">restarts</span><span class="value${(a.restarts || 0) > 5 ? ' restart-high' : (a.restarts || 0) > 0 ? ' restart-warn' : ''}">${a.restarts || 0}<span class="restart-label">24h</span>${(a.restarts || 0) > 0 ? `<button class="restart-reset" data-action="resetRestarts" data-agent="${esc(a.name)}" title="Reset restart counter">✕</button>` : ''}<span class="restart-spark">${restartSparkSvg(a.name)}</span></span></div>
+          <div class="agent-field"><span class="label" title="Number of times this agent has been restarted in the last 24 hours. High counts may indicate instability or rate limiting.">restarts</span><span class="value${(a.restarts || 0) > 5 ? ' restart-high' : (a.restarts || 0) > 0 ? ' restart-warn' : ''}">${a.restarts || 0}<span class="restart-label">24h</span>${(a.restarts || 0) > 0 ? `<button class="restart-reset" data-action="resetRestarts" data-agent="${esc(a.name)}" title="Reset the restart counter to zero — does not affect the agent">✕</button>` : ''}<span class="restart-spark">${restartSparkSvg(a.name)}</span></span></div>
           <div class="agent-state ${isPaused ? 'paused' : isOff ? 'off' : a.busy}">${isPaused ? 'paused' : isOff ? 'off' : a.busy}${(() => {
             if (a.structuredStatus === 'BLOCKED') return '<span class="status-badge blocked" title="' + esc(a.statusEvidence) + '">blocked</span>';
             if (a.structuredStatus === 'NEEDS_CONTEXT') return '<span class="status-badge needs-context" title="' + esc(a.statusEvidence) + '">needs context</span>';
@@ -2629,14 +2631,14 @@
           ${needsLogin ? '<div class="login-warning">⚠ NOT LOGGED IN — run /login</div>' : ''}
           ${summaryEl}${indEl}
           <div class="agent-actions">
-            <input type="text" class="kick-prompt" id="kick-prompt-${esc(a.name)}" placeholder="custom prompt (optional)" data-enter-action="kick" data-agent="${esc(a.name)}" />
-            <button class="btn" data-action="kick" data-agent="${esc(a.name)}" title="Send custom prompt to agent">send</button>
-            <button class="btn" data-action="kickEmpty" data-agent="${esc(a.name)}">kick</button>
-            <select class="btn backend-select" data-change-action="switchCli" data-agent="${esc(a.name)}">
+            <input type="text" class="kick-prompt" id="kick-prompt-${esc(a.name)}" placeholder="custom prompt (optional)" data-enter-action="kick" data-agent="${esc(a.name)}" title="Type a custom prompt to send to this agent instead of its default kick prompt. Press Enter to send." />
+            <button class="btn" data-action="kick" data-agent="${esc(a.name)}" title="Send the custom prompt above to this agent immediately, bypassing the governor cadence timer">send</button>
+            <button class="btn" data-action="kickEmpty" data-agent="${esc(a.name)}" title="Kick this agent now with its default prompt, bypassing the governor cadence timer">kick</button>
+            <select class="btn backend-select" data-change-action="switchCli" data-agent="${esc(a.name)}" title="Switch this agent to a different CLI backend. Free backends (copilot, goose) do not count toward token budget.">
               <option value="" disabled selected>cli ▾</option>
               ${KNOWN_BACKENDS.map(b => `<option value="${b}" ${a.cli === b ? 'disabled' : ''}>${b}</option>`).join('')}
             </select>
-            <select class="btn backend-select" data-change-action="switchModel" data-agent="${esc(a.name)}">
+            <select class="btn backend-select" data-change-action="switchModel" data-agent="${esc(a.name)}" title="Switch this agent to a different LLM model. Higher-tier models (Opus) cost more tokens; lower-tier (Haiku) are cheaper but less capable.">
               <option value="" disabled selected>model ▾</option>
               ${KNOWN_MODELS.map(m => `<option value="${m.value}">${m.label}</option>`).join('')}
             </select>
@@ -2732,15 +2734,15 @@
       const holdSpark = sparkSvg(getHistorySeries('govHold'), HOLD_COLOR);
 
       el.innerHTML = `
-        <div class="gov-title">Governor <button class="config-gear" onclick="openConfigDialog('governor')" title="Configure Governor">⚙️</button></div>
+        <div class="gov-title">Governor <button class="config-gear" onclick="openConfigDialog('governor')" title="Open Governor configuration — manage agents, thresholds, budget, notifications, health checks, and sensing patterns">⚙️</button></div>
         <div class="gov-grid">
-          <div class="gov-stat"><div class="label">timer</div><div class="val ${cls}">${gov.active ? '● active' : (isStarting ? '⏳ starting' : '⚠ DEAD')}</div></div>
-          <div class="gov-stat"><div class="label">mode</div><div class="val" style="color:${modeColor}">${escapeHtml(gov.mode)}</div></div>
-          <div class="gov-stat"><div class="label">actionable issues</div><div class="spark-row"><span class="val">${issueCount}</span>${issuesSpark}</div></div>
-          <div class="gov-stat"><div class="label">PRs</div><div class="spark-row"><span class="val">${gov.prs}</span>${prsSpark}</div></div>
+          <div class="gov-stat" title="Whether the governor's periodic evaluation timer is running. If dead, agents will not be kicked automatically."><div class="label">timer</div><div class="val ${cls}">${gov.active ? '● active' : (isStarting ? '⏳ starting' : '⚠ DEAD')}</div></div>
+          <div class="gov-stat" title="Current governor mode based on actionable issue count. Modes: idle (few issues), quiet (normal), busy (high load), surge (critical). Each mode has different agent cadences."><div class="label">mode</div><div class="val" style="color:${modeColor}">${escapeHtml(gov.mode)}</div></div>
+          <div class="gov-stat" title="Number of open GitHub issues that are actionable (not labeled as hold, wontfix, etc.). This count determines the governor mode."><div class="label">actionable issues</div><div class="spark-row"><span class="val">${issueCount}</span>${issuesSpark}</div></div>
+          <div class="gov-stat" title="Number of open pull requests across all monitored repositories."><div class="label">PRs</div><div class="spark-row"><span class="val">${gov.prs}</span>${prsSpark}</div></div>
           <div class="gov-stat" title="${itmTitle}"><div class="label">MTTR</div><div class="spark-row"><span class="val" style="color:${FIX_TIME_SPARK_COLOR}">${formatFixTime(itmMedian)}</span>${itmSpark}</div></div>
           <div class="gov-stat" title="${holdTooltip}"><div class="label">on hold</div><div class="spark-row"><span class="val" style="color:${HOLD_COLOR}">${holdTotal}</span>${holdSpark}</div></div>
-          <div class="gov-stat"><div class="label">next run</div><div class="val">${escapeHtml(gov.nextKick || '—')}</div></div>
+          <div class="gov-stat" title="When the governor will next evaluate mode and kick agents based on cadence schedules."><div class="label">next run</div><div class="val">${escapeHtml(gov.nextKick || '—')}</div></div>
         </div>
         <div class="temp-gauge">
           <div class="temp-gauge-label"><span>Issues: ${issueCount}</span><span>max ${maxQ}</span></div>
@@ -2915,7 +2917,7 @@
         govAction = '<span style="color:var(--green)">Budget healthy — governor using preferred models</span>';
       }
 
-      const ignoreCheck = `<label style="font-size:0.68rem;color:var(--muted);cursor:pointer;margin-left:12px">
+      const ignoreCheck = `<label style="font-size:0.68rem;color:var(--muted);cursor:pointer;margin-left:12px" title="When checked, the governor ignores budget limits entirely. No model downgrading, no kick skipping. Use with caution — spending will be uncapped until unchecked.">
         <input type="checkbox" ${budgetIgnored ? 'checked' : ''} onchange="toggleBudgetIgnore()" style="cursor:pointer;vertical-align:middle"> ignore budget
       </label>`;
 
@@ -3677,7 +3679,7 @@ function burnAreaChart() {
         html += `<span>Queue limit: ${exp.fastFail.queueMax}</span>`;
         html += `<span>MTTR limit: ${exp.fastFail.mttrMax}min</span>`;
         html += '</div>';
-        html += `<button class="nous-btn nous-btn-abort" style="margin-top:10px" onclick="nousAbort()">Abort Experiment</button>`;
+        html += `<button class="nous-btn nous-btn-abort" style="margin-top:10px" onclick="nousAbort()" title="Immediately stop the running experiment and revert the governor to its pre-experiment configuration. Results collected so far will be saved for analysis.">Abort Experiment</button>`;
         html += '</div>';
       }
 
@@ -3698,8 +3700,8 @@ function burnAreaChart() {
           html += `<div style="font-size:0.72rem;color:#92400e">Predicted: ${escapeHtml(JSON.stringify(p.predicted))}</div>`;
         }
         html += '<div style="margin-top:10px">';
-        html += '<button class="nous-btn nous-btn-approve" onclick="nousApprove()">Apply</button>';
-        html += '<button class="nous-btn nous-btn-reject" onclick="nousReject()">Reject</button>';
+        html += '<button class="nous-btn nous-btn-approve" onclick="nousApprove()" title="Approve this experiment proposal and start running it. The governor will apply the proposed parameter changes for the configured experiment duration.">Apply</button>';
+        html += '<button class="nous-btn nous-btn-reject" onclick="nousReject()" title="Reject this experiment proposal. Nous will discard it and generate a new hypothesis based on collected data.">Reject</button>';
         html += '</div></div>';
       }
 
@@ -3895,10 +3897,10 @@ function burnAreaChart() {
       // Goal Definition
       h += '<div class="nous-config-section">';
       h += '<h3>🎯 Goal Definition</h3>';
-      h += '<label>Governor Research Question</label>';
-      h += `<textarea id="nc-gov-goal" rows="2">${escapeHtml(camp.research_question || '')}</textarea>`;
-      h += '<label style="margin-top:10px">Repo Research Question</label>';
-      h += `<textarea id="nc-repo-goal" rows="2">${escapeHtml(repoCamp.research_question || '')}</textarea>`;
+      h += '<label title="The hypothesis Nous will test through governor-scope experiments. Example: Can we reduce MTTR by 20% by adjusting agent cadences during busy mode?">Governor Research Question</label>';
+      h += `<textarea id="nc-gov-goal" rows="2" title="Describe what you want Nous to optimize in the governor configuration (cadences, models, thresholds)">${escapeHtml(camp.research_question || '')}</textarea>`;
+      h += '<label style="margin-top:10px" title="The hypothesis Nous will test through repo-scope experiments (code changes). These always require approval regardless of trust level.">Repo Research Question</label>';
+      h += `<textarea id="nc-repo-goal" rows="2" title="Describe what you want Nous to optimize in the repo codebase (tests, CI config, automation scripts)">${escapeHtml(repoCamp.research_question || '')}</textarea>`;
       h += '</div>';
 
       // Output Mode
@@ -3916,8 +3918,8 @@ function burnAreaChart() {
       }
       h += '</div>';
       h += '<div style="margin-top:8px">';
-      h += `<label class="nous-config-check"><input type="checkbox" id="nc-auto-hold" ${output.autoHold ? 'checked' : ''}> Auto-apply <code>hold</code> label to Nous issues/PRs</label>`;
-      h += `<label class="nous-config-check"><input type="checkbox" id="nc-auto-dnm" ${output.autoDoNotMerge ? 'checked' : ''}> Auto-apply <code>do-not-merge</code> label to Nous PRs</label>`;
+      h += `<label class="nous-config-check" title="When enabled, Nous automatically adds the 'hold' label to any issues or PRs it creates. This prevents agents from acting on Nous-generated work items until an operator reviews them."><input type="checkbox" id="nc-auto-hold" ${output.autoHold ? 'checked' : ''}> Auto-apply <code>hold</code> label to Nous issues/PRs</label>`;
+      h += `<label class="nous-config-check" title="When enabled, Nous automatically adds the 'do-not-merge' label to any PRs it creates. This prevents automated merge workflows from merging experiment PRs without operator review."><input type="checkbox" id="nc-auto-dnm" ${output.autoDoNotMerge ? 'checked' : ''}> Auto-apply <code>do-not-merge</code> label to Nous PRs</label>`;
       h += '</div>';
       h += '</div>';
 
@@ -3940,18 +3942,18 @@ function burnAreaChart() {
       h += '<div class="nous-config-section">';
       h += '<h3>⚡ Fast-Fail Bounds</h3>';
       h += '<div class="nous-config-row">';
-      h += `<div><label>Queue Depth Max</label><input type="number" id="nc-ff-queue" value="${ff.queue_depth_max || 30}" min="5" max="100"></div>`;
-      h += `<div><label>MTTR Max (min)</label><input type="number" id="nc-ff-mttr" value="${ff.mttr_max_minutes || 180}" min="30" max="1440"></div>`;
-      h += `<div><label>Burn Rate Max %</label><input type="number" id="nc-ff-burn" value="${ff.budget_burn_rate_max_pct || 110}" min="80" max="200"></div>`;
+      h += `<div><label title="If the issue queue depth exceeds this number during an experiment, Nous immediately aborts and reverts. Prevents experiments from causing unacceptable issue buildup. Default: 30.">Queue Depth Max</label><input type="number" id="nc-ff-queue" value="${ff.queue_depth_max || 30}" min="5" max="100" title="Maximum allowed actionable issues before auto-abort (5-100)"></div>`;
+      h += `<div><label title="If the mean time to resolution exceeds this many minutes during an experiment, Nous immediately aborts. Prevents experiments from stalling issue resolution. Default: 180 (3 hours).">MTTR Max (min)</label><input type="number" id="nc-ff-mttr" value="${ff.mttr_max_minutes || 180}" min="30" max="1440" title="Maximum allowed MTTR in minutes before auto-abort (30-1440)"></div>`;
+      h += `<div><label title="If the token burn rate exceeds this percentage of the normal rate during an experiment, Nous aborts. Values above 100% allow higher-than-normal spending. Default: 110%.">Burn Rate Max %</label><input type="number" id="nc-ff-burn" value="${ff.budget_burn_rate_max_pct || 110}" min="80" max="200" title="Maximum burn rate as percentage of normal (80-200)"></div>`;
       h += '</div>';
       h += '</div>';
 
       h += '<div class="nous-config-section">';
       h += '<h3>⏱️ Experiment Timing</h3>';
       h += '<div class="nous-config-row">';
-      h += `<div><label>Duration (hours)</label><input type="number" id="nc-sched-dur" value="${sched.experiment_duration_hours || 4}" min="1" max="48" step="0.5"></div>`;
-      h += `<div><label>Baseline (hours)</label><input type="number" id="nc-sched-base" value="${sched.baseline_hours || 4}" min="1" max="48" step="0.5"></div>`;
-      h += `<div><label>Cooldown (hours)</label><input type="number" id="nc-sched-cool" value="${sched.cooldown_hours || 2}" min="0.5" max="24" step="0.5"></div>`;
+      h += `<div><label title="How long each experiment runs before Nous collects results. Longer durations give more statistical confidence. Default: 4 hours.">Duration (hours)</label><input type="number" id="nc-sched-dur" value="${sched.experiment_duration_hours || 4}" min="1" max="48" step="0.5" title="Experiment duration in hours (1-48)"></div>`;
+      h += `<div><label title="How many hours of baseline data Nous collects before its first experiment. More data means better comparison accuracy. Default: 4 hours.">Baseline (hours)</label><input type="number" id="nc-sched-base" value="${sched.baseline_hours || 4}" min="1" max="48" step="0.5" title="Baseline collection period in hours (1-48)"></div>`;
+      h += `<div><label title="Mandatory pause between experiments to let the system stabilize. Prevents confounding back-to-back results. Default: 2 hours.">Cooldown (hours)</label><input type="number" id="nc-sched-cool" value="${sched.cooldown_hours || 2}" min="0.5" max="24" step="0.5" title="Cooldown between experiments in hours (0.5-24)"></div>`;
       h += '</div>';
       h += '</div>';
 
@@ -3981,8 +3983,8 @@ function burnAreaChart() {
       h += '<div class="nous-config-section">';
       h += '<h3>🧠 Principle Store</h3>';
       h += '<div class="nous-config-row-2">';
-      h += `<div><label>Recommendation Threshold</label><input type="number" id="nc-prin-thresh" value="${confThresh}" min="0.1" max="1.0" step="0.05"></div>`;
-      h += `<div><label>Decay Rate / Week</label><input type="number" id="nc-prin-decay" value="${decayRate}" min="0.01" max="0.5" step="0.01"></div>`;
+      h += `<div><label title="Minimum confidence score (0.0-1.0) a principle must reach before Nous recommends applying it permanently. Higher values require more experimental evidence. Default: 0.8.">Recommendation Threshold</label><input type="number" id="nc-prin-thresh" value="${confThresh}" min="0.1" max="1.0" step="0.05" title="Confidence threshold for permanent recommendations (0.1-1.0)"></div>`;
+      h += `<div><label title="How much a principle's confidence decays per week without reinforcing experimental evidence. Higher values require more frequent validation. Default: 0.05 (5% per week).">Decay Rate / Week</label><input type="number" id="nc-prin-decay" value="${decayRate}" min="0.01" max="0.5" step="0.01" title="Weekly confidence decay rate (0.01-0.5)"></div>`;
       h += '</div>';
       if (principles.length > 0) {
         h += '<div style="margin-top:10px;max-height:200px;overflow-y:auto">';
@@ -4003,8 +4005,8 @@ function burnAreaChart() {
 
       // Save / Cancel
       h += '<div class="nous-config-btn-bar">';
-      h += '<button class="nous-config-btn nous-config-btn-cancel" onclick="closeNousConfig()">Cancel</button>';
-      h += '<button class="nous-config-btn nous-config-btn-save" onclick="saveNousConfig()">Save Configuration</button>';
+      h += '<button class="nous-config-btn nous-config-btn-cancel" onclick="closeNousConfig()" title="Discard all changes and close this dialog">Cancel</button>';
+      h += '<button class="nous-config-btn nous-config-btn-save" onclick="saveNousConfig()" title="Save all configuration changes to the server. Goals, output mode, repo targets, fast-fail bounds, timing, controllable knobs, and principle settings will be updated.">Save Configuration</button>';
       h += '</div>';
 
       h += '</div>';
@@ -4222,7 +4224,7 @@ function burnAreaChart() {
 
       if (!_kbCache || !_kbCache.enabled) {
         if (badge) { badge.textContent = 'disabled'; badge.style.background = '#6b7280'; badge.style.color = 'white'; }
-        panel.innerHTML = '<div class="kb-disabled"><div style="font-size:2rem;margin-bottom:8px">📚</div><div>Knowledge system not enabled</div><div style="font-size:0.72rem;margin-top:4px;color:var(--muted);margin-bottom:12px">Enable the knowledge base to store and retrieve facts across agents.</div><button onclick="toggleKnowledge(true)" style="padding:8px 20px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:600">Enable Knowledge</button></div>';
+        panel.innerHTML = '<div class="kb-disabled"><div style="font-size:2rem;margin-bottom:8px">📚</div><div>Knowledge system not enabled</div><div style="font-size:0.72rem;margin-top:4px;color:var(--muted);margin-bottom:12px">Enable the knowledge base to store and retrieve facts across agents.</div><button onclick="toggleKnowledge(true)" style="padding:8px 20px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:600" title="Enable the knowledge base system. Agents will be able to store and retrieve facts (patterns, gotchas, regressions, decisions) across sessions and layers (personal, project, org, community).">Enable Knowledge</button></div>';
         return;
       }
 
@@ -4234,7 +4236,7 @@ function burnAreaChart() {
         badge.style.color = 'white';
       }
 
-      let html = '<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button onclick="toggleKnowledge(false)" style="padding:4px 12px;background:none;border:1px solid #dc2626;color:#dc2626;border-radius:4px;cursor:pointer;font-size:0.72rem">Disable</button></div>';
+      let html = '<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button onclick="toggleKnowledge(false)" style="padding:4px 12px;background:none;border:1px solid #dc2626;color:#dc2626;border-radius:4px;cursor:pointer;font-size:0.72rem" title="Disable the knowledge base. Agents will no longer inject facts into prompts. Stored facts are preserved for when re-enabled.">Disable</button></div>';
 
       // Stats row
       const totalPages = layers.reduce((sum, l) => sum + (l.total_pages || 0), 0);
@@ -4250,10 +4252,11 @@ function burnAreaChart() {
 
       // Action buttons
       html += '<div style="display:flex;gap:8px;margin-bottom:14px">';
-      html += '<button class="nous-btn" style="background:var(--accent);color:white" onclick="kbOpenCreate()">+ New Fact</button>';
-      html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenImport()">📥 Import</button>';
-      html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenSubscriptions()">🔗 Subscriptions</button>';
-      html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenVaults()">📂 Vaults</button>';
+      html += '<button class="nous-btn" style="background:var(--accent);color:white" onclick="kbOpenCreate()" title="Create a new knowledge fact manually. Choose a layer (personal, project, org, community), type, and enter the fact content.">+ New Fact</button>';
+      html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenImport()" title="Import facts from a file or external knowledge base. Supports JSON and YAML formats.">📥 Import</button>';
+      html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenSubscriptions()" title="Manage subscriptions to external knowledge sources. Subscribed facts auto-sync on a schedule.">🔗 Subscriptions</button>';
+      html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenVaults()" title="Manage knowledge vaults — collections of facts organized by topic or project. Vaults can be shared across hive instances.">📂 Vaults</button>';
+      html += '<button class="nous-btn" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" onclick="kbOpenHowItWorks()">📖 How it works</button>';
       html += '</div>';
 
       // Main layout: sidebar + content
@@ -4740,6 +4743,75 @@ function burnAreaChart() {
       } catch (e) { alert('Error: ' + e.message); }
     }
 
+
+    // ── Knowledge: How it works modal ──
+
+    function kbOpenHowItWorks() {
+      const body = `
+        <div style="max-height:70vh;overflow-y:auto;font-size:0.82rem;line-height:1.6;color:var(--fg)">
+          <div style="margin-bottom:18px">
+            <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">How Knowledge Works</h3>
+            <p style="margin:0 0 6px 0">Hive uses a <strong>4-layer knowledge system</strong> with precedence-based deduplication:</p>
+            <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap">
+              <span style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:0.75rem">personal (highest)</span>
+              <span style="color:var(--muted)">&rarr;</span>
+              <span style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:0.75rem">project</span>
+              <span style="color:var(--muted)">&rarr;</span>
+              <span style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:0.75rem">org</span>
+              <span style="color:var(--muted)">&rarr;</span>
+              <span style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:0.75rem">community (lowest)</span>
+            </div>
+            <p style="margin:0;color:var(--muted);font-size:0.78rem">Higher layers override lower ones. Pages are Markdown with YAML frontmatter containing tags and maturity levels.</p>
+          </div>
+
+          <div style="margin-bottom:18px">
+            <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">Adding & Removing Pages</h3>
+            <p style="margin:0 0 6px 0">Pages can be added via the wiki API or by connecting an Obsidian vault directory.</p>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-family:monospace;font-size:0.75rem;margin:6px 0">
+              POST /api/knowledge/pages &nbsp;&mdash;&nbsp; create a page<br>
+              DELETE /api/knowledge/pages/{id} &nbsp;&mdash;&nbsp; remove a page
+            </div>
+            <p style="margin:6px 0 0 0;color:var(--muted);font-size:0.78rem">Pages have maturity stages: <strong>draft</strong> &rarr; <strong>reviewed</strong> &rarr; <strong>canonical</strong>.</p>
+          </div>
+
+          <div style="margin-bottom:18px">
+            <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">Linting & Promotion</h3>
+            <p style="margin:0">Pages go through a lint/promotion pipeline. The system checks for completeness (title, tags, body length) and promotes pages through maturity stages automatically. Incomplete pages stay at <strong>draft</strong> until they meet the quality bar.</p>
+          </div>
+
+          <div style="margin-bottom:18px">
+            <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">Subscribing to Remote Layers</h3>
+            <p style="margin:0 0 6px 0">Layers can be HTTP endpoints or file-based. Subscribe to a remote wiki by adding its URL as a layer in the knowledge config.</p>
+            <p style="margin:0;color:var(--muted);font-size:0.78rem">The system periodically syncs content from remote sources. Manage subscriptions via the <strong>Subscriptions</strong> button above.</p>
+          </div>
+
+          <div style="margin-bottom:18px">
+            <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">Obsidian Vault Integration</h3>
+            <p style="margin:0 0 6px 0">Connect local Obsidian vaults via the <strong>Vaults</strong> panel. The FileStore reads <code style="background:var(--surface);padding:1px 4px;border-radius:3px">.md</code> files, parses YAML frontmatter and inline <code style="background:var(--surface);padding:1px 4px;border-radius:3px">#tags</code>, and auto-reindexes every 30 seconds.</p>
+            <p style="margin:0;color:var(--muted);font-size:0.78rem">Vaults appear as an additional knowledge source alongside wiki layers.</p>
+          </div>
+
+          <div style="margin-bottom:18px">
+            <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">How Sources Combine</h3>
+            <p style="margin:0 0 6px 0">Pages from all layers (wiki + vaults) are merged with precedence:</p>
+            <p style="margin:0;font-weight:600;font-size:0.78rem">personal &gt; project &gt; org &gt; community</p>
+            <p style="margin:6px 0 0 0;color:var(--muted);font-size:0.78rem">Duplicate pages (same title) are deduped, with higher-precedence layers winning.</p>
+          </div>
+
+          <div style="margin-bottom:18px">
+            <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">Sharing Knowledge</h3>
+            <p style="margin:0">Knowledge can be shared by exporting pages or by pointing multiple Hive instances at the same wiki endpoint or vault directory. This lets teams maintain a shared knowledge base across environments.</p>
+          </div>
+
+          <div style="margin-bottom:4px">
+            <h3 style="font-size:0.92rem;margin:0 0 8px 0;color:var(--accent)">How Agents Use Knowledge</h3>
+            <p style="margin:0">Before each agent kick, the scheduler queries the knowledge system for pages matching the agent's domain. Relevant knowledge is injected into the agent's prompt as context, helping agents make more informed decisions without manual prompt engineering.</p>
+          </div>
+        </div>
+      `;
+      kbShowModal('📖 How Knowledge Works', body);
+    }
+
     // ── Vault Management ──
 
     function kbOpenVaults() {
@@ -4864,6 +4936,12 @@ function burnAreaChart() {
       window._lastAgents = data.agents || [];
       window._lastStatus = data;
       window._lastBudget = data.budget || {};
+      // Display the Hive ID in header badges
+      const hiveId = data.hiveId || '';
+      const hiveIdBadge = document.getElementById('hive-id-badge');
+      if (hiveIdBadge) hiveIdBadge.textContent = hiveId;
+      const ocHiveId = document.getElementById('oc-hive-id');
+      if (ocHiveId) ocHiveId.textContent = hiveId;
       // Update Light health badge with hover detail
       const ocHealth = document.getElementById('oc-health');
       if (ocHealth) {
@@ -5438,8 +5516,19 @@ function burnAreaChart() {
     let _configState = { type: null, agent: null, tab: null, data: {}, dirty: {} };
 
     const AGENT_CONFIG_TABS = ['General', 'Cadences', 'Pipeline', 'Hooks', 'Restrictions', 'Stats', 'Prompt Template', 'Last Prompt'];
-    const GOVERNOR_CONFIG_TABS = ['Agents', 'Thresholds', 'Labels', 'Repos', 'Budget', 'Notifications', 'Health', 'Sensing'];
+    const GOVERNOR_CONFIG_TABS = ['General', 'Agents', 'Thresholds', 'Labels', 'Repos', 'Budget', 'Notifications', 'Health', 'Sensing'];
     const PIPELINE_STAGES = ['resolve-beads', 'track-prs', 'stale-check', 'repo-scan', 'coverage-gate', 'prompt-compose', 'budget-check', 'api-collect', 'final-compose'];
+    const PIPELINE_STAGE_TIPS = {
+      'resolve-beads': 'Fetch and inject knowledge beads (facts, patterns, gotchas) relevant to the agent\'s current task context.',
+      'track-prs': 'Check open PRs for this agent and inject their status (CI results, review comments, merge readiness) into the prompt.',
+      'stale-check': 'Detect stale issues and PRs that haven\'t had activity recently, so the agent can prioritize or close them.',
+      'repo-scan': 'Scan monitored repos for new issues, PR activity, and CI failures to build the agent\'s work queue.',
+      'coverage-gate': 'Check test coverage thresholds before allowing the agent to merge PRs. Blocks merges that drop coverage.',
+      'prompt-compose': 'Assemble the initial prompt template with variable placeholders from the agent\'s kick script.',
+      'budget-check': 'Verify token budget before kicking. If budget is critical, the governor may skip this kick or downgrade the model.',
+      'api-collect': 'Gather data from external APIs (GitHub rate limits, CI status, analytics) to enrich the agent\'s context.',
+      'final-compose': 'Final prompt assembly — resolve all variables, inject pipeline data, and produce the complete prompt sent to the agent.',
+    };
     const RESTART_STRATEGIES = ['immediate', 'backoff', 'none'];
 
     function openConfigDialog(type, agentName) {
@@ -5518,6 +5607,7 @@ function burnAreaChart() {
     function renderGovernorTab(tab) {
       const d = _configState.data;
       switch (tab) {
+        case 'General': return renderGovGeneral();
         case 'Agents': return renderGovAgents(d.agents || []);
         case 'Thresholds': return renderGovThresholds(d.thresholds || {});
         case 'Labels': return renderGovLabels(d.labels || []);
@@ -5535,11 +5625,11 @@ function burnAreaChart() {
       const agentName = _configState.agent || '';
       return `
         <div class="config-field">
-          <label>Display Name</label>
+          <label>Display Name <span class="config-info">i<span class="config-tooltip">The friendly name shown on the agent card and sidebar. Does not affect the agent's internal ID or tmux session name.</span></span></label>
           <input type="text" id="cfg-agent-name" value="${esc(g.displayName || agentName)}" placeholder="e.g. Scanner, Code Reviewer" onchange="updateConfigAgentName(this.value);markDirty('general','displayName',this.value)">
         </div>
         <div class="config-field">
-          <label>Launch Command</label>
+          <label>Launch Command <span class="config-info">i<span class="config-tooltip">The shell command used to start this agent's CLI process. Typically uses agent-launch.sh with a --backend flag. Changing the CLI Pin Value will auto-update the binary path here.</span></span></label>
           <input type="text" id="cfg-launch-cmd" value="${esc(g.launchCmd || '')}" onchange="markDirty('general','launchCmd',this.value)">
         </div>
         <div class="config-toggle">
@@ -5548,10 +5638,10 @@ function burnAreaChart() {
         </div>
         <div class="config-toggle">
           <div class="config-toggle-switch ${g.cliPinned ? 'on' : ''}" id="cfg-cli-pinned" data-action="toggleConfigSwitch" data-section="general" data-key="cliPinned"></div>
-          <span class="config-toggle-label">CLI Pinned</span>
+          <span class="config-toggle-label">CLI Pinned <span class="config-info">i<span class="config-tooltip">When enabled, the agent is locked to the CLI backend specified in CLI Pin Value. The governor will not switch this agent to a different backend. Useful for agents that require a specific tool (e.g. copilot for free-tier work).</span></span></span>
         </div>
         <div class="config-field">
-          <label>CLI Pin Value</label>
+          <label>CLI Pin Value <span class="config-info">i<span class="config-tooltip">Which CLI backend to pin this agent to when CLI Pinned is on. Options: claude, copilot, bob, gemini, codex, amazonq, goose, aider. copilot and goose are free backends (no token cost).</span></span></label>
           <select id="cfg-pin-value" onchange="markDirty('general','cliPinValue',this.value);updateLaunchCmd(this.value)">
             ${KNOWN_BACKENDS.map(b => `<option value="${b}" ${g.cliPinValue === b ? 'selected' : ''}>${b}</option>`).join('')}
           </select>
@@ -5569,7 +5659,7 @@ function burnAreaChart() {
           </div>
         </div>
         <div class="config-field">
-          <label>Model</label>
+          <label>Model <span class="config-info">i<span class="config-tooltip">Override the LLM model for this agent. Select "(from launch command)" to let the CLI choose its default. The governor may downgrade models automatically when budget is tight, unless Model Lock is enabled in Governor Health settings.</span></span></label>
           <select id="cfg-model" onchange="markDirty('general','model',this.value)">
             <option value="">(from launch command)</option>
             ${KNOWN_MODELS.map(m => `<option value="${m.value}" ${_modelsEqual(g.model, m.value) ? 'selected' : ''}>${m.label}</option>`).join('')}
@@ -5577,7 +5667,7 @@ function burnAreaChart() {
         </div>
         <div style="margin-top:24px;padding-top:16px;border-top:1px solid #fecaca">
           <label style="color:#b91c1c;font-weight:600;font-size:0.75rem;margin-bottom:8px;display:block">Danger Zone</label>
-          <button data-action="deleteAgentFromConfig" data-agent="${esc(agentName)}" style="background:#dc2626;color:#fff;border:none;padding:6px 16px;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:600">Delete Agent</button>
+          <button data-action="deleteAgentFromConfig" data-agent="${esc(agentName)}" style="background:#dc2626;color:#fff;border:none;padding:6px 16px;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:600" title="Permanently remove this agent from the hive. Deletes its config file, env file, and sidebar entry. Cannot be undone.">Delete Agent</button>
           <span style="color:#9ca3af;font-size:0.65rem;margin-left:8px">Removes agent config, env file, and sidebar entry</span>
         </div>`;
     }
@@ -5617,10 +5707,10 @@ function burnAreaChart() {
       return `
         <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Time between kicks per governor mode. Use <b>m</b> (minutes) or <b>h</b> (hours), e.g. <code>30m</code>, <code>2h</code>. Set to <code>0</code> to turn the agent off in that mode.</p>
         <div class="config-field-row4">
-          <div class="config-field"><label>Idle</label><input type="text" value="${cadenceToHuman(c.idle)}" onchange="markDirty('cadences','idle',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
-          <div class="config-field"><label>Quiet</label><input type="text" value="${cadenceToHuman(c.quiet)}" onchange="markDirty('cadences','quiet',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
-          <div class="config-field"><label>Busy</label><input type="text" value="${cadenceToHuman(c.busy)}" onchange="markDirty('cadences','busy',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
-          <div class="config-field"><label>Surge</label><input type="text" value="${cadenceToHuman(c.surge)}" onchange="markDirty('cadences','surge',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
+          <div class="config-field"><label>Idle <span class="config-info">i<span class="config-tooltip">Kick interval when the governor is in idle mode (0 actionable issues). Set to 0 to disable this agent during idle. Default varies by agent role.</span></span></label><input type="text" value="${cadenceToHuman(c.idle)}" onchange="markDirty('cadences','idle',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
+          <div class="config-field"><label>Quiet <span class="config-info">i<span class="config-tooltip">Kick interval when the governor is in quiet mode (few actionable issues). Agents typically run at a moderate pace in this mode.</span></span></label><input type="text" value="${cadenceToHuman(c.quiet)}" onchange="markDirty('cadences','quiet',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
+          <div class="config-field"><label>Busy <span class="config-info">i<span class="config-tooltip">Kick interval when the governor is in busy mode (many actionable issues). Agents run more frequently to handle the workload.</span></span></label><input type="text" value="${cadenceToHuman(c.busy)}" onchange="markDirty('cadences','busy',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
+          <div class="config-field"><label>Surge <span class="config-info">i<span class="config-tooltip">Kick interval when the governor is in surge mode (critical issue count). Maximum agent activity. Watch your token budget at this pace.</span></span></label><input type="text" value="${cadenceToHuman(c.surge)}" onchange="markDirty('cadences','surge',cadenceFromHuman(this.value));this.value=cadenceToHuman(cadenceFromHuman(this.value))"></div>
         </div>`;
     }
 
@@ -5630,7 +5720,7 @@ function burnAreaChart() {
         ${PIPELINE_STAGES.map(stage => `
           <div class="config-toggle">
             <div class="config-toggle-switch ${p[stage] !== false ? 'on' : ''}" data-action="toggleConfigSwitch" data-section="pipeline" data-key="${stage}"></div>
-            <span class="config-toggle-label">${stage}</span>
+            <span class="config-toggle-label">${stage} <span class="config-info">i<span class="config-tooltip">${PIPELINE_STAGE_TIPS[stage] || stage}</span></span></span>
           </div>
         `).join('')}`;
     }
@@ -5644,19 +5734,19 @@ function burnAreaChart() {
       ).join('');
       return `
         <div class="config-list">
-          <label style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:block">Pre-Kick Scripts</label>
+          <label style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:block">Pre-Kick Scripts <span class="config-info">i<span class="config-tooltip">Shell scripts executed before each governor kick. Use for setup tasks like pulling latest code, clearing caches, or checking prerequisites. Scripts run in order and must exit 0 for the kick to proceed.</span></span></label>
           ${preList || '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">None configured</div>'}
           <div class="config-list-add">
-            <input type="text" id="cfg-pre-kick-input" placeholder="script path">
-            <button onclick="addListItem('hooks','preKick','cfg-pre-kick-input')">+ Add</button>
+            <input type="text" id="cfg-pre-kick-input" placeholder="script path" title="Absolute path to a shell script to run before each kick">
+            <button onclick="addListItem('hooks','preKick','cfg-pre-kick-input')" title="Add this script to the pre-kick hook list">+ Add</button>
           </div>
         </div>
         <div class="config-list">
-          <label style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:block">Post-Idle Scripts</label>
+          <label style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:block">Post-Idle Scripts <span class="config-info">i<span class="config-tooltip">Shell scripts executed after the agent finishes its work and returns to idle. Use for cleanup tasks like committing progress, sending notifications, or collecting metrics.</span></span></label>
           ${postList || '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">None configured</div>'}
           <div class="config-list-add">
-            <input type="text" id="cfg-post-idle-input" placeholder="script path">
-            <button onclick="addListItem('hooks','postIdle','cfg-post-idle-input')">+ Add</button>
+            <input type="text" id="cfg-post-idle-input" placeholder="script path" title="Absolute path to a shell script to run after the agent returns to idle">
+            <button onclick="addListItem('hooks','postIdle','cfg-post-idle-input')" title="Add this script to the post-idle hook list">+ Add</button>
           </div>
         </div>`;
     }
@@ -5690,9 +5780,9 @@ function burnAreaChart() {
         }
         if (editable) {
           h += `<div style="display:flex;gap:6px;margin-top:6px">`;
-          h += `<input type="text" id="cfg-restriction-pattern" placeholder="glob pattern, e.g. gh issue list*" style="flex:2;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:0.78rem;background:var(--bg);color:var(--fg)">`;
-          h += `<input type="text" id="cfg-restriction-reason" placeholder="reason (optional)" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:0.78rem;background:var(--bg);color:var(--fg)">`;
-          h += `<button onclick="addRestriction()" style="padding:6px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--fg);cursor:pointer;font-size:0.78rem;white-space:nowrap">+ Add</button>`;
+          h += `<input type="text" id="cfg-restriction-pattern" placeholder="glob pattern, e.g. gh issue list*" style="flex:2;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:0.78rem;background:var(--bg);color:var(--fg)" title="Glob pattern matching commands this agent is blocked from running. The gh wrapper enforces these restrictions.">`;
+          h += `<input type="text" id="cfg-restriction-reason" placeholder="reason (optional)" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:0.78rem;background:var(--bg);color:var(--fg)" title="Optional explanation shown when the agent hits this restriction">`;
+          h += `<button onclick="addRestriction()" style="padding:6px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--fg);cursor:pointer;font-size:0.78rem;white-space:nowrap" title="Add this restriction to the agent command blocklist">+ Add</button>`;
           h += '</div>';
         }
         h += '</div>';
@@ -5736,6 +5826,38 @@ function burnAreaChart() {
     }
 
     // ── Governor Tab Renderers ──
+    function renderGovGeneral() {
+      const currentId = (window._lastStatus || {}).hiveId || '';
+      return `
+        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">General hive instance settings.</p>
+        <div class="config-field">
+          <label>Hive ID <span class="config-info">i<span class="config-tooltip">Unique identifier for this hive instance. Stamped into beads and available as \${HIVE_ID} in agent CLAUDE.md templates. Persists across container restarts.</span></span></label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="cfg-hive-id" value="${esc(currentId)}" placeholder="hive-xxxxxxxx" style="flex:1">
+            <button onclick="saveHiveId()" style="font-size:0.75rem;padding:6px 14px;background:var(--green);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">Save</button>
+          </div>
+          <span style="font-size:0.65rem;color:var(--muted);margin-top:4px;display:block">Format: hive-XXXXXXXX (8 hex chars). Changes take effect immediately.</span>
+        </div>`;
+    }
+
+    async function saveHiveId() {
+      const input = document.getElementById('cfg-hive-id');
+      if (!input) return;
+      const newId = input.value.trim();
+      if (!newId) { showToast('Hive ID cannot be empty', 'error'); return; }
+      try {
+        const res = await fetch('/api/hive-id', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: newId }),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        showToast('Hive ID updated to ' + newId);
+      } catch (err) {
+        showToast('Failed to save Hive ID: ' + err.message, 'error');
+      }
+    }
+
     function renderGovAgents(agents) {
       const list = agents.map(a =>
         `<li><span class="agent-link" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a)}">${esc(a)}</span><button class="remove-agent" data-action="removeAgent" data-agent="${esc(a)}">✕</button></li>`
@@ -5744,12 +5866,12 @@ function burnAreaChart() {
         <p style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Managed agents. Click name to configure.</p>
         <ul class="config-agent-list">${list}</ul>
         <div class="config-list-add" style="margin-top:12px">
-          <input type="text" id="cfg-new-agent" placeholder="agent name">
-          <select id="cfg-copy-from" style="margin-left:6px;font-size:0.75rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px">
+          <input type="text" id="cfg-new-agent" placeholder="agent name" title="Internal name for the new agent. Used as the tmux session name and config file name. Use lowercase with no spaces (e.g. scanner, code-reviewer).">
+          <select id="cfg-copy-from" style="margin-left:6px;font-size:0.75rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px" title="Optionally copy configuration from an existing agent. Select 'blank' to start with default settings.">
             <option value="">blank</option>
             ${agents.map(a => '<option value="' + esc(a) + '">copy ' + esc(a) + '</option>').join('')}
           </select>
-          <button onclick="addAgent()">+ Add Agent</button>
+          <button onclick="addAgent()" title="Create the new agent with the specified name and optional copied config">+ Add Agent</button>
         </div>`;
     }
 
@@ -5790,9 +5912,9 @@ function burnAreaChart() {
           </div>
         </div>
         <div class="config-field-row" style="margin-top:24px">
-          <div class="config-field"><label>Quiet</label><input type="number" min="1" max="${THRESH_BAR_MAX}" id="thresh-in-quiet" value="${q}" oninput="setThreshFromInput('quiet',this.value)"></div>
-          <div class="config-field"><label>Busy</label><input type="number" min="1" max="${THRESH_BAR_MAX}" id="thresh-in-busy" value="${b}" oninput="setThreshFromInput('busy',this.value)"></div>
-          <div class="config-field"><label>Surge</label><input type="number" min="1" max="${THRESH_BAR_MAX}" id="thresh-in-surge" value="${s}" oninput="setThreshFromInput('surge',this.value)"></div>
+          <div class="config-field"><label title="Number of actionable issues at which the governor transitions from idle to quiet mode. Below this count, agents run at their idle cadence.">Quiet</label><input type="number" min="1" max="${THRESH_BAR_MAX}" id="thresh-in-quiet" value="${q}" oninput="setThreshFromInput('quiet',this.value)"></div>
+          <div class="config-field"><label title="Number of actionable issues at which the governor transitions from quiet to busy mode. Agents increase their kick frequency to handle the growing workload.">Busy</label><input type="number" min="1" max="${THRESH_BAR_MAX}" id="thresh-in-busy" value="${b}" oninput="setThreshFromInput('busy',this.value)"></div>
+          <div class="config-field"><label title="Number of actionable issues at which the governor transitions from busy to surge mode. Maximum agent activity — monitor your token budget closely at this level.">Surge</label><input type="number" min="1" max="${THRESH_BAR_MAX}" id="thresh-in-surge" value="${s}" oninput="setThreshFromInput('surge',this.value)"></div>
         </div>`;
     }
 
@@ -5871,8 +5993,8 @@ function burnAreaChart() {
         <div class="config-list">
           ${list || '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">No exempt labels</div>'}
           <div class="config-list-add">
-            <input type="text" id="cfg-label-input" placeholder="label name">
-            <button onclick="addListItem('labels','list','cfg-label-input')">+ Add</button>
+            <input type="text" id="cfg-label-input" placeholder="label name" title="GitHub label name to exempt from the actionable issue count. Issues with this label will not affect governor mode transitions.">
+            <button onclick="addListItem('labels','list','cfg-label-input')" title="Add this label to the exempt list">+ Add</button>
           </div>
         </div>`;
     }
@@ -5886,8 +6008,8 @@ function burnAreaChart() {
         <div class="config-list">
           ${list || '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">No repos configured</div>'}
           <div class="config-list-add">
-            <input type="text" id="cfg-repo-input" placeholder="org/repo">
-            <button onclick="addListItem('repos','list','cfg-repo-input')">+ Add</button>
+            <input type="text" id="cfg-repo-input" placeholder="org/repo" title="GitHub repository in org/repo format (e.g. kubestellar/console). The governor will monitor this repo for issues, PRs, and CI status.">
+            <button onclick="addListItem('repos','list','cfg-repo-input')" title="Add this repository to the monitored list">+ Add</button>
           </div>
         </div>`;
     }
@@ -5895,11 +6017,11 @@ function burnAreaChart() {
     function renderGovBudget(b) {
       return `
         <div class="config-field-row">
-          <div class="config-field"><label>Total Tokens</label><input type="number" value="${b.totalTokens || 0}" onchange="markDirty('budget','totalTokens',this.value)"></div>
-          <div class="config-field"><label>Period (days)</label><input type="number" value="${b.periodDays || 7}" onchange="markDirty('budget','periodDays',this.value)"></div>
+          <div class="config-field"><label>Total Tokens <span class="config-info">i<span class="config-tooltip">Maximum token budget for the period. When usage approaches this limit, the governor will downgrade models or skip low-priority kicks. Set to 0 to disable budget tracking.</span></span></label><input type="number" value="${b.totalTokens || 0}" onchange="markDirty('budget','totalTokens',this.value)"></div>
+          <div class="config-field"><label>Period (days) <span class="config-info">i<span class="config-tooltip">Rolling window length in days for token budget accounting. Default is 7 (weekly). The budget resets at the end of each period.</span></span></label><input type="number" value="${b.periodDays || 7}" onchange="markDirty('budget','periodDays',this.value)"></div>
         </div>
         <div class="config-field">
-          <label>Critical Percent</label>
+          <label>Critical Percent <span class="config-info">i<span class="config-tooltip">When token usage exceeds this percentage of the total budget, the governor enters budget-critical mode: downgrading models to cheaper alternatives and potentially skipping non-essential kicks. Default is 90%.</span></span></label>
           <input type="number" value="${b.criticalPct || 90}" onchange="markDirty('budget','criticalPct',this.value)">
         </div>`;
     }
@@ -5907,15 +6029,15 @@ function burnAreaChart() {
     function renderGovNotifications(n) {
       return `
         <div class="config-field">
-          <label>Ntfy Server</label>
+          <label>Ntfy Server <span class="config-info">i<span class="config-tooltip">URL of the ntfy.sh server for push notifications. The governor sends alerts for mode changes, budget warnings, agent crashes, and rate limits. Leave empty to disable ntfy notifications. Default: https://ntfy.sh</span></span></label>
           <input type="text" value="${esc(n.ntfyServer || '')}" onchange="markDirty('notifications','ntfyServer',this.value)">
         </div>
         <div class="config-field">
-          <label>Ntfy Topic</label>
+          <label>Ntfy Topic <span class="config-info">i<span class="config-tooltip">Topic name on the ntfy server. Subscribe to this topic in the ntfy app or web UI to receive governor notifications on your phone or desktop.</span></span></label>
           <input type="text" value="${esc(n.ntfyTopic || '')}" onchange="markDirty('notifications','ntfyTopic',this.value)">
         </div>
         <div class="config-field">
-          <label>Discord Webhook</label>
+          <label>Discord Webhook <span class="config-info">i<span class="config-tooltip">Discord webhook URL for posting governor notifications to a channel. Create a webhook in your Discord server settings under Integrations. Leave empty to disable Discord notifications.</span></span></label>
           <input type="text" value="${esc(n.discordWebhook || '')}" onchange="markDirty('notifications','discordWebhook',this.value)" placeholder="https://discord.com/api/webhooks/...">
         </div>`;
     }
@@ -5943,24 +6065,24 @@ function burnAreaChart() {
         const fieldOptions = (sources[s.source] || {}).fields || [];
         return `<div class="config-stat-row" data-idx="${i}">
           <div class="config-field-row" style="margin-bottom:4px;align-items:center">
-            <div class="config-field" style="flex:0.7"><label>Label</label><input type="text" value="${esc(s.label || '')}" onchange="updateStat(${i},'label',this.value)"></div>
-            <div class="config-field" style="flex:0.8"><label>Source</label>
-              <select onchange="updateStatSource(${i},this.value)">
+            <div class="config-field" style="flex:0.7"><label title="Display name shown on the agent card for this metric">Label</label><input type="text" value="${esc(s.label || '')}" onchange="updateStat(${i},'label',this.value)"></div>
+            <div class="config-field" style="flex:0.8"><label title="Data source to pull this metric from (e.g. agentMetrics, github, budget)">Source</label>
+              <select onchange="updateStatSource(${i},this.value)" title="Changing the source resets the field to the first available option">
                 ${sourceKeys.map(k => `<option value="${k}" ${s.source === k ? 'selected' : ''}>${(sources[k] || {}).label || k}</option>`).join('')}
               </select>
             </div>
-            <div class="config-field" style="flex:0.8"><label>Field</label>
+            <div class="config-field" style="flex:0.8"><label title="Specific data field from the selected source to display">Field</label>
               <select id="stat-field-${i}" onchange="updateStat(${i},'field',this.value)">
                 ${fieldOptions.map(f => `<option value="${f}" ${s.field === f ? 'selected' : ''}>${f}</option>`).join('')}
               </select>
             </div>
-            <div class="config-field" style="flex:0.6"><label>Style</label>
+            <div class="config-field" style="flex:0.6"><label title="Visual display style: number (raw value), dot (colored indicator), pct (percentage), pct-bar (progress bar), spark (sparkline chart)">Style</label>
               <select onchange="updateStat(${i},'style',this.value)">
                 ${styles.map(st => `<option value="${st}" ${s.style === st ? 'selected' : ''}>${st}</option>`).join('')}
               </select>
             </div>
-            <div class="config-field" style="flex:0.4"><label>Icon</label><input type="text" value="${esc(s.icon || '')}" onchange="updateStat(${i},'icon',this.value)" style="width:40px"></div>
-            <div class="config-field" style="flex:0.4"><label>Target</label><input type="number" value="${s.target || ''}" onchange="updateStat(${i},'target',this.value ? Number(this.value) : undefined)" style="width:50px"></div>
+            <div class="config-field" style="flex:0.4"><label title="Emoji or symbol shown next to this stat on the agent card">Icon</label><input type="text" value="${esc(s.icon || '')}" onchange="updateStat(${i},'icon',this.value)" style="width:40px"></div>
+            <div class="config-field" style="flex:0.4"><label title="Target value for percentage and progress bar styles. The stat is shown as (value/target). Leave empty for raw values.">Target</label><input type="number" value="${s.target || ''}" onchange="updateStat(${i},'target',this.value ? Number(this.value) : undefined)" style="width:50px"></div>
             <div style="display:flex;gap:2px;align-items:flex-end;padding-bottom:2px">
               <button class="btn-sm" onclick="moveStatUp(${i})" title="Move up" ${i === 0 ? 'disabled' : ''}>▲</button>
               <button class="btn-sm" onclick="moveStatDown(${i})" title="Move down" ${i === stats.length - 1 ? 'disabled' : ''}>▼</button>
@@ -6031,12 +6153,12 @@ function burnAreaChart() {
     function renderGovHealth(h) {
       return `
         <div class="config-field-row">
-          <div class="config-field"><label>Healthcheck Interval (sec)</label><input type="number" value="${h.healthcheckInterval || 300}" onchange="markDirty('health','healthcheckInterval',this.value)"></div>
-          <div class="config-field"><label>Restart Cooldown (sec)</label><input type="number" value="${h.restartCooldown || 60}" onchange="markDirty('health','restartCooldown',this.value)"></div>
+          <div class="config-field"><label>Healthcheck Interval (sec) <span class="config-info">i<span class="config-tooltip">How often the governor checks each agent's tmux session for liveness (responding to prompts, no crash indicators). Default is 300 seconds (5 minutes).</span></span></label><input type="number" value="${h.healthcheckInterval || 300}" onchange="markDirty('health','healthcheckInterval',this.value)"></div>
+          <div class="config-field"><label>Restart Cooldown (sec) <span class="config-info">i<span class="config-tooltip">Minimum time between restart attempts for the same agent. Prevents restart loops when an agent keeps crashing. Default is 60 seconds.</span></span></label><input type="number" value="${h.restartCooldown || 60}" onchange="markDirty('health','restartCooldown',this.value)"></div>
         </div>
         <div class="config-toggle">
           <div class="config-toggle-switch ${h.modelLock ? 'on' : ''}" data-action="toggleConfigSwitch" data-section="health" data-key="modelLock"></div>
-          <span class="config-toggle-label">Model Lock (prevent automatic model changes)</span>
+          <span class="config-toggle-label">Model Lock <span class="config-info">i<span class="config-tooltip">When enabled, the governor will not automatically change any agent's model (e.g. downgrading from Opus to Sonnet during budget pressure). Agents keep their configured model regardless of budget status. Does NOT prevent manual model changes or agent kicks.</span></span></span>
         </div>`;
     }
 
@@ -6054,8 +6176,8 @@ function burnAreaChart() {
           <div class="config-list">
             ${ghPatterns || '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">No patterns configured</div>'}
             <div class="config-list-add">
-              <input type="text" id="cfg-sensing-gh-input" placeholder="e.g. 403.*rate limit" style="font-family:monospace;font-size:0.75rem">
-              <button onclick="addSensingItem('ghRatePatterns','cfg-sensing-gh-input')">+ Add</button>
+              <input type="text" id="cfg-sensing-gh-input" placeholder="e.g. 403.*rate limit" style="font-family:monospace;font-size:0.75rem" title="Regular expression to match against agent tmux pane output. When matched, the governor triggers a rate-limit pullback for that agent.">
+              <button onclick="addSensingItem('ghRatePatterns','cfg-sensing-gh-input')" title="Add this regex pattern to the GitHub rate limit detection list">+ Add</button>
             </div>
           </div>
         </div>
@@ -6064,14 +6186,14 @@ function burnAreaChart() {
           <div class="config-list">
             ${cliPatterns || '<div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">No exclude patterns</div>'}
             <div class="config-list-add">
-              <input type="text" id="cfg-sensing-cli-input" placeholder="e.g. out of extra usage" style="font-family:monospace;font-size:0.75rem">
-              <button onclick="addSensingItem('cliExcludePatterns','cfg-sensing-cli-input')">+ Add</button>
+              <input type="text" id="cfg-sensing-cli-input" placeholder="e.g. out of extra usage" style="font-family:monospace;font-size:0.75rem" title="Lines matching these patterns are filtered out before rate-limit detection. Use for known false positives in agent output.">
+              <button onclick="addSensingItem('cliExcludePatterns','cfg-sensing-cli-input')" title="Add this pattern to the CLI exclusion list">+ Add</button>
             </div>
           </div>
         </div>
         <div class="config-field-row">
-          <div class="config-field"><label>Alert TTL (sec)</label><input type="number" value="${s.ttlSeconds || 900}" onchange="markDirty('sensing','ttlSeconds',Number(this.value))"></div>
-          <div class="config-field"><label>Pullback Duration (sec)</label><input type="number" value="${s.pullbackSeconds || 900}" onchange="markDirty('sensing','pullbackSeconds',Number(this.value))"></div>
+          <div class="config-field"><label>Alert TTL (sec) <span class="config-info">i<span class="config-tooltip">How long a rate-limit alert stays active before auto-clearing. Default is 900 seconds (15 minutes). After this time, the agent is considered safe to kick again.</span></span></label><input type="number" value="${s.ttlSeconds || 900}" onchange="markDirty('sensing','ttlSeconds',Number(this.value))"></div>
+          <div class="config-field"><label>Pullback Duration (sec) <span class="config-info">i<span class="config-tooltip">How long to pause an agent after detecting a rate limit. During pullback, the governor skips kicks for this agent. Default is 900 seconds (15 minutes).</span></span></label><input type="number" value="${s.pullbackSeconds || 900}" onchange="markDirty('sensing','pullbackSeconds',Number(this.value))"></div>
         </div>`;
     }
 

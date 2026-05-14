@@ -94,6 +94,9 @@ func (s *Server) RegisterAPI(deps *Dependencies) {
 	s.mux.HandleFunc("POST /api/knowledge/vaults/reindex", s.handleVaultsReindex)
 	s.mux.HandleFunc("GET /api/knowledge/vaults/{name}/facts", s.handleVaultFacts)
 
+	s.mux.HandleFunc("GET /api/hive-id", s.handleHiveIDGet)
+	s.mux.HandleFunc("PUT /api/hive-id", s.handleHiveIDSet)
+
 	s.mux.HandleFunc("POST /api/chat", s.handleChat)
 
 	s.mux.HandleFunc("GET /api/nous/status", s.handleNousStatus)
@@ -1848,6 +1851,41 @@ func (s *Server) handleVaultFacts(w http.ResponseWriter, r *http.Request) {
 		facts = []knowledge.Fact{}
 	}
 	jsonResponse(w, facts)
+}
+
+// --- Hive ID endpoints ---
+
+// hiveIDFilePath is the persistent file where the Hive ID is stored.
+const hiveIDFilePath = "/data/hive-id"
+
+func (s *Server) handleHiveIDGet(w http.ResponseWriter, r *http.Request) {
+	id := ""
+	if s.deps != nil && s.deps.Config != nil {
+		id = s.deps.Config.HiveID
+	}
+	jsonResponse(w, map[string]string{"id": id})
+}
+
+func (s *Server) handleHiveIDSet(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID string `json:"id"`
+	}
+	if err := decodeBody(r, &body); err != nil || body.ID == "" {
+		jsonError(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	if s.deps != nil && s.deps.Config != nil {
+		s.deps.Config.HiveID = body.ID
+	}
+
+	// Persist the new ID to disk so it survives restarts
+	if err := os.WriteFile(hiveIDFilePath, []byte(body.ID+"\n"), 0o644); err != nil {
+		s.logger.Warn("failed to persist hive ID", "error", err)
+	}
+
+	s.refreshAfterMutation()
+	okResponse(w, map[string]string{"status": "updated", "id": body.ID})
 }
 
 // --- Chat endpoint ---

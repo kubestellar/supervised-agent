@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -45,10 +48,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Load or generate a unique Hive ID for this instance
+	cfg.HiveID = loadOrGenerateHiveID(logger)
+
 	logger.Info("hive starting",
 		"org", cfg.Project.Org,
 		"repos", cfg.Project.Repos,
 		"agents", len(cfg.Agents),
+		"hive_id", cfg.HiveID,
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -184,6 +191,7 @@ func main() {
 			logger.Warn("failed to init beads store", "agent", name, "error", err)
 			continue
 		}
+		store.SetHiveID(cfg.HiveID)
 		beadStores[name] = store
 		logger.Info("beads store initialized", "agent", name, "count", store.Count())
 	}
@@ -405,6 +413,39 @@ func convertKnowledgeLayers(cfgLayers []config.KnowledgeLayer) []knowledge.Layer
 		}
 	}
 	return layers
+}
+
+// hiveIDFilePath is the persistent file where the Hive ID is stored across restarts.
+const hiveIDFilePath = "/data/hive-id"
+
+// hiveIDRandomBytes is the number of random bytes used to generate a Hive ID (produces 8 hex chars).
+const hiveIDRandomBytes = 4
+
+// loadOrGenerateHiveID reads the Hive ID from disk, or generates and persists a new one.
+func loadOrGenerateHiveID(logger *slog.Logger) string {
+	if data, err := os.ReadFile(hiveIDFilePath); err == nil {
+		id := strings.TrimSpace(string(data))
+		if id != "" {
+			logger.Info("hive ID loaded from disk", "id", id)
+			return id
+		}
+	}
+
+	// Generate a new Hive ID: hive- followed by 8 random hex characters
+	randomBytes := make([]byte, hiveIDRandomBytes)
+	if _, err := rand.Read(randomBytes); err != nil {
+		logger.Error("failed to generate random bytes for hive ID", "error", err)
+		return "hive-00000000"
+	}
+	id := "hive-" + hex.EncodeToString(randomBytes)
+
+	if err := os.WriteFile(hiveIDFilePath, []byte(id+"\n"), 0o644); err != nil {
+		logger.Warn("failed to persist hive ID", "error", err)
+	} else {
+		logger.Info("generated new hive ID", "id", id)
+	}
+
+	return id
 }
 
 func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.Config, path string, logger *slog.Logger) {

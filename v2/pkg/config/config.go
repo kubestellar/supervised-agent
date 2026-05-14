@@ -21,6 +21,7 @@ type Config struct {
 	Dashboard     DashboardConfig              `yaml:"dashboard"`
 	Data          DataConfig                   `yaml:"data"`
 	Knowledge     KnowledgeConfig              `yaml:"knowledge"`
+	HiveID        string                       `yaml:"hive_id"`
 }
 
 type KnowledgeConfig struct {
