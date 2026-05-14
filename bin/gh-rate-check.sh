@@ -27,7 +27,7 @@ mkdir -p "$PULLBACK_STATE_DIR"
 # Agent name -> tmux session name
 declare -A AGENT_SESSIONS=(
   [scanner]=scanner
-  [reviewer]=reviewer
+  [ci-maintainer]=ci-maintainer
   [architect]=architect
   [outreach]=outreach
 )

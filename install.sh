@@ -11,7 +11,7 @@
 # You can mix both on the same host — each call installs what it needs.
 #
 # The kick-governor is always installed alongside the agent supervisor.
-# It replaces the old per-agent kick timers (kick-scanner, kick-reviewer,
+# It replaces the old per-agent kick timers (kick-scanner, kick-ci-maintainer,
 # kick-architect, kick-outreach) with a single adaptive timer that adjusts
 # cadences based on the live issue/PR queue depth across all 5 repos.
 set -euo pipefail
@@ -19,7 +19,7 @@ set -euo pipefail
 # Per-agent timers superseded by kick-governor. Disabled on install.
 LEGACY_KICK_TIMERS=(
   kick-scanner.timer
-  kick-reviewer.timer
+  kick-ci-maintainer.timer
   kick-architect.timer
   kick-outreach.timer
 )

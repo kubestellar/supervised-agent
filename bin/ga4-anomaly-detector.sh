@@ -1,5 +1,5 @@
 #!/bin/bash
-# ga4-anomaly-detector.sh — Pre-compute GA4 error anomalies for the reviewer agent.
+# ga4-anomaly-detector.sh — Pre-compute GA4 error anomalies for the ci-maintainer agent.
 # Compares recent error counts against 7-day baseline.
 # Writes /var/run/hive-metrics/ga4-anomalies.json.
 #

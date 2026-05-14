@@ -1,16 +1,16 @@
 #!/bin/bash
-# kick-agents.sh — fires work orders at the scanner, reviewer, architect, and outreach tmux sessions.
+# kick-agents.sh — fires work orders at the scanner, ci-maintainer, architect, and outreach tmux sessions.
 # Called by systemd timers (or manually). Does NOT require Claude to be running
 # as a supervisor — it speaks directly to the named tmux sessions.
 #
 # Usage:
 #   kick-agents.sh scanner    # kick scanner only
-#   kick-agents.sh reviewer   # kick reviewer only
+#   kick-agents.sh ci-maintainer   # kick ci-maintainer only
 #   kick-agents.sh architect  # kick architect only
 #   kick-agents.sh outreach   # kick outreach only
 #   kick-agents.sh all        # kick all four (default)
 #
-# Systemd timer fires this every 15 min for scanner, every 30 min for reviewer,
+# Systemd timer fires this every 15 min for scanner, every 30 min for ci-maintainer,
 # every 2 hours for architect and outreach.
 
 set -euo pipefail
@@ -93,13 +93,13 @@ audit_kick() {
 # Default backend assignments per agent
 declare -A AGENT_PRIMARY_BACKEND=(
   [scanner]=copilot
-  [reviewer]=claude
+  [ci-maintainer]=claude
   [architect]=claude
   [outreach]=claude
 )
 declare -A AGENT_FALLBACK_BACKEND=(
   [scanner]=claude
-  [reviewer]=copilot
+  [ci-maintainer]=copilot
   [architect]=copilot
   [outreach]=copilot
 )
@@ -331,7 +331,7 @@ next_run() {
   # Compute next run time in ET for a given agent
   case "$1" in
     scanner)  systemctl show kick-scanner.timer  --property=NextElapseUSecRealtime --value 2>/dev/null | xargs -I{} date -d "{}" '+%I:%M %p ET' 2>/dev/null || echo "unknown" ;;
-    reviewer) systemctl show kick-reviewer.timer  --property=NextElapseUSecRealtime --value 2>/dev/null | xargs -I{} date -d "{}" '+%I:%M %p ET' 2>/dev/null || echo "unknown" ;;
+    ci-maintainer) systemctl show kick-ci-maintainer.timer  --property=NextElapseUSecRealtime --value 2>/dev/null | xargs -I{} date -d "{}" '+%I:%M %p ET' 2>/dev/null || echo "unknown" ;;
     architect) systemctl show kick-architect.timer --property=NextElapseUSecRealtime --value 2>/dev/null | xargs -I{} date -d "{}" '+%I:%M %p ET' 2>/dev/null || echo "unknown" ;;
     outreach) systemctl show kick-outreach.timer --property=NextElapseUSecRealtime --value 2>/dev/null | xargs -I{} date -d "{}" '+%I:%M %p ET' 2>/dev/null || echo "unknown" ;;
   esac
@@ -445,14 +445,21 @@ render_policy() {
   # Substitute template variables in a policy file before sending to agents.
   # This allows policy templates to reference project-specific values from
   # hive-project.yaml / hive-config.sh without hardcoding them.
+  #
+  # Usage: render_policy <file> [agent_name]
+  # If agent_name is omitted, ${AGENT_NAME} is left unresolved.
   local policy_file="$1"
+  local agent_name="${2:-}"
   sed \
+    -e "s|\${AGENT_NAME}|${agent_name}|g" \
+    -e "s|\${PROJECT_NAME}|${PROJECT_NAME}|g" \
     -e "s|\${PROJECT_ORG}|${PROJECT_ORG}|g" \
     -e "s|\${PROJECT_PRIMARY_REPO}|${PROJECT_PRIMARY_REPO}|g" \
     -e "s|\${PROJECT_AI_AUTHOR}|${PROJECT_AI_AUTHOR}|g" \
     -e "s|\${PROJECT_REPOS_LIST}|${PROJECT_REPOS}|g" \
     -e "s|\${GA4_PROPERTY_ID}|${OUTREACH_GA4_PROPERTY_ID}|g" \
     -e "s|\${HIVE_REPO}|${PROJECT_HIVE_REPO:-kubestellar/hive}|g" \
+    -e "s|\${HIVE_ID}|${HIVE_ID:-}|g" \
     -e "s|\${AGENTS_WORKDIR}|${AGENTS_WORKDIR}|g" \
     -e "s|\${BEADS_BASE}|${BEADS_BASE}|g" \
     "$policy_file"
@@ -479,9 +486,9 @@ policy_changed() {
   local current_hash
   if [[ -d "$skills_dir" ]]; then
     # Sort skill files for deterministic ordering; render all through template substitution
-    current_hash=$({ render_policy "$policy_file"; for f in $(find "$skills_dir" -type f | sort); do render_policy "$f"; done; } 2>/dev/null | md5sum | cut -d' ' -f1)
+    current_hash=$({ render_policy "$policy_file" "$agent"; for f in $(find "$skills_dir" -type f | sort); do render_policy "$f" "$agent"; done; } 2>/dev/null | md5sum | cut -d' ' -f1)
   else
-    current_hash=$(render_policy "$policy_file" 2>/dev/null | md5sum | cut -d' ' -f1)
+    current_hash=$(render_policy "$policy_file" "$agent" 2>/dev/null | md5sum | cut -d' ' -f1)
   fi
 
   if [[ -f "$hash_file" ]] && [[ "$(cat "$hash_file" 2>/dev/null)" == "$current_hash" ]]; then
@@ -817,7 +824,7 @@ ${_WORK_LIST}${_CLUSTER_SECTION}${_MERGE_INLINE}
 ⛔ MERGE METHOD: ALWAYS use 'gh pr merge <number> --admin --squash --repo <repo>' for ALL repos (console, docs, console-kb, etc.). Do NOT rely on Tide or Prow to merge — Prow jobs may not trigger for bot-authored PRs. The --admin flag bypasses branch protection. Never use /lgtm or /approve as a merge strategy.
 WORKFLOW: Dispatch a sub-agent for each issue (use the Agent tool). Each agent does: 1) git worktree add /tmp/fix-NNNN -b fix/NNNN from the repo checkout, 2) cd into worktree, read the issue with gh issue view, make the fix, 3) git add + git commit -s, 4) git push origin fix/NNNN, 5) gh pr create --body 'Fixes #NNNN'. Dispatch 4-6 agents IN PARALLEL — do not work issues one-at-a-time. Use the model_recommendation for each issue (S=haiku, M=sonnet, C=opus). Bundle clustered issues into 1 agent per cluster. Skip issues with lane!=scanner. Do NOT stand by — if issues exist, work them. NEVER run vitest, npm test, npm run build, tsc, or any test/build locally. Beads: ~/scanner-beads"
 
-# Build live health preamble for reviewer — tells it exactly what's red RIGHT NOW
+# Build live health preamble for ci-maintainer — tells it exactly what's red RIGHT NOW
 _rh_json=$(/tmp/hive/dashboard/health-check.sh 2>/dev/null || echo '{}')
 _rh_reds=""
 _rh_ci=$(echo "$_rh_json" | jq -r '.ci // 0' 2>/dev/null || echo 0)
@@ -845,12 +852,12 @@ if [ -n "$_rh_reds" ]; then
 else
   _HEALTH_PREAMBLE=""
 fi
-if policy_changed "reviewer"; then
+if policy_changed "ci-maintainer"; then
   _REVIEWER_POLICY_INSTR="Read your CLAUDE.md."
 else
   _REVIEWER_POLICY_INSTR="Policy unchanged since last kick — skip CLAUDE.md re-read, continue with standing instructions."
 fi
-# Build reviewer pipeline data preamble
+# Build ci-maintainer pipeline data preamble
 _COPILOT_FILE="/var/run/hive-metrics/copilot-comments.json"
 _GA4_FILE="/var/run/hive-metrics/ga4-anomalies.json"
 _COPILOT_PREAMBLE=""
@@ -877,9 +884,9 @@ if [ -f "$_GA4_FILE" ]; then
 GA4: ${_GA4_SUMMARY}"
   fi
 fi
-REVIEWER_MSG="[agent:reviewer] [KICK] ${_HEALTH_PREAMBLE}git pull /tmp/hive. ${_REVIEWER_POLICY_INSTR}${_GA4_PREAMBLE}${_COPILOT_PREAMBLE}
+CI_MAINTAINER_MSG="[agent:ci-maintainer] [KICK] ${_HEALTH_PREAMBLE}git pull /tmp/hive. ${_REVIEWER_POLICY_INSTR}${_GA4_PREAMBLE}${_COPILOT_PREAMBLE}
 ${_GH_AUTH_INSTR}
-Fix REDs (NOT Playwright — file issues only, scanner owns Playwright fixes), merge green PRs. Copilot comments and GA4 data above are pre-computed — do NOT re-query. Read /var/run/hive-metrics/copilot-comments.json and /var/run/hive-metrics/ga4-anomalies.json for full details. Beads: ~/reviewer-beads"
+Fix REDs (NOT Playwright — file issues only, scanner owns Playwright fixes), merge green PRs. Copilot comments and GA4 data above are pre-computed — do NOT re-query. Read /var/run/hive-metrics/copilot-comments.json and /var/run/hive-metrics/ga4-anomalies.json for full details. Beads: ~/ci-maintainer-beads"
 
 if policy_changed "architect"; then
   _ARCHITECT_POLICY_INSTR="Read your CLAUDE.md."
@@ -1110,8 +1117,8 @@ case "$TARGET" in
   scanner)
     apply_model_if_changed "scanner" "scanner" && kick "scanner" "$SCANNER_MSG" "scanner"
     ;;
-  reviewer)
-    apply_model_if_changed "reviewer" "reviewer" && kick "reviewer" "$REVIEWER_MSG" "reviewer"
+  ci-maintainer)
+    apply_model_if_changed "ci-maintainer" "ci-maintainer" && kick "ci-maintainer" "$CI_MAINTAINER_MSG" "ci-maintainer"
     ;;
   architect)
     apply_model_if_changed "architect" "architect" && kick "architect" "$ARCHITECT_MSG" "architect"
@@ -1128,7 +1135,7 @@ case "$TARGET" in
     ;;
   all)
     apply_model_if_changed "scanner" "scanner" && kick "scanner" "$SCANNER_MSG" "scanner"
-    apply_model_if_changed "reviewer" "reviewer" && kick "reviewer" "$REVIEWER_MSG" "reviewer"
+    apply_model_if_changed "ci-maintainer" "ci-maintainer" && kick "ci-maintainer" "$CI_MAINTAINER_MSG" "ci-maintainer"
     apply_model_if_changed "architect" "architect" && kick "architect" "$ARCHITECT_MSG" "architect"
     apply_model_if_changed "outreach" "outreach" && kick "outreach" "$OUTREACH_MSG" "outreach"
     # supervisor is NOT kicked in "all" — it has its own cadence via governor
@@ -1156,13 +1163,13 @@ bd dolt push 2>&1 | tee -a "$LOG" || log "WARN: bd dolt push failed (non-fatal)"
 CENTRAL_ISSUES="/tmp/hive/.beads/issues.jsonl"
 CENTRAL_INTERACTIONS="/tmp/hive/.beads/interactions.jsonl"
 {
-  for _agent in ${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}; do
+  for _agent in ${AGENTS_ENABLED:-supervisor scanner ci-maintainer architect outreach}; do
     agent_dir="${BEADS_BASE:-/home/dev}/${_agent}-beads"
     [ -f "$agent_dir/.beads/issues.jsonl" ] && cat "$agent_dir/.beads/issues.jsonl"
   done
 } > "${CENTRAL_ISSUES}.tmp" 2>/dev/null && mv "${CENTRAL_ISSUES}.tmp" "$CENTRAL_ISSUES" || true
 {
-  for _agent in ${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}; do
+  for _agent in ${AGENTS_ENABLED:-supervisor scanner ci-maintainer architect outreach}; do
     agent_dir="${BEADS_BASE:-/home/dev}/${_agent}-beads"
     [ -f "$agent_dir/.beads/interactions.jsonl" ] && cat "$agent_dir/.beads/interactions.jsonl"
   done

@@ -20,7 +20,7 @@ class CommandRouter {
       k: 'kick',
       p: 'pause',
       r: 'resume',
-      sc: 'scanner', rv: 'reviewer', ar: 'architect', ou: 'outreach', su: 'supervisor',
+      sc: 'scanner', rv: 'ci-maintainer', ar: 'architect', ou: 'outreach', su: 'supervisor',
     };
     cmd = ALIASES[cmd] || cmd;
 
@@ -123,7 +123,7 @@ class CommandRouter {
       '`!status` (`!s`) — show system status',
       '`!governor` (`!g`, `!gov`) — show governor mode and thresholds',
       '`!scanner <prompt>` (`!sc`) — send prompt to scanner',
-      '`!reviewer <prompt>` (`!rv`) — send prompt to reviewer',
+      '`!ci-maintainer <prompt>` (`!rv`) — send prompt to ci-maintainer',
       '`!architect <prompt>` (`!ar`) — send prompt to architect',
       '`!outreach <prompt>` (`!ou`) — send prompt to outreach',
       '`!supervisor <prompt>` (`!su`) — send prompt to supervisor',

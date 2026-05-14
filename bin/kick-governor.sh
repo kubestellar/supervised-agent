@@ -6,29 +6,29 @@
 # agent at a cadence that reflects the current workload:
 #
 # Architect and outreach are OPPORTUNISTIC — they fill idle cycles and yield
-# entirely under load. Scanner and reviewer always have priority.
+# entirely under load. Scanner and ci-maintainer always have priority.
 #
 #   SURGE (queue > SURGE_THRESHOLD, default 20):
 #     scanner   → every 15 min
-#     reviewer  → PAUSED
+#     ci-maintainer  → PAUSED
 #     architect → PAUSED
 #     outreach  → PAUSED
 #
 #   BUSY (queue > BUSY_THRESHOLD, default 10):
 #     scanner   → every 15 min
-#     reviewer  → every 1 hour
+#     ci-maintainer  → every 1 hour
 #     architect → PAUSED
 #     outreach  → PAUSED
 #
 #   QUIET (queue > IDLE_THRESHOLD, default 2):
 #     scanner   → every 15 min
-#     reviewer  → every 45 min
+#     ci-maintainer  → every 45 min
 #     architect → PAUSED
 #     outreach  → PAUSED
 #
 #   IDLE (queue ≤ IDLE_THRESHOLD):
 #     scanner   → every 15 min
-#     reviewer  → every 15 min
+#     ci-maintainer  → every 15 min
 #     architect → every 30 min  (jam — queue is clear)
 #     outreach  → every 2 hours
 #
@@ -141,7 +141,7 @@ COST_WEIGHT_SONNET="${COST_WEIGHT_SONNET:-3}"
 COST_WEIGHT_HAIKU="${COST_WEIGHT_HAIKU:-1}"
 
 # ── Model selection table: MODEL_<MODE>_<AGENT>=backend:model ───────────────
-# Priority agents (scanner, reviewer) get metered Claude in surge/busy.
+# Priority agents (scanner, ci-maintainer) get metered Claude in surge/busy.
 # Non-priority agents (architect, outreach) use copilot (free/unlimited).
 # Supervisor is lightweight — Haiku or copilot.
 MODEL_SURGE_SCANNER="${MODEL_SURGE_SCANNER:-claude:claude-sonnet-4-6}"
@@ -494,7 +494,7 @@ BUDGETEOF
 optimize_model_assignment() {
   local mode="$1"
   local agents=($AGENTS_ENABLED)
-  local priority_agents=(scanner reviewer)
+  local priority_agents=(scanner ci-maintainer)
 
   local projected_pct
   projected_pct=$(compute_budget_state)

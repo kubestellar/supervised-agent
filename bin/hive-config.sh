@@ -129,7 +129,7 @@ if [[ -f "$_HIVE_CONFIG" ]]; then
   PROJECT_WEBSITE=$(_hive_read "project.website" "")
 
   # Agents
-  AGENTS_ENABLED=$(_hive_read_runtime_array "agents.enabled" "supervisor scanner reviewer")
+  AGENTS_ENABLED=$(_hive_read_runtime_array "agents.enabled" "supervisor scanner ci-maintainer")
   BEADS_BASE=$(_hive_read "agents.beads_base" "/home/dev")
   AGENTS_WORKDIR=$(_hive_read "agents.workdir" "")
 

@@ -49,7 +49,7 @@ const DASHBOARD_TITLE = ((projectConfig.dashboard || {}).title) || (PROJECT_NAME
 const HIVE_REPO_DIR = process.env.HIVE_REPO_DIR || path.resolve(__dirname, '..');
 let ENABLED_AGENTS = ((runtimeConfig.agents || {}).enabled
   || (projectConfig.agents || {}).enabled
-  || ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach']);
+  || ['supervisor', 'scanner', 'ci-maintainer', 'architect', 'outreach']);
 let ENABLED_AGENTS_PLUS_ALL = [...ENABLED_AGENTS, 'all'];
 
 const CONFIG_REPO_SOURCE = process.env.HIVE_PROJECT_CONFIG_SRC
@@ -432,7 +432,7 @@ function fetchStatus() {
           if (statusCache.beads.supervisor >= 0) lastGoodBeads.supervisor = statusCache.beads.supervisor;
           else statusCache.beads.supervisor = lastGoodBeads.supervisor;
         }
-        // Build reviewer metrics from live data
+        // Build ci-maintainer metrics from live data
         statusCache.health = healthChecks;
         statusCache.ciPassRate = ciPassRate;
         statusCache.agentMetrics = agentMetrics;
@@ -961,7 +961,7 @@ const GOVERNOR_CADENCE_DIR = '/var/run/kick-governor';
 // 0 means off in that mode (governor rule — agent doesn't run).
 const CADENCE_MATRIX = {
   scanner:    { surge: 900, busy: 900,  quiet: 900,  idle: 900  },
-  reviewer:   { surge: 0,   busy: 3600, quiet: 2700, idle: 900  },
+  ci-maintainer:   { surge: 0,   busy: 3600, quiet: 2700, idle: 900  },
   architect:  { surge: 0,   busy: 0,    quiet: 0,    idle: 7200 },
   outreach:   { surge: 0,   busy: 0,    quiet: 0,    idle: 7200 },
   supervisor: { surge: 300, busy: 600,  quiet: 900,  idle: 1800 },
@@ -1213,7 +1213,7 @@ app.get('/api/issue-costs', (_req, res) => {
 // Model advisor — reads governor state files
 const GOVERNOR_STATE_DIR = '/var/run/kick-governor';
 app.get('/api/model-advisor', (_req, res) => {
-  const agents = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+  const agents = ['scanner', 'ci-maintainer', 'architect', 'outreach', 'supervisor'];
   const result = { mode: 'unknown', budget: {}, agents: [] };
 
   try {
@@ -1390,7 +1390,7 @@ function getDefaultStats(agentName) {
       { key: 'openPrs', label: 'Open PRs', source: 'status', field: 'openPrCount', style: 'spark', trendField: 'openPrs' },
       { key: 'mergeable', label: 'Mergeable', source: 'status', field: 'mergeableCount', style: 'spark', trendField: 'mergeable' },
     ],
-    reviewer: [
+    ci-maintainer: [
       { key: 'coverage', label: 'Coverage', source: 'agentMetrics', field: 'coverage', style: 'pct-bar', target: 91 },
       { key: 'brew', label: 'Brew', source: 'health', field: 'brew', style: 'dot' },
       { key: 'helm', label: 'Helm', source: 'health', field: 'helm', style: 'dot' },
@@ -2003,7 +2003,7 @@ app.get('/api/config/backends', (_req, res) => {
 });
 
 // ── Hive Chat — search across beads, status, metrics ──────────────────────
-const BEADS_AGENTS = ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach'];
+const BEADS_AGENTS = ['supervisor', 'scanner', 'ci-maintainer', 'architect', 'outreach'];
 const BEADS_BASE = '/home/dev';
 const HIVE_STATUS_DIR = process.env.HOME ? path.join(process.env.HOME, '.hive') : '/home/dev/.hive';
 const CHAT_MAX_RESULTS = 20;

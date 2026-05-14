@@ -92,8 +92,8 @@ func (mc *MetricsCollector) collect(ctx context.Context) {
 	outreach := mc.collectOutreach(ctx)
 	metrics["outreach"] = outreach
 
-	reviewer := mc.collectCoverage()
-	metrics["ci-maintainer"] = reviewer
+	ciMaintainer := mc.collectCoverage()
+	metrics["ci-maintainer"] = ciMaintainer
 
 	architect := mc.collectArchitect()
 	metrics["architect"] = architect
@@ -107,7 +107,7 @@ func (mc *MetricsCollector) collect(ctx context.Context) {
 	mc.saveToDisk(metrics)
 	mc.logger.Info("agent metrics collected",
 		"stars", outreach["stars"],
-		"coverage", reviewer["coverage"],
+		"coverage", ciMaintainer["coverage"],
 	)
 }
 

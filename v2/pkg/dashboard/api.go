@@ -880,10 +880,43 @@ func (s *Server) loadPromptTemplate(name string) string {
 	if claudeMdPath == "" {
 		return ""
 	}
-	if data, err := os.ReadFile(claudeMdPath); err == nil {
-		return string(data)
+	data, err := os.ReadFile(claudeMdPath)
+	if err != nil {
+		return ""
 	}
-	return ""
+	return s.substituteTemplateVars(string(data), name)
+}
+
+// substituteTemplateVars replaces ${VAR} placeholders in a prompt template
+// with values from the running config, so the dashboard shows resolved content
+// instead of raw variable names.
+func (s *Server) substituteTemplateVars(template, agentName string) string {
+	if s.deps == nil || s.deps.Config == nil {
+		return template
+	}
+	cfg := s.deps.Config
+	org := cfg.Project.Org
+	primaryRepo := cfg.Project.PrimaryRepo
+
+	// Build full primary repo path (org/repo) if not already qualified
+	fullPrimaryRepo := primaryRepo
+	if org != "" && !strings.Contains(primaryRepo, "/") {
+		fullPrimaryRepo = fmt.Sprintf("%s/%s", org, primaryRepo)
+	}
+
+	reposList := strings.Join(cfg.Project.Repos, ", ")
+
+	replacer := strings.NewReplacer(
+		"${AGENT_NAME}", agentName,
+		"${PROJECT_NAME}", cfg.Project.Name,
+		"${PROJECT_ORG}", org,
+		"${PROJECT_PRIMARY_REPO}", fullPrimaryRepo,
+		"${PROJECT_AI_AUTHOR}", cfg.Project.AIAuthor,
+		"${PROJECT_REPOS_LIST}", reposList,
+		"${HIVE_REPO}", fmt.Sprintf("%s/hive", org),
+		"${HIVE_ID}", cfg.HiveID,
+	)
+	return replacer.Replace(template)
 }
 
 func (s *Server) loadAgentStats(name string) []any {

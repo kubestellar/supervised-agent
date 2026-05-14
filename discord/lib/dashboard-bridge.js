@@ -7,7 +7,7 @@ const SSE_RECONNECT_BASE_MS = 5000;
 const SSE_RECONNECT_MAX_MS = 60000;
 const DASHBOARD_STALE_WARN_MS = 30000;
 const TOPIC_DEBOUNCE_MS = 5000;
-const TOPIC_AGENT_ORDER_DEFAULT = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+const TOPIC_AGENT_ORDER_DEFAULT = ['scanner', 'ci-maintainer', 'architect', 'outreach', 'supervisor'];
 const TOPIC_STATE_ICONS = { working: '🟢', idle: '⚪', paused: '🔴', off: '⚫' };
 
 class DashboardBridge {

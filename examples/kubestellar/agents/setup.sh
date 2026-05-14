@@ -14,8 +14,8 @@ SCANNER_HOME="${HOME}/.hive-fix-loop"
 LEDGER_HOME="${HOME}/agent-ledger"
 NTFY_TOPIC="${1:-}"
 
-AGENTS=(supervisor fixer architect reviewer outreach)
-WORKER_AGENTS=(fixer architect reviewer outreach)
+AGENTS=(supervisor fixer architect ci-maintainer outreach)
+WORKER_AGENTS=(fixer architect ci-maintainer outreach)
 
 log() { printf '\033[1;36m==> %s\033[0m\n' "$*"; }
 err() { printf '\033[1;31mERR: %s\033[0m\n' "$*" >&2; exit 1; }
@@ -53,8 +53,8 @@ for agent in fixer architect; do
   done
 done
 
-# Read-only clones for reviewer/outreach (only primary repo needed)
-for agent in reviewer outreach; do
+# Read-only clones for ci-maintainer/outreach (only primary repo needed)
+for agent in ci-maintainer outreach; do
   target="$AGENTS_HOME/$agent/$PRIMARY_REPO_NAME"
   if [ -d "$target/.git" ]; then
     echo "  ✓ $agent/$PRIMARY_REPO_NAME exists"
@@ -131,7 +131,7 @@ echo "├───────────────────────�
 echo "│  🎯 ks-supervisor  (Opus, /loop 1m)          │"
 echo "│  🔧 ks-fixer       (Sonnet, executor)        │"
 echo "│  🏗️  ks-architect   (Sonnet, executor)        │"
-echo "│  👁️  ks-reviewer    (Sonnet, executor)        │"
+echo "│  👁️  ks-ci-maintainer    (Sonnet, executor)        │"
 echo "│  📣 ks-outreach  (Sonnet, executor)        │"
 echo "├──────────────────────────────────────────────┤"
 echo "│  Scanner: cron every 15 min                  │"
@@ -140,4 +140,4 @@ echo "│  State: ~/.hive-fix-loop/state.db     │"
 echo "└──────────────────────────────────────────────┘"
 echo ""
 echo "Attach: tmux attach -t ks-supervisor"
-echo "Status: for s in ks-{supervisor,fixer,architect,reviewer,outreach}; do echo \"\$s: \$(tmux has-session -t \$s 2>/dev/null && echo ✅ || echo ❌)\"; done"
+echo "Status: for s in ks-{supervisor,fixer,architect,ci-maintainer,outreach}; do echo \"\$s: \$(tmux has-session -t \$s 2>/dev/null && echo ✅ || echo ❌)\"; done"

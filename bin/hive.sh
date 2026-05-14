@@ -5,8 +5,8 @@
 #   hive supervisor   # bootstrap everything and start
 #   hive status       # live dashboard (add --watch 5 for auto-refresh)
 #   hive attach  [agent]
-#   hive kick    [all|scanner|reviewer|architect|outreach]
-#   hive logs    [governor|scanner|reviewer|architect|outreach|supervisor]
+#   hive kick    [all|scanner|ci-maintainer|architect|outreach]
+#   hive logs    [governor|scanner|ci-maintainer|architect|outreach|supervisor]
 #   hive stop    [all|agent]
 
 set -euo pipefail
@@ -129,7 +129,7 @@ load_conf() {
   SUPERVISOR_WORKDIR="${SUPERVISOR_WORKDIR:-/home/dev/hive-supervisor}"
   BEADS_SUPERVISOR_DIR="${BEADS_SUPERVISOR_DIR:-/home/dev/supervisor-beads}"
   BEADS_SCANNER_DIR="${BEADS_SCANNER_DIR:-/home/dev/scanner-beads}"
-  BEADS_REVIEWER_DIR="${BEADS_REVIEWER_DIR:-/home/dev/reviewer-beads}"
+  BEADS_CI_MAINTAINER_DIR="${BEADS_CI_MAINTAINER_DIR:-/home/dev/ci-maintainer-beads}"
   BEADS_ARCHITECT_DIR="${BEADS_ARCHITECT_DIR:-${BEADS_FEATURE_DIR:-/home/dev/architect-beads}}"
   BEADS_OUTREACH_DIR="${BEADS_OUTREACH_DIR:-/home/dev/outreach-beads}"
   BEADS_WORKER_DIR="${BEADS_WORKER_DIR:-/home/dev/scanner-beads}"
@@ -146,7 +146,7 @@ load_conf() {
 #
 #   AGENT       SESSION    SYSTEMD SERVICE              ENV FILE (both dirs)
 #   scanner     scanner    supervised-agent@scanner      scanner.env
-#   reviewer    reviewer   supervised-agent@reviewer     reviewer.env
+#   ci-maintainer    ci-maintainer   supervised-agent@ci-maintainer     ci-maintainer.env
 #   architect   architect  supervised-agent@architect    architect.env
 #   outreach    outreach   supervised-agent@outreach     outreach.env
 #   supervisor  supervisor supervised-agent@supervisor   supervisor.env
@@ -168,8 +168,8 @@ ${BLD}COMMANDS${RST}
   status  [--watch N] [--json]         Live dashboard (--watch N refreshes every N sec, --json for API)
   dashboard                            Open web dashboard (port 3001)
   attach  [agent]                   Watch an agent live  (Ctrl+B D to leave)
-  kick    [all|scanner|reviewer|architect|outreach]
-  logs    [governor|scanner|reviewer|architect|outreach|supervisor]
+  kick    [all|scanner|ci-maintainer|architect|outreach]
+  logs    [governor|scanner|ci-maintainer|architect|outreach|supervisor]
   stop    [all|agent]
   switch  <agent> <backend>            Switch agent to a different CLI backend (pins CLI)
   pin     <agent>                      Pin current CLI -- governor will not change it
@@ -423,7 +423,7 @@ ensure_agents() {
 
   local services=(
     "supervised-agent@scanner.service:scanner"
-    "supervised-agent@reviewer.service:reviewer"
+    "supervised-agent@ci-maintainer.service:ci-maintainer"
     "supervised-agent@architect.service:architect"
     "supervised-agent@outreach.service:outreach"
   )
@@ -487,7 +487,7 @@ kick_agents() {
   # Per-agent beads dirs — each agent reads and writes only its own ledger.
   declare -A AGENT_BEADS_DIR
   AGENT_BEADS_DIR["scanner"]="${BEADS_SCANNER_DIR:-/home/${AGENT_USER:-dev}/scanner-beads}"
-  AGENT_BEADS_DIR["reviewer"]="${BEADS_REVIEWER_DIR:-/home/${AGENT_USER:-dev}/reviewer-beads}"
+  AGENT_BEADS_DIR["ci-maintainer"]="${BEADS_CI_MAINTAINER_DIR:-/home/${AGENT_USER:-dev}/ci-maintainer-beads}"
   AGENT_BEADS_DIR["architect"]="${BEADS_ARCHITECT_DIR:-/home/${AGENT_USER:-dev}/architect-beads}"
   AGENT_BEADS_DIR["outreach"]="${BEADS_OUTREACH_DIR:-/home/${AGENT_USER:-dev}/outreach-beads}"
 
@@ -495,7 +495,7 @@ kick_agents() {
   # Copilot shows "claude-opus-4.6" in bottom-right; Claude Code shows "Opus 4.6".
   local expected_model="4.6"
 
-  local _kick_agents="${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}"
+  local _kick_agents="${AGENTS_ENABLED:-supervisor scanner ci-maintainer architect outreach}"
   for session in $_kick_agents; do
     [[ "$session" == "supervisor" ]] && continue
     if ! tmux has-session -t "$session" 2>/dev/null; then
@@ -595,7 +595,7 @@ cmd_status() {
   echo -e "\n${BLD}🐝 hive status — $(TZ="${HIVE_TZ:-UTC}" date '+%-I:%M %p %Z')${RST}\n"
 
   # Sessions — read from project config (AGENTS_ENABLED from hive-config.sh)
-  local _ae="${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}"
+  local _ae="${AGENTS_ENABLED:-supervisor scanner ci-maintainer architect outreach}"
   local SESSIONS=($_ae) LABELS=($_ae) ENV_FILES=($_ae)
   local GOV_STATE="/var/run/kick-governor"
   printf "  %-12s  %-8s  %-8s  %-8s  %-8s  %s\n" "AGENT" "STATE" "CLI" "CADENCE" "KICK" "BUSY"
@@ -753,7 +753,7 @@ cmd_status() {
 # ── status JSON ──────────────────────────────────────────────────────────────
 
 cmd_status_json() {
-  local _ae="${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}"
+  local _ae="${AGENTS_ENABLED:-supervisor scanner ci-maintainer architect outreach}"
   local SESSIONS=($_ae) LABELS=($_ae) ENV_FILES=($_ae)
   local GOV_STATE="/var/run/kick-governor"
   local STATUS_CACHE="/var/run/kick-governor/repo_cache"
@@ -929,7 +929,7 @@ for f in ['$_gov_script', '$_gov_env']:
                 defaults[(agent, mode)] = secs
     except: pass
 
-agents = '${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}'.split()
+agents = '${AGENTS_ENABLED:-supervisor scanner ci-maintainer architect outreach}'.split()
 modes = ['surge','busy','quiet','idle']
 rows = []
 for a in agents:
@@ -973,8 +973,8 @@ cmd_attach() {
   case "$name" in
     scanner|issue-scanner) name="scanner" ;;
     architect|feature)     name="architect" ;;
-    supervisor|reviewer|outreach) ;;
-    *) die "Unknown agent: $name. Use: supervisor scanner reviewer architect outreach" ;;
+    supervisor|ci-maintainer|outreach) ;;
+    *) die "Unknown agent: $name. Use: supervisor scanner ci-maintainer architect outreach" ;;
   esac
 
   if ! tmux has-session -t "$name" 2>/dev/null; then
@@ -991,11 +991,11 @@ cmd_logs() {
   case "${1:-governor}" in
     governor)           exec journalctl -u kick-governor -f --no-pager ;;
     scanner)            exec journalctl -u "supervised-agent@scanner" -f --no-pager ;;
-    reviewer)           exec journalctl -u "supervised-agent@reviewer" -f --no-pager ;;
+    ci-maintainer)      exec journalctl -u "supervised-agent@ci-maintainer" -f --no-pager ;;
     architect|feature)  exec journalctl -u "supervised-agent@architect" -f --no-pager ;;
     outreach)           exec journalctl -u "supervised-agent@outreach" -f --no-pager ;;
     supervisor)         exec journalctl -u "supervised-agent@supervisor" -f --no-pager ;;
-    *) die "Unknown agent. Use: governor scanner reviewer architect outreach supervisor" ;;
+    *) die "Unknown agent. Use: governor scanner ci-maintainer architect outreach supervisor" ;;
   esac
 }
 
@@ -1010,14 +1010,14 @@ cmd_stop() {
   local target="${1:-all}"
   if [[ "$target" == "all" ]]; then
     info "Stopping all agents..."
-    for agent in scanner reviewer architect outreach supervisor; do
+    for agent in scanner ci-maintainer architect outreach supervisor; do
       sudo systemctl stop "supervised-agent@${agent}" 2>/dev/null && ok "Stopped $agent" || true
     done
     sudo systemctl stop kick-governor.timer 2>/dev/null && ok "Stopped governor" || true
   else
     case "$target" in
       scanner)  sudo systemctl stop "supervised-agent@scanner" ;;
-      reviewer) sudo systemctl stop "supervised-agent@reviewer" ;;
+      ci-maintainer) sudo systemctl stop "supervised-agent@ci-maintainer" ;;
       architect|feature) sudo systemctl stop "supervised-agent@architect" ;;
       outreach) sudo systemctl stop "supervised-agent@outreach" ;;
       supervisor) sudo systemctl stop "supervised-agent@supervisor" ;;
@@ -1034,10 +1034,10 @@ cmd_pin() {
   [[ -z "$agent" ]] && die "Usage: hive pin <agent>"
   local envfile service
   case "$agent" in
-    scanner)            envfile="scanner";   service="supervised-agent@scanner" ;;
-    reviewer)           envfile="reviewer";  service="supervised-agent@reviewer" ;;
-    architect|feature)  envfile="architect"; service="supervised-agent@architect" ;;
-    outreach)           envfile="outreach";  service="supervised-agent@outreach" ;;
+    scanner)            envfile="scanner";         service="supervised-agent@scanner" ;;
+    ci-maintainer)      envfile="ci-maintainer";   service="supervised-agent@ci-maintainer" ;;
+    architect|feature)  envfile="architect";       service="supervised-agent@architect" ;;
+    outreach)           envfile="outreach";        service="supervised-agent@outreach" ;;
     *) die "Unknown agent: $agent" ;;
   esac
   for envpath in "$ENV_DIR/${envfile}.env" "/etc/supervised-agent/${envfile}.env"; do
@@ -1068,7 +1068,7 @@ cmd_unpin() {
   local envfile
   case "$agent" in
     scanner)            envfile="scanner" ;;
-    reviewer)           envfile="reviewer" ;;
+    ci-maintainer)      envfile="ci-maintainer" ;;
     architect|feature)  envfile="architect" ;;
     outreach)           envfile="outreach" ;;
     *) die "Unknown agent: $agent" ;;
@@ -1090,16 +1090,16 @@ cmd_switch() {
   local agent="${1:-}" backend="${2:-}"
   [[ -z "$agent" || -z "$backend" ]] && die "Usage: hive switch <agent> <backend>  (backends: copilot claude gemini goose)"
 
-  # Map agent name → session, env files, and systemd service.
+  # Map agent name -> session, env files, and systemd service.
   # Two env dirs: /etc/hive (kick-agents) and /etc/supervised-agent (systemd supervisor.sh).
   local session service
   case "$agent" in
-    scanner)            session="scanner";    service="supervised-agent@scanner" ;;
-    reviewer)           session="reviewer";   service="supervised-agent@reviewer" ;;
-    architect|feature)  session="architect";  service="supervised-agent@architect" ;;
-    outreach)           session="outreach";   service="supervised-agent@outreach" ;;
-    supervisor)         session="supervisor"; service="supervised-agent@supervisor" ;;
-    *) die "Unknown agent: $agent (valid: scanner reviewer architect outreach supervisor)" ;;
+    scanner)            session="scanner";         service="supervised-agent@scanner" ;;
+    ci-maintainer)      session="ci-maintainer";   service="supervised-agent@ci-maintainer" ;;
+    architect|feature)  session="architect";       service="supervised-agent@architect" ;;
+    outreach)           session="outreach";        service="supervised-agent@outreach" ;;
+    supervisor)         session="supervisor";      service="supervised-agent@supervisor" ;;
+    *) die "Unknown agent: $agent (valid: scanner ci-maintainer architect outreach supervisor)" ;;
   esac
 
   # Resolve launch command for backend
@@ -1168,16 +1168,16 @@ cmd_model() {
   local agent="${1:-}" model="${2:-}"
   [[ -z "$agent" || -z "$model" ]] && die "Usage: hive model <agent> <model>  (e.g., claude-opus-4.6)"
 
-  # Map agent name → session, env files, and systemd service.
+  # Map agent name -> session, env files, and systemd service.
   # Two env dirs: /etc/hive (kick-agents) and /etc/supervised-agent (systemd supervisor.sh).
   local session service
   case "$agent" in
-    scanner)            session="scanner";    service="supervised-agent@scanner" ;;
-    reviewer)           session="reviewer";   service="supervised-agent@reviewer" ;;
-    architect|feature)  session="architect";  service="supervised-agent@architect" ;;
-    outreach)           session="outreach";   service="supervised-agent@outreach" ;;
-    supervisor)         session="supervisor"; service="supervised-agent@supervisor" ;;
-    *) die "Unknown agent: $agent (valid: scanner reviewer architect outreach supervisor)" ;;
+    scanner)            session="scanner";         service="supervised-agent@scanner" ;;
+    ci-maintainer)      session="ci-maintainer";   service="supervised-agent@ci-maintainer" ;;
+    architect|feature)  session="architect";       service="supervised-agent@architect" ;;
+    outreach)           session="outreach";        service="supervised-agent@outreach" ;;
+    supervisor)         session="supervisor";      service="supervised-agent@supervisor" ;;
+    *) die "Unknown agent: $agent (valid: scanner ci-maintainer architect outreach supervisor)" ;;
   esac
 
   info "Restarting $agent with model $model"

@@ -837,7 +837,7 @@
     .token-session-row .sid { color: var(--cyan); font-family: monospace; min-width: 90px; }
     .token-session-row .sagent { font-weight: 600; min-width: 70px; font-size: 0.65rem; }
     .token-session-row .sagent.a-scanner { color: #58a6ff; }
-    .token-session-row .sagent.a-reviewer { color: #3fb950; }
+    .token-session-row .sagent.a-ci-maintainer { color: #3fb950; }
     .token-session-row .sagent.a-architect { color: #bc8cff; }
     .token-session-row .sagent.a-outreach { color: #39d2c0; }
     .token-session-row .sagent.a-supervisor { color: #d29922; }
@@ -891,7 +891,7 @@
     .model-chip.sonnet { background: rgba(210,153,34,0.12); color: var(--yellow); }
     .model-chip.opus { background: rgba(248,81,73,0.12); color: var(--red); }
 
-    /* Health dots (reused inside reviewer indicators) */
+    /* Health dots (reused inside ci-maintainer indicators) */
     .health-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
     .health-dot.ok { background: #3fb950; }
     .health-dot.fail { background: #f85149; }
@@ -1788,7 +1788,7 @@
     const AGENT_DESCRIPTIONS = {
       supervisor: 'Orchestrates all agents — runs periodic sweeps, enforces cadence, monitors health, and coordinates cross-agent handoffs',
       scanner: 'Triages GitHub issues and PRs — dispatches fix agents, enforces SLA, manages the beads work ledger',
-      reviewer: 'Post-merge quality gate — monitors CI health, code coverage, GA4 errors, and produces adoption digests',
+      ci-maintainer: 'Post-merge quality gate — monitors CI health, code coverage, GA4 errors, and produces adoption digests',
       architect: 'Designs RFCs for cross-cutting changes — produces phase plans that scanner implements',
       outreach: 'Drives CNCF ecosystem engagement — ADOPTERS outreach, ACMM badges, community PRs',
       strategist: 'Designs governor experiments — proposes cadence/model/threshold changes with falsifiable hypotheses',
@@ -2396,7 +2396,7 @@
     const AGENT_TMUX_SESSION = {
       supervisor: 'supervisor',
       scanner: 'scanner',
-      reviewer: 'reviewer',
+      ci-maintainer: 'ci-maintainer',
       architect: 'architect',
       outreach: 'outreach',
       strategist: 'strategist',
@@ -2833,7 +2833,7 @@
 
       const MINUTES_PER_HOUR = 60;
       const HOURS_PER_WEEK = 168;
-      const AGENT_ORDER = ['scanner', 'reviewer', 'architect', 'outreach', 'supervisor'];
+      const AGENT_ORDER = ['scanner', 'ci-maintainer', 'architect', 'outreach', 'supervisor'];
       const rows = [];
       let totalWeeklyBurn = 0;
 
@@ -2920,7 +2920,7 @@
 
       const barRows = rows.filter(r => r.weeklyBurn > 0 || (!r.isPaused && !r.isOff)).map(r => {
         const pct = totalWeeklyBurn > 0 ? Math.round((r.weeklyBurn / totalWeeklyBurn) * 100) : 0;
-        const barColor = r.name === 'scanner' ? 'var(--blue)' : r.name === 'reviewer' ? 'var(--green)' : r.name === 'architect' ? 'var(--purple)' : r.name === 'outreach' ? 'var(--cyan)' : 'var(--yellow)';
+        const barColor = r.name === 'scanner' ? 'var(--blue)' : r.name === 'ci-maintainer' ? 'var(--green)' : r.name === 'architect' ? 'var(--purple)' : r.name === 'outreach' ? 'var(--cyan)' : 'var(--yellow)';
         const label = r.isPaused ? 'paused' : r.isOff ? 'off' : `${fmtTokens(r.weeklyBurn)}/wk`;
         return `<div class="advisor-bar-row">
           <span class="advisor-agent">${r.name}</span>
@@ -3162,14 +3162,14 @@ function burnAreaChart() {
         </div>`;
       }).join('');
 
-      const HIVE_AGENTS = new Set(['scanner', 'reviewer', 'architect', 'outreach', 'supervisor']);
+      const HIVE_AGENTS = new Set(['scanner', 'ci-maintainer', 'architect', 'outreach', 'supervisor']);
       const agentSessions = sessions.filter(s => HIVE_AGENTS.has(s.agent));
       const grouped = {};
       for (const s of agentSessions) {
         if (!grouped[s.agent]) grouped[s.agent] = [];
         grouped[s.agent].push(s);
       }
-      const AGENT_ORDER = ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach'];
+      const AGENT_ORDER = ['supervisor', 'scanner', 'ci-maintainer', 'architect', 'outreach'];
       const sortedGroups = AGENT_ORDER.filter(a => grouped[a]).map(a => [a, grouped[a]]);
       const sessionRows = sortedGroups.map(([agent, grp]) => {
         const agentCls = `a-${agent}`;
@@ -3181,7 +3181,7 @@ function burnAreaChart() {
           if (act.length >= 2) {
             const mx = Math.max(...act, 1);
             const pts = act.map((v, i) => `${(i / (act.length - 1)) * MINI_W},${MINI_H - (v / mx) * (MINI_H - 2) - 1}`).join(' ');
-            const aClrs = { scanner: '#58a6ff', reviewer: '#3fb950', architect: '#bc8cff', outreach: '#39d2c0', supervisor: '#d29922' };
+            const aClrs = { scanner: '#58a6ff', ci-maintainer: '#3fb950', architect: '#bc8cff', outreach: '#39d2c0', supervisor: '#d29922' };
             const clr = aClrs[s.agent] || '#8b949e';
             miniSpark = `<span class="sparkline" style="margin-left:4px"><svg width="${MINI_W}" height="${MINI_H}" viewBox="0 0 ${MINI_W} ${MINI_H}"><polyline points="${pts}" fill="none" stroke="${clr}" stroke-width="1.2" opacity="0.7"/></svg></span>`;
           }
@@ -3208,8 +3208,8 @@ function burnAreaChart() {
       const advisorHtml = buildCadenceAdvisor(tokens.byAgent || {});
 
       const totalSpark = sparkSvg(getHistorySeries('tokenTotal'), '#39d2c0');
-      const agentNames = ['supervisor', 'scanner', 'reviewer', 'architect', 'outreach'];
-      const agentColors = { scanner: '#58a6ff', reviewer: '#3fb950', architect: '#bc8cff', outreach: '#39d2c0', supervisor: '#d29922' };
+      const agentNames = ['supervisor', 'scanner', 'ci-maintainer', 'architect', 'outreach'];
+      const agentColors = { scanner: '#58a6ff', ci-maintainer: '#3fb950', architect: '#bc8cff', outreach: '#39d2c0', supervisor: '#d29922' };
       const agentSparkRows = agentNames.map(name => {
         const ba = tokens.byAgent || {};
         const aData = ba[name];

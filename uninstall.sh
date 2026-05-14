@@ -69,7 +69,7 @@ echo "==> stopping + disabling single-instance units"
 for unit in \
   hive.service \
   supervised-agent@scanner.service \
-  supervised-agent@reviewer.service \
+  supervised-agent@ci-maintainer.service \
   supervised-agent@architect.service \
   supervised-agent@outreach.service \
   supervised-agent@supervisor.service; do

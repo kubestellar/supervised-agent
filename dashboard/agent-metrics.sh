@@ -39,8 +39,8 @@ agent_status=$(hive status --json 2>/dev/null)
 # Extract live summary/doing for each agent
 scanner_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "scanner") | .doing' 2>/dev/null || echo "")
 scanner_model=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "scanner") | .model' 2>/dev/null || echo "?")
-reviewer_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "reviewer") | .doing' 2>/dev/null || echo "")
-reviewer_model=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "reviewer") | .model' 2>/dev/null || echo "?")
+ci_maintainer_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "ci-maintainer") | .doing' 2>/dev/null || echo "")
+ci_maintainer_model=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "ci-maintainer") | .model' 2>/dev/null || echo "?")
 architect_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "architect") | .doing' 2>/dev/null || echo "")
 architect_model=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "architect") | .model' 2>/dev/null || echo "?")
 outreach_doing=$(echo "$agent_status" | jq -r '.agents[] | select(.name == "outreach") | .doing' 2>/dev/null || echo "")
@@ -162,7 +162,7 @@ fi
 
 # Build agent JSON with live summaries and model
 scanner_json=$(jq -n --arg doing "$scanner_doing" --arg model "$scanner_model" --argjson pairs "$scanner_pairs_json" --argjson inProgress "$scanner_inprogress_json" --argjson mergedPrs "$scanner_standalone_merged" '{doing: $doing, model: $model, pairs: $pairs, inProgress: $inProgress, mergedPrs: $mergedPrs}')
-reviewer_json=$(jq -n --arg doing "$reviewer_doing" --arg model "$reviewer_model" '{doing: $doing, model: $model}')
+ci_maintainer_json=$(jq -n --arg doing "$ci_maintainer_doing" --arg model "$ci_maintainer_model" '{doing: $doing, model: $model}')
 architect_json=$(jq -n --arg doing "$architect_doing" --arg model "$architect_model" '{doing: $doing, model: $model}')
 outreach_json=$(jq -n --arg doing "$outreach_doing" --arg model "$outreach_model" '{doing: $doing, model: $model}')
 
@@ -178,7 +178,7 @@ if [[ "$coverage_value" == "0" ]]; then
 elif [[ "$coverage_value" -gt 0 ]] 2>/dev/null; then
   echo "$coverage_value" > "${HIVE_METRICS_DIR:-/var/run/hive-metrics}/coverage-last.txt" 2>/dev/null || true
 fi
-reviewer_json=$(echo "$reviewer_json" | jq --argjson cv "$coverage_value" --argjson ct "$coverage_target" '. + {coverage: $cv, coverageTarget: $ct}')
+ci_maintainer_json=$(echo "$ci_maintainer_json" | jq --argjson cv "$coverage_value" --argjson ct "$coverage_target" '. + {coverage: $cv, coverageTarget: $ct}')
 
 # ── Outreach: read from centralized api-collector cache (no extra API calls) ──
 GITHUB_CACHE="${HIVE_METRICS_DIR:-/var/run/hive-metrics}/github-cache.json"
@@ -204,7 +204,7 @@ architect_closed=${architect_closed:-0}
 cat <<OUT
 {
   "scanner": $scanner_json,
-  "reviewer": $reviewer_json,
+  "ci-maintainer": $ci_maintainer_json,
   "architect": $(jq -n --argjson json "$architect_json" --arg prs "$architect_prs" --arg closed "$architect_closed" '$json | .prs = ($prs|tonumber) | .closed = ($closed|tonumber)'),
   "outreach": $(jq -n --argjson json "$outreach_json" --argjson stars "$stars" --argjson forks "$forks" --argjson contribs "$contributors" --argjson adopters "$adopters_total" --argjson acmm "$acmm_count" --argjson orOpen "$outreach_open" --argjson orMerged "$outreach_merged" '$json | .stars = $stars | .forks = $forks | .contributors = $contribs | .adopters = $adopters | .acmm = $acmm | .outreachOpen = $orOpen | .outreachMerged = $orMerged')
 }

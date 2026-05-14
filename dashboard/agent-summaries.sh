@@ -16,7 +16,7 @@ if [ -f /usr/local/bin/hive-config.sh ]; then
   source /usr/local/bin/hive-config.sh 2>/dev/null
 fi
 declare -A BEADS_DIR
-for _sa in ${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}; do
+for _sa in ${AGENTS_ENABLED:-supervisor scanner ci-maintainer architect outreach}; do
   BEADS_DIR[$_sa]="/home/dev/${_sa}-beads"
 done
 
@@ -46,7 +46,7 @@ is_stale() {
   echo '  "summaries": {'
 
   first=1
-  for agent in ${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}; do
+  for agent in ${AGENTS_ENABLED:-supervisor scanner ci-maintainer architect outreach}; do
     file=~/.hive/${agent}_status.txt
     if [ -f "$file" ]; then
       task=$(grep '^TASK=' "$file" 2>/dev/null | cut -d= -f2- | sed 's/"/'\''/g')

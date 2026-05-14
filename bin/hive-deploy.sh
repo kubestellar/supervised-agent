@@ -211,7 +211,7 @@ _DEPLOY_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 for _cf in "${_DEPLOY_SCRIPT_DIR}/hive-config.sh" /usr/local/bin/hive-config.sh; do
   if [[ -f "$_cf" ]]; then source "$_cf"; break; fi
 done
-HIVE_AGENTS="${AGENTS_ENABLED:-supervisor scanner reviewer architect outreach}"
+HIVE_AGENTS="${AGENTS_ENABLED:-supervisor scanner ci-maintainer architect outreach}"
 for agent in $HIVE_AGENTS; do
   unit="hive@${agent}.service"
   envfile="/etc/hive/${agent}.env"
