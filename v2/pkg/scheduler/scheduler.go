@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -30,6 +31,98 @@ func New(cfg *config.Config, logger *slog.Logger) *Scheduler {
 // messages include relevant facts from the wiki layers.
 func (s *Scheduler) SetPrimer(p *knowledge.Primer) {
 	s.primer = p
+}
+
+// loadPromptTemplate searches standard paths for an agent's CLAUDE.md template.
+func (s *Scheduler) loadPromptTemplate(agentName string) string {
+	paths := []string{
+		fmt.Sprintf("/data/agents/%s/CLAUDE.md", agentName),
+		fmt.Sprintf("/data/policies/examples/kubestellar/agents/%s-CLAUDE.md", agentName),
+	}
+	if s.cfg.Policies.LocalDir != "" {
+		paths = append(paths,
+			fmt.Sprintf("%s/examples/kubestellar/agents/%s-CLAUDE.md", s.cfg.Policies.LocalDir, agentName),
+			fmt.Sprintf("%s/%s%s-CLAUDE.md", s.cfg.Policies.LocalDir, s.cfg.Policies.Path, agentName),
+		)
+	}
+	for _, p := range paths {
+		if data, err := os.ReadFile(p); err == nil {
+			return string(data)
+		}
+	}
+	return ""
+}
+
+// substituteTemplate replaces ${VAR} placeholders in a prompt template.
+func (s *Scheduler) substituteTemplate(template string, actionable *github.ActionableResult, agentName string, issues []github.Issue) string {
+	now := time.Now().In(time.FixedZone("EDT", -4*3600))
+
+	issueList := s.formatIssueList(filterByLane(issues, agentName))
+	prList := s.formatPRList(actionable)
+
+	reposList := strings.Join(s.cfg.Project.Repos, ", ")
+	primaryRepo := s.cfg.Project.PrimaryRepo
+	fullPrimaryRepo := fmt.Sprintf("%s/%s", s.cfg.Project.Org, primaryRepo)
+
+	replacer := strings.NewReplacer(
+		"${AGENT_NAME}", agentName,
+		"${TIMESTAMP}", now.Format("1/2 3:04 PM MST"),
+		"${QUEUE_ISSUES}", fmt.Sprintf("%d", actionable.Issues.Count),
+		"${QUEUE_PRS}", fmt.Sprintf("%d", actionable.PRs.Count),
+		"${QUEUE_HOLD}", fmt.Sprintf("%d", actionable.Hold.Total),
+		"${SLA_VIOLATIONS}", fmt.Sprintf("%d", actionable.Issues.SLAViolations),
+		"${ISSUE_LIST}", issueList,
+		"${PR_LIST}", prList,
+		"${AUTHORIZED_REPOS}", s.buildReposSection(),
+		"${GH_AUTH}", s.ghAuthInstructions(),
+		"${PROJECT_ORG}", s.cfg.Project.Org,
+		"${PROJECT_NAME}", s.cfg.Project.Name,
+		"${PROJECT_PRIMARY_REPO}", fullPrimaryRepo,
+		"${PROJECT_AI_AUTHOR}", s.cfg.Project.AIAuthor,
+		"${PROJECT_REPOS_LIST}", reposList,
+		"${PROJECT_HOMEBREW_REPO}", fmt.Sprintf("%s/homebrew-tap", s.cfg.Project.Org),
+		"${HIVE_REPO}", fmt.Sprintf("%s/hive", s.cfg.Project.Org),
+	)
+	return replacer.Replace(template)
+}
+
+func (s *Scheduler) formatIssueList(issues []github.Issue) string {
+	if len(issues) == 0 {
+		return "(none)"
+	}
+	var b strings.Builder
+	shown := 0
+	for _, issue := range issues {
+		if shown >= maxIssuesPerKick {
+			break
+		}
+		title := issue.Title
+		const maxTitleLen = 60
+		if len(title) > maxTitleLen {
+			title = title[:maxTitleLen]
+		}
+		b.WriteString(fmt.Sprintf("  %dm %s#%d [%s] %s\n",
+			issue.AgeMinutes, issue.Repo, issue.Number,
+			strings.Join(issue.Labels, ","), title))
+		shown++
+	}
+	return b.String()
+}
+
+func (s *Scheduler) formatPRList(actionable *github.ActionableResult) string {
+	if len(actionable.PRs.Items) == 0 {
+		return "(none)"
+	}
+	var b strings.Builder
+	for _, pr := range actionable.PRs.Items {
+		title := pr.Title
+		const maxPRTitleLen = 70
+		if len(title) > maxPRTitleLen {
+			title = title[:maxPRTitleLen]
+		}
+		b.WriteString(fmt.Sprintf("  %s#%d by @%s %s\n", pr.Repo, pr.Number, pr.Author, title))
+	}
+	return b.String()
 }
 
 type KickMessage struct {
@@ -75,6 +168,16 @@ func (s *Scheduler) buildReposSection() string {
 const maxIssuesPerKick = 20
 
 func (s *Scheduler) buildAgentMessage(agentName string, issues []github.Issue, actionable *github.ActionableResult) string {
+	// Prefer CLAUDE.md prompt template if it exists — allows config-driven kicks
+	if template := s.loadPromptTemplate(agentName); template != "" {
+		s.logger.Info("using prompt template for kick", "agent", agentName)
+		msg := fmt.Sprintf("[agent:%s] [KICK]\n\n", agentName)
+		msg += s.substituteTemplate(template, actionable, agentName, issues)
+		return msg
+	}
+
+	// Fall back to hardcoded messages for agents without templates
+	s.logger.Info("no prompt template found, using hardcoded kick", "agent", agentName)
 	switch agentName {
 	case "scanner":
 		return s.buildScannerMessage(issues, actionable)
