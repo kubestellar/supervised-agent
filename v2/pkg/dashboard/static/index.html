@@ -1432,6 +1432,16 @@
   </style>
 </head>
 <body>
+<script>
+// Apply layout immediately and hide content until first data render
+(function(){
+  var m=localStorage.getItem('hive-layout');
+  if(m==='openclaw')m='light';
+  if(m==='light'){document.body.classList.add('light-mode','has-info-sidebar')}
+  document.body.style.opacity='0';
+  document.body.style.transition='opacity 0.15s ease-in';
+})();
+</script>
 <div id="toast-container"></div>
 
 <!-- Hive Chat FAB + Panel -->
@@ -5153,7 +5163,8 @@ function burnAreaChart() {
     setInterval(fetchKnowledgeStats, KB_POLL_MS);
 
     function render(data) {
-      if (!data || data.error) return;
+      if (!data || data.error || data.status === 'initializing') return;
+      if (document.body.style.opacity === '0') document.body.style.opacity = '1';
       const scrollY = window.scrollY;
       const tsDt = new Date(data.timestamp);
       const tsStr = tsDt.toLocaleDateString([], {month:'numeric',day:'numeric'}) + ' ' + tsDt.toLocaleTimeString([], {hour:'numeric',minute:'2-digit',hour12:true});
