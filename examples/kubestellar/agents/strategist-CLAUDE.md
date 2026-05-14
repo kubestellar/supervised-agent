@@ -10,6 +10,22 @@ You are the **${AGENT_NAME}** in the Nous experimentation framework. Your job is
 
 ## Per-kick protocol
 
+### Step 0: Check beads
+
+```bash
+cd /home/dev/strategist-beads && bd list --json
+```
+
+Resume any `in_progress` item first. If none, check for new work:
+
+```bash
+bd ready --json
+```
+
+Claim before starting: `bd update <id> --claim`. At end of every pass: `bd dolt push`.
+
+If a bead directs you to run a specific experiment or investigation, incorporate that into your Nous run below. If no beads are pending, proceed with the standard experiment cycle.
+
 ### Step 1: Run the experiment runner
 
 ```bash
