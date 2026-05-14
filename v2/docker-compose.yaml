@@ -3,6 +3,9 @@ services:
     build:
       context: ..
       dockerfile: v2/Dockerfile
+      args:
+        GIT_HASH: ${GIT_HASH:-unknown}
+        GIT_SHORT: ${GIT_SHORT:-unknown}
     container_name: hive
     restart: unless-stopped
     ports:
