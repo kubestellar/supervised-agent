@@ -21,10 +21,6 @@ const (
 	metricsCacheFile       = "/data/metrics/agent-metrics-cache.json"
 )
 
-const (
-	adoptersRepo = "kubestellar"
-)
-
 type MetricsCollector struct {
 	ghClient *ghpkg.Client
 	org      string
@@ -129,10 +125,10 @@ func (mc *MetricsCollector) collectOutreach(ctx context.Context) map[string]any 
 		result["contributors"] = contribs
 	}
 
-	adopters := mc.countAdopters(ctx, mc.org, adoptersRepo)
+	adopters := mc.countAdopters(ctx, mc.org, mc.repo)
 	result["adopters"] = adopters
 
-	acmm := mc.countACMM(ctx, mc.org, adoptersRepo)
+	acmm := mc.countACMM(ctx, mc.org, mc.repo)
 	result["acmm"] = acmm
 
 	open, merged := mc.countOutreachPRs(ctx)
@@ -187,9 +183,12 @@ func (mc *MetricsCollector) collectArchitect() map[string]any {
 }
 
 func (mc *MetricsCollector) countAdopters(ctx context.Context, owner, repo string) int {
-	content, err := mc.ghClient.GetFileContent(ctx, owner, repo, "ADOPTERS.md")
+	content, err := mc.ghClient.GetFileContent(ctx, owner, repo, "ADOPTERS.MD")
 	if err != nil {
-		return 0
+		content, err = mc.ghClient.GetFileContent(ctx, owner, repo, "ADOPTERS.md")
+		if err != nil {
+			return 0
+		}
 	}
 	count := 0
 	for _, line := range strings.Split(content, "\n") {
@@ -202,9 +201,12 @@ func (mc *MetricsCollector) countAdopters(ctx context.Context, owner, repo strin
 }
 
 func (mc *MetricsCollector) countACMM(ctx context.Context, owner, repo string) int {
-	content, err := mc.ghClient.GetFileContent(ctx, owner, repo, "ADOPTERS.md")
+	content, err := mc.ghClient.GetFileContent(ctx, owner, repo, "ADOPTERS.MD")
 	if err != nil {
-		return 0
+		content, err = mc.ghClient.GetFileContent(ctx, owner, repo, "ADOPTERS.md")
+		if err != nil {
+			return 0
+		}
 	}
 	count := 0
 	for _, line := range strings.Split(content, "\n") {
