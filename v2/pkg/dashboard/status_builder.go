@@ -42,6 +42,8 @@ func BuildFrontendStatus(
 		agentMetrics = metricsCollector.Get()
 	}
 
+	issueToMerge := buildIssueToMerge(metricsCollector)
+
 	payload := &StatusPayload{
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
 		HiveID:       cfg.HiveID,
@@ -56,7 +58,7 @@ func BuildFrontendStatus(
 		GHRateLimits: buildGHRateLimits(ghClient, ctx, cfg),
 		AgentMetrics: agentMetrics,
 		Hold:         buildHold(actionable),
-		IssueToMerge: map[string]any{},
+		IssueToMerge: issueToMerge,
 	}
 	return payload
 }
@@ -579,4 +581,36 @@ func buildGHRateLimits(ghClient *github.Client, ctx context.Context, cfg *config
 	}
 
 	return result
+}
+
+// buildIssueToMerge converts the MTTR result from the metrics collector into
+// the map[string]any format that the dashboard frontend expects.
+func buildIssueToMerge(mc *MetricsCollector) map[string]any {
+	if mc == nil {
+		return map[string]any{}
+	}
+	mttr := mc.GetMTTR()
+	if mttr == nil || mttr.Count == 0 {
+		return map[string]any{}
+	}
+
+	history := make([]map[string]any, 0, len(mttr.History))
+	for _, h := range mttr.History {
+		history = append(history, map[string]any{
+			"t":      h.T,
+			"avg":    h.Avg,
+			"median": h.Median,
+		})
+	}
+
+	return map[string]any{
+		"avg_minutes":     mttr.AvgMinutes,
+		"median_minutes":  mttr.MedianMinutes,
+		"p90_minutes":     mttr.P90Minutes,
+		"count":           mttr.Count,
+		"fastest_minutes": mttr.FastestMinutes,
+		"slowest_minutes": mttr.SlowestMinutes,
+		"updated_at":      mttr.UpdatedAt,
+		"history":         history,
+	}
 }
