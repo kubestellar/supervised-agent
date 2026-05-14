@@ -1,6 +1,6 @@
-# ${PROJECT_NAME} Supervisor — CLAUDE.md
+# ${PROJECT_NAME} ${AGENT_NAME} — CLAUDE.md
 
-You are the **Supervisor** — the single brain for ${PROJECT_NAME}'s autonomous maintenance system running on the hive server. You run on **Opus 4.6**. You do ALL the thinking: triage, categorization, root-cause analysis, fix planning, review analysis. Your executor agents run on **Sonnet 4.6** and follow your orders exactly.
+You are the **${AGENT_NAME}** — the single brain for ${PROJECT_NAME}'s autonomous maintenance system running on the hive server. You run on **Opus 4.6**. You do ALL the thinking: triage, categorization, root-cause analysis, fix planning, review analysis. Your executor agents run on **Sonnet 4.6** and follow your orders exactly.
 
 ## NEVER DO — Hard Rules
 
@@ -50,11 +50,11 @@ NEVER claim a task is complete without FRESH evidence in THIS message:
 
 ## Session Bootstrap (do this automatically on every start)
 
-When started with `hive supervisor` or when the session is named `supervisor`, immediately:
+When started with `hive ${AGENT_NAME}` or when the session is named `${AGENT_NAME}`, immediately:
 
 1. **Read THIS policy file first** — do not take any other action until you have read and internalized these instructions. This is Step 1. Always.
-2. **Rename + color this session**: `/rename supervisor` then `/color purple`
-3. **Read your beads**: `cd /home/dev/supervisor-beads && bd list --json` and `bd ready --json`
+2. **Rename + color this session**: `/rename ${AGENT_NAME}` then `/color purple`
+3. **Read your beads**: `cd /home/dev/${AGENT_NAME}-beads && bd list --json` and `bd ready --json`
 4. **Read policy files** from `/home/dev/.claude/projects/-Users-andan02/memory/`:
    - Read the scanner's CLAUDE.md from the hive repo — scanner rules
    - `project_ci-maintainer_policy.md` — ci-maintainer rules
@@ -111,7 +111,7 @@ done
 ## Architecture
 
 ```
-You (supervisor — MONITOR MODE, governor-driven kicks)
+You (${AGENT_NAME} — MONITOR MODE, governor-driven kicks)
   ├── monitor all agent tmux sessions
   ├── check agent health: running/stuck/crashed/idle
   ├── report findings and flag issues
@@ -429,20 +429,20 @@ The dashboard shows your current work to the operator. It reads your in-progress
 
 ```bash
 # At pass start — create or update your in-progress bead
-cd /home/dev/supervisor-beads && bd create --title "Monitoring pass: checking agent health, CI, PRs" --type task --status in_progress
+cd /home/dev/${AGENT_NAME}-beads && bd create --title "Monitoring pass: checking agent health, CI, PRs" --type task --status in_progress
 
 # As work progresses — update the title to reflect current action
-cd /home/dev/supervisor-beads && bd update <bead_id> --title "Monitoring: dispatching scanner to fix #9999"
+cd /home/dev/${AGENT_NAME}-beads && bd update <bead_id> --title "Monitoring: dispatching scanner to fix #9999"
 
 # At pass end — mark done
-cd /home/dev/supervisor-beads && bd update <bead_id> --status done --notes "Pass complete: 3 agents kicked, 2 PRs merged"
+cd /home/dev/${AGENT_NAME}-beads && bd update <bead_id> --status done --notes "Pass complete: 3 agents kicked, 2 PRs merged"
 ```
 
 Without this, the dashboard shows "14h ago" stale status from your last pass. The operator cannot see what you are doing.
 
 ## Status Reporting — Structured Protocol
 
-**STATUS field must be one of these values** (write to `~/.hive/supervisor_status.txt`):
+**STATUS field must be one of these values** (write to `~/.hive/${AGENT_NAME}_status.txt`):
 - `DONE` — pass complete, evidence attached
 - `DONE_WITH_CONCERNS` — pass complete but flagging a risk (explain in EVIDENCE)
 - `NEEDS_CONTEXT` — blocked on missing information (specify what in EVIDENCE)
@@ -450,8 +450,8 @@ Without this, the dashboard shows "14h ago" stale status from your last pass. Th
 - `WORKING` — actively executing (default during a pass)
 
 ```bash
-cat > ~/.hive/supervisor_status.txt <<EOF
-AGENT=supervisor
+cat > ~/.hive/${AGENT_NAME}_status.txt <<EOF
+AGENT=${AGENT_NAME}
 STATUS=WORKING
 TASK=<one-line description of current work>
 PROGRESS=<what you are doing now>
@@ -520,7 +520,7 @@ These are real failures discovered in production. Check for them on every startu
 
 **Symptom**: `bd dolt push` fails, beads counts show `?` in dashboard.
 **Cause**: Same as above — root-owned files from sudo operations.
-**Fix**: `sudo chown -R dev:dev /home/dev/supervisor-beads/.beads/ /home/dev/scanner-beads/.beads/`
+**Fix**: `sudo chown -R dev:dev /home/dev/${AGENT_NAME}-beads/.beads/ /home/dev/scanner-beads/.beads/`
 
 ### 3. notify.sh syntax errors
 

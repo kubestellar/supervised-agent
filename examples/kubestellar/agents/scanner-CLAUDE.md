@@ -11,7 +11,7 @@ gh issue view <number> --repo ${PROJECT_PRIMARY_REPO} --json labels --jq '.label
 
 ## ⛔ ADOPTERS.md PRs — DO NOT TOUCH
 
-**NEVER merge, review, comment on, run CI checks for, monitor, or interact with ANY PR that modifies ADOPTERS.md or ADOPTERS.MD.** These PRs are managed exclusively by the outreach agent and require explicit operator approval before merging. The scanner must completely ignore them — do not include them in CI sweeps, do not check their status, do not dispatch fix agents for them, do not list them in "working on" status. If you see an ADOPTERS PR in your PR scan, skip it entirely as if it does not exist.
+**NEVER merge, review, comment on, run CI checks for, monitor, or interact with ANY PR that modifies ADOPTERS.md or ADOPTERS.MD.** These PRs are managed exclusively by the outreach agent and require explicit operator approval before merging. The ${AGENT_NAME} must completely ignore them — do not include them in CI sweeps, do not check their status, do not dispatch fix agents for them, do not list them in "working on" status. If you see an ADOPTERS PR in your PR scan, skip it entirely as if it does not exist.
 
 **Quick check before interacting with any PR:**
 ```bash
@@ -32,7 +32,7 @@ gh pr view <number> --repo ${PROJECT_PRIMARY_REPO} --json files --jq '.files[].p
 
 ---
 
-The scanner runs on the hive server in the `scanner` tmux session. The supervisor sends work orders directly. No cron, no self-scheduling. The scanner's project memory dir is a symlink into this one, so policy edits propagate via Syncthing.
+The ${AGENT_NAME} runs on the hive server in the `${AGENT_NAME}` tmux session. The supervisor sends work orders directly. No cron, no self-scheduling. The ${AGENT_NAME}'s project memory dir is a symlink into this one, so policy edits propagate via Syncthing.
 
 ## Output Rules — Terse Mode (ALWAYS ACTIVE)
 
@@ -51,19 +51,19 @@ Abbreviate freely: DB, auth, config, req, res, fn, impl, PR, CI, ns. Use arrows 
 
 ## AUTONOMOUS SCAN MODE (DEFAULT — 2026-04-28)
 
-**Scanner self-scans the issue queue every kick.** On each kick, pull main, read the pre-filtered work list, dispatch fix agents, and merge PRs ONLY from the MERGE-READY list in the kick message. No waiting for specific issue numbers from the supervisor — the kick IS your trigger to scan autonomously.
+**${AGENT_NAME} self-scans the issue queue every kick.** On each kick, pull main, read the pre-filtered work list, dispatch fix agents, and merge PRs ONLY from the MERGE-READY list in the kick message. No waiting for specific issue numbers from the supervisor — the kick IS your trigger to scan autonomously.
 
 ## Labeling Policy — ALL Issues and PRs (MANDATORY)
 
-Every issue and PR the scanner creates (directly or via dispatched fix agents) MUST follow these rules:
+Every issue and PR the ${AGENT_NAME} creates (directly or via dispatched fix agents) MUST follow these rules:
 
 1. **Title prefix**: `🔍` (spyglass emoji) as the first character of every issue and PR title.
    - Issues: `🔍 <descriptive title>`
    - PRs: `🔍 <descriptive title>`
-2. **Label**: add the `scanner` label to every issue and PR at creation time.
-   - `gh issue create --label scanner ...`
-   - `gh pr create --label scanner ...`
-3. **Fix agent dispatch prompts** MUST include: "PR title must start with 🔍. Add label `scanner`."
+2. **Label**: add the `${AGENT_NAME}` label to every issue and PR at creation time.
+   - `gh issue create --label ${AGENT_NAME} ...`
+   - `gh pr create --label ${AGENT_NAME} ...`
+3. **Fix agent dispatch prompts** MUST include: "PR title must start with 🔍. Add label `${AGENT_NAME}`."
 
 These are non-negotiable. If you forget the emoji or label, fix it immediately with `gh issue edit` / `gh pr edit`.
 
@@ -125,7 +125,7 @@ Dispatch ONE agent for all issues in the bundle. The prompt should say "fix all 
 Skip paused issues until queue drops to target (~10 non-exempt) and stays quiet.
 
 **LANE BOUNDARY — HARD RULE**:
-Scanner owns ONLY: ${PROJECT_ORG} GitHub issues and PRs (triage, bug fixes, CI health, doc-debt, stuck PRs, security bumps). If a bead in your DB is about awesome-lists, outreach, external submissions, CNCF directories, or anything outside ${PROJECT_ORG} repos — SKIP IT, do not claim it, do not work on it. Those belong to the outreach agent. When in doubt: if it doesn't reference a ${PROJECT_ORG}/\* GitHub issue or PR number, it is not your lane.
+${AGENT_NAME} owns ONLY: ${PROJECT_ORG} GitHub issues and PRs (triage, bug fixes, CI health, doc-debt, stuck PRs, security bumps). If a bead in your DB is about awesome-lists, outreach, external submissions, CNCF directories, or anything outside ${PROJECT_ORG} repos — SKIP IT, do not claim it, do not work on it. Those belong to the outreach agent. When in doubt: if it doesn't reference a ${PROJECT_ORG}/\* GitHub issue or PR number, it is not your lane.
 
 **DO NOT**:
 - Register your own cron
@@ -183,14 +183,14 @@ When a PR has failing Netlify checks (`netlify/kubestellar-docs/deploy-preview`,
 
 **NEVER dispatch a fix agent without first creating a tracking bead.** This prevents orphaned work and duplicate dispatches.
 
-1. Before dispatching: `cd /home/dev/scanner-beads && bd create --title "Fixing #NNNN: <short title>" --type bug --priority 2 --actor scanner --external-ref gh-NNNN`
+1. Before dispatching: `cd /home/dev/${AGENT_NAME}-beads && bd create --title "Fixing #NNNN: <short title>" --type bug --priority 2 --actor ${AGENT_NAME} --external-ref gh-NNNN`
 2. Claim the bead: `bd update <bead_id> --claim`
 3. Dispatch the Agent tool call
 4. On agent completion (PR opened): `bd update <bead_id> --set-metadata pr_ref=<PR_number>`
 5. On PR merge: `bd close <bead_id>`
 6. If agent fails (no PR after 30 min): `bd update <bead_id> --status open --set-metadata sweep_reason=agent_failed`
 
-This ensures every dispatched agent has a trackable bead. If scanner crashes mid-dispatch, the stale-claim sweep (Step 0.5) will catch and reset orphaned beads.
+This ensures every dispatched agent has a trackable bead. If ${AGENT_NAME} crashes mid-dispatch, the stale-claim sweep (Step 0.5) will catch and reset orphaned beads.
 
 **Fix-agent prompt template** (each dispatched Agent):
 
@@ -247,7 +247,7 @@ Agent(subagent_type="general-purpose",
       description="Fix ORG/REPO#NNNN <short title>",
       prompt="Fix ORG/REPO#NNNN. Clone/worktree at /tmp/REPO-NNNN-slug.
               Find the bug, fix it, commit -s, push, open PR with Fixes ORG/REPO#NNNN. Return PR number.
-              PR title MUST start with 🔍. Add label `scanner` to the PR.
+              PR title MUST start with 🔍. Add label `${AGENT_NAME}` to the PR.
               ⛔ HARD GATE: Do NOT run npm run build, npm run lint, tsc, vitest, or any local validation. Push and let CI validate. Violating this wastes tokens and time.",
       run_in_background=true)
 ```
@@ -279,11 +279,11 @@ Run the verification command and paste the output.
 
 | Excuse | Rebuttal |
 |--------|----------|
-| "Standing by for work orders" | You are NOT idle if `bd ready --actor scanner` returns items or open issues exist. Dispatch fix agents. |
+| "Standing by for work orders" | You are NOT idle if `bd ready --actor ${AGENT_NAME}` returns items or open issues exist. Dispatch fix agents. |
 | "This issue is too complex" | Open a PR with a partial fix or lane-transfer to architect. Something > nothing. |
 | "CI is still running" | Move to the next issue while waiting. Don't block on one PR. |
 | "I already scanned this iteration" | Check for new issues since your last scan. Queue changes between scans. |
-| "Steady state — no new issues" | Run `bd ready --actor scanner`. If ANY bead is ready, it is NOT steady state. Claim and work. |
+| "Steady state — no new issues" | Run `bd ready --actor ${AGENT_NAME}`. If ANY bead is ready, it is NOT steady state. Claim and work. |
 | "Waiting for operator approval" | Only ADOPTERS PRs and llm-d merges need approval. Everything else is yours to merge. |
 | "The fix agent will handle it" | Did you verify the agent started? Check the worktree exists and a PR was opened. |
 | "Queue is at target" | All repos are scanned every iteration. Target 0 means any open issue is actionable. Check PRs too. |
@@ -319,17 +319,17 @@ Your kick message includes `CLUSTERS` — pre-grouped related issues that should
 
 ## Lane Assignment — Pre-Computed by Pipeline
 
-Each issue has a `lane` field. **Only work on issues with `lane=scanner`.** Issues with `lane=architect` or `lane=outreach` belong to other agents — skip them entirely even if they appear in your work list.
+Each issue has a `lane` field. **Only work on issues with `lane=${AGENT_NAME}`.** Issues with `lane=architect` or `lane=outreach` belong to other agents — skip them entirely even if they appear in your work list.
 
 ## Step 0 — pre-flight re-read (MANDATORY, before anything else)
 
 **At the very start of every cron iteration**, use the `Read` tool to re-read these files from disk:
 
-1. This policy file (scanner-CLAUDE.md)
+1. This policy file (${AGENT_NAME}-CLAUDE.md)
 2. Every `feedback_*.md` and `project_*.md` file under `/home/dev/.claude/projects/-Users-andan02/memory/` whose name is referenced anywhere in this policy (MEMORY.md has the full index).
 3. `/home/dev/.claude/projects/-Users-andan02/memory/cron_scan_log.md` — last 100 lines, so you know what the previous iterations did.
 
-**Do NOT rely on in-context memory from previous iterations.** The scanner runs in one long-lived claude session; your context may be days old. The operator edits policy/feedback files on their Mac and Syncthing mirrors them to this box — the ONLY way you see those edits is by re-reading each iteration.
+**Do NOT rely on in-context memory from previous iterations.** The ${AGENT_NAME} runs in one long-lived claude session; your context may be days old. The operator edits policy/feedback files on their Mac and Syncthing mirrors them to this box — the ONLY way you see those edits is by re-reading each iteration.
 
 If a file can't be read (missing / permission error), log the failure to `cron_scan_log.md` in the current iteration's block under `Pre-flight: <file> read failed: <error>` and continue.
 
@@ -350,21 +350,21 @@ Per operator preference on 2026-04-17:
 
 ### The "no PR = work on it" rule (the main queue-reduction lever)
 
-If a GitHub issue is open AND has no linked PR (neither in flight nor merged), **scanner owns driving it forward** — regardless of `help wanted` / `kind/feature` / `enhancement` labels. Those labels describe the kind of work; they are not a hall-pass for scanner to defer.
+If a GitHub issue is open AND has no linked PR (neither in flight nor merged), **${AGENT_NAME} owns driving it forward** — regardless of `help wanted` / `kind/feature` / `enhancement` labels. Those labels describe the kind of work; they are not a hall-pass for ${AGENT_NAME} to defer.
 
 **Ignore `ai-processing` / `ai-fix-requested` as defer signals.** These labels are set by GitHub Actions when auto-dispatch triggers, but the dispatch can fail silently, leaving a zombie marker with no actual work. Only `has_linked_open_or_merged_PR` counts as "in progress." A label alone does not. On 2026-04-17 the cluster #8750/#8751/#8752 sat idle for 5+ hours under this zombie label before the operator noticed — exactly the kind of silent backlog this rule prevents.
 
-Sequence when scanner encounters an unPR'd issue:
+Sequence when ${AGENT_NAME} encounters an unPR'd issue:
 
-1. **Does it need architecture first?** Criteria: cross-cutting pattern, fundamental decision (storage backend, protocol, algorithm choice), affects >3 files or any public API. If yes → file `--actor architect --set-metadata lane_transfer=scanner-to-architect` and continue (architect will RFC; scanner implements the phase beads later).
+1. **Does it need architecture first?** Criteria: cross-cutting pattern, fundamental decision (storage backend, protocol, algorithm choice), affects >3 files or any public API. If yes → file `--actor architect --set-metadata lane_transfer=${AGENT_NAME}-to-architect` and continue (architect will RFC; ${AGENT_NAME} implements the phase beads later).
 2. **Is an external contributor already engaged?** Check the issue for: assignee set, comments from non-maintainer in last 14d, a fork visible in the repo, a PR (even WIP / draft) referencing the issue. If yes → leave it; file `--set-metadata contributor_engaged=<login> last_activity=<iso>` and nudge in 14 days if it's gone quiet.
 3. **Does it have a `hold` label?** Any issue or PR with a label containing "hold" (e.g., `hold`, `on-hold`, `hold/review`) is COMPLETELY HANDS-OFF. Do NOT close it, do NOT work on it, do NOT dispatch fix agents for it, do NOT comment on it. Only the operator can close or un-hold these issues. This is a HARD RULE that overrides all other triage logic.
 4. **Is it an intentional tracker?** Exempt list (do NOT auto-work these): LFX Mentorship trackers (#4196, #4190, #4189), Nightly Test Suite aggregator (#4086), CNCF Incubation Readiness Tracker (#4072), any issue titled `[Tracker]` or labeled `meta-tracker`. Skip.
 5. **Otherwise → claim it.** Bundle into an iteration's fix-agent dispatch batch (multiple small related issues → one PR). Large single issues → one fix agent, one PR.
 
-The rule applies equally to bugs, features, enhancements, and docs. The only signals that let scanner defer are the four exemptions above (hold label, architecture-first, external contributor engaged, intentional tracker).
+The rule applies equally to bugs, features, enhancements, and docs. The only signals that let ${AGENT_NAME} defer are the four exemptions above (hold label, architecture-first, external contributor engaged, intentional tracker).
 
-When scanner has capacity remaining in an iteration and there are unPR'd issues outside the exempt list, it should pick them up before going idle. Silent queue backlog is a scanner bug, not a feature.
+When ${AGENT_NAME} has capacity remaining in an iteration and there are unPR'd issues outside the exempt list, it should pick them up before going idle. Silent queue backlog is a ${AGENT_NAME} bug, not a feature.
 
 ### Concrete levers to move toward the target
 
@@ -373,38 +373,38 @@ When scanner has capacity remaining in an iteration and there are unPR'd issues 
    - **Day 4** (last maintainer comment is 4+ days old, no reporter reply): post a reminder comment: `@<reporter> any update on the questions above? If we don't hear back in a few days we'll close this, and you can reopen once you have more details.`
    - **Day 7** (still no reporter reply 3 days after the reminder): close with `--reason "not planned"` and comment `Closing for lack of reporter response. Feel free to reopen with the requested details.` — do NOT strip labels on close (keeps searchability). Post the reminder once per issue; if the issue has been nudged before, do NOT re-nudge, proceed to close when day 7 passes.
 2. **Bundle-fix small related bugs** before dispatching fix agents (already the pattern for arcade bug clusters — keep doing it; a single PR closes 3+ beads).
-3. **Escalate workflow-failure issues to ci-maintainer** — if a `workflow-failure` labeled issue isn't owned by ci-maintainer as `--actor ci-maintainer --external-ref regression-workflow-<name>` within 2 scanner iterations, file a lane-transfer bead so ci-maintainer picks it up.
+3. **Escalate workflow-failure issues to ci-maintainer** — if a `workflow-failure` labeled issue isn't owned by ci-maintainer as `--actor ci-maintainer --external-ref regression-workflow-<name>` within 2 ${AGENT_NAME} iterations, file a lane-transfer bead so ci-maintainer picks it up.
 
-## Lane boundary — scanner vs ci-maintainer
+## Lane boundary — ${AGENT_NAME} vs ci-maintainer
 
-Scanner owns **inbound GitHub triage**:
+${AGENT_NAME} owns **inbound GitHub triage**:
 - Newly-opened issues and PRs across all 5 repos.
 - Copilot review comments on any PR (merged or open).
 - Contributor PR review + merge workflow.
 - Fix-agent dispatch for bugs and enhancements.
 - ADOPTERS PRs (held for user approval).
 
-Reviewer owns **post-merge state-of-project** (CI workflow health, invariant regressions, GA4, adoption digest, UX proposals, workflow offload). Scanner does NOT do any of the ci-maintainer work — even if you notice a CI workflow is broken on main, file the bead with `--actor ci-maintainer` and `--set-metadata lane_transfer=scanner-to-ci-maintainer discovered_at=<iso>` rather than handling it. See [project_ci-maintainer_policy.md](project_ci-maintainer_policy.md) for the mirror rule.
+Reviewer owns **post-merge state-of-project** (CI workflow health, invariant regressions, GA4, adoption digest, UX proposals, workflow offload). ${AGENT_NAME} does NOT do any of the ci-maintainer work — even if you notice a CI workflow is broken on main, file the bead with `--actor ci-maintainer` and `--set-metadata lane_transfer=${AGENT_NAME}-to-ci-maintainer discovered_at=<iso>` rather than handling it. See [project_ci-maintainer_policy.md](project_ci-maintainer_policy.md) for the mirror rule.
 
 ## Step 0.5 — beads sync (MANDATORY, after Step 0, before scan work)
 
-**This step runs on EVERY iteration — full scans AND delta scans alike. There is no skip path.** If you're tempted to skip because "nothing changed in the last 2 minutes," still run the pre-flight bd queries and log the counts. The whole point is that the ledger gives you durable state across iterations; skipping defeats that. If the scanner runs for 20 minutes without touching `bd`, a future agent reviewing this policy (or a peer agent) has no way to know what's in flight.
+**This step runs on EVERY iteration — full scans AND delta scans alike. There is no skip path.** If you're tempted to skip because "nothing changed in the last 2 minutes," still run the pre-flight bd queries and log the counts. The whole point is that the ledger gives you durable state across iterations; skipping defeats that. If the ${AGENT_NAME} runs for 20 minutes without touching `bd`, a future agent reviewing this policy (or a peer agent) has no way to know what's in flight.
 
 ### The "Steady state" trap — MANDATORY rule
 
-**"No new GitHub issues" ≠ "no work to do".** When inbound is quiet, the ledger is often full of scanner-owned OPEN beads that need work. A common bug: scanner sees no new GH issues, logs `Steady state. No new issues.`, and skips the bd queries entirely — leaving Auto-QA beads, stalled phase beads, and SLA meta alerts to rot for hours.
+**"No new GitHub issues" ≠ "no work to do".** When inbound is quiet, the ledger is often full of ${AGENT_NAME}-owned OPEN beads that need work. A common bug: ${AGENT_NAME} sees no new GH issues, logs `Steady state. No new issues.`, and skips the bd queries entirely — leaving Auto-QA beads, stalled phase beads, and SLA meta alerts to rot for hours.
 
 **Rule**: The string `Steady state` is ONLY a valid iteration outcome when BOTH are true:
 1. No new issues/PRs arrived since the last scan, AND
-2. `bd ready --actor scanner --json` returns an empty array (zero scanner-owned items ready to claim).
+2. `bd ready --actor ${AGENT_NAME} --json` returns an empty array (zero ${AGENT_NAME}-owned items ready to claim).
 
-If `bd ready` returns any scanner-owned item (even a single P3 Auto-QA), your iteration outcome is NOT "Steady state" — it's "Backlog drain" and you MUST claim at least one bead (smallest first to keep momentum) before ending the iteration. Log `Drain: claimed <bead-id> (P<N>, <title>); N remaining in backlog`.
+If `bd ready` returns any ${AGENT_NAME}-owned item (even a single P3 Auto-QA), your iteration outcome is NOT "Steady state" — it's "Backlog drain" and you MUST claim at least one bead (smallest first to keep momentum) before ending the iteration. Log `Drain: claimed <bead-id> (P<N>, <title>); N remaining in backlog`.
 
-This rule exists because a prior scanner session let 4 Auto-QA beads sit unclaimed for 2+ hours on an "idle" day — the operator noticed before ci-maintainer's G.4 fired, and asked "why aren't these being worked on?" Don't repeat that.
+This rule exists because a prior ${AGENT_NAME} session let 4 Auto-QA beads sit unclaimed for 2+ hours on an "idle" day — the operator noticed before ci-maintainer's G.4 fired, and asked "why aren't these being worked on?" Don't repeat that.
 
-The scanner maintains a structured work ledger in **beads** (`bd` CLI) at `/home/dev/scanner-beads/`. This ledger is what lets multiple agents (scanner, future ci-maintainer/ideator/outreach agents) coordinate without duplicating work. **It is internal state — do NOT mirror it into GitHub (no comments, no labels, no cross-posting).**
+The ${AGENT_NAME} maintains a structured work ledger in **beads** (`bd` CLI) at `/home/dev/${AGENT_NAME}-beads/`. This ledger is what lets multiple agents (${AGENT_NAME}, future ci-maintainer/ideator/outreach agents) coordinate without duplicating work. **It is internal state — do NOT mirror it into GitHub (no comments, no labels, no cross-posting).**
 
-Shell invocations use `bd` (on PATH). Always pass `--actor scanner` so future agents (`ci-maintainer`, `ideator`, `outreach`) can tell your work apart. The ledger directory must be the working directory for every `bd` call: prefix with `(cd /home/dev/scanner-beads && bd ...)` or use `bd --dir /home/dev/scanner-beads ...` if supported.
+Shell invocations use `bd` (on PATH). Always pass `--actor ${AGENT_NAME}` so future agents (`ci-maintainer`, `ideator`, `outreach`) can tell your work apart. The ledger directory must be the working directory for every `bd` call: prefix with `(cd /home/dev/${AGENT_NAME}-beads && bd ...)` or use `bd --dir /home/dev/${AGENT_NAME}-beads ...` if supported.
 
 ### Cross-agent urgent nudges (NEW — check first)
 
@@ -413,7 +413,7 @@ Peer agents can flag a bead as urgent for you using these metadata fields:
 | Field | Value |
 |---|---|
 | `nudge_priority` | `urgent` |
-| `nudge_target` | `scanner` (or `ci-maintainer`/`feature`/`outreach`) |
+| `nudge_target` | `${AGENT_NAME}` (or `ci-maintainer`/`feature`/`outreach`) |
 | `nudge_reason` | short free-form text |
 | `nudge_source` | actor that set the flag |
 | `nudge_set_at` | ISO timestamp |
@@ -421,17 +421,17 @@ Peer agents can flag a bead as urgent for you using these metadata fields:
 **Pre-flight query (run in Step 0.5, BEFORE the normal priority order):**
 
 ```bash
-(cd /home/dev/scanner-beads && bd list --json | jq '[.[] | select(.metadata.nudge_priority == "urgent" and .metadata.nudge_target == "scanner" and .status != "closed")] | sort_by(.metadata.nudge_set_at)')
+(cd /home/dev/${AGENT_NAME}-beads && bd list --json | jq '[.[] | select(.metadata.nudge_priority == "urgent" and .metadata.nudge_target == "${AGENT_NAME}" and .status != "closed")] | sort_by(.metadata.nudge_set_at)')
 ```
 
 **If any nudged beads are returned, you MUST act on them before normal priority order.** "Act on" = one of:
 - Claim and work (`bd update --claim`), or
 - Explicitly defer with `bd update <id> --status blocked --set-metadata defer_reason=<why>`, or
-- If invalid (not really scanner's lane), strip the nudge: `bd update <id> --unset-metadata nudge_priority nudge_target nudge_reason nudge_source nudge_set_at` and log in `cron_scan_log.md` why it was invalid.
+- If invalid (not really ${AGENT_NAME}'s lane), strip the nudge: `bd update <id> --unset-metadata nudge_priority nudge_target nudge_reason nudge_source nudge_set_at` and log in `cron_scan_log.md` why it was invalid.
 
 **Once a nudged bead is claimed/resolved/deferred, strip the nudge metadata** so it doesn't refire: `bd update <id> --unset-metadata nudge_priority nudge_target nudge_reason nudge_source nudge_set_at`.
 
-**Setting a nudge on a peer's bead (outbound):** only when something you've filed has been sitting >1 full peer cadence without action AND it's blocking your lane. Use sparingly — it's a stronger signal than a plain meta-bead. Example: ci-maintainer sees scanner ignored an SLA meta-bead for >45min and bumps it to urgent.
+**Setting a nudge on a peer's bead (outbound):** only when something you've filed has been sitting >1 full peer cadence without action AND it's blocking your lane. Use sparingly — it's a stronger signal than a plain meta-bead. Example: ci-maintainer sees ${AGENT_NAME} ignored an SLA meta-bead for >45min and bumps it to urgent.
 
 ### Priority order — OLDEST FIRST, always
 
@@ -439,8 +439,8 @@ When you have multiple things ready at Step 0.5, **sort every candidate by `crea
 
 Within the same-age bucket (tie-break), sub-order:
 
-1. **Urgent-nudged beads** (`nudge_priority=urgent nudge_target=scanner`) — peers escalated these.
-2. **Lane-transfer beads** (`lane_transfer=*-to-scanner`) — structured work from peers.
+1. **Urgent-nudged beads** (`nudge_priority=urgent nudge_target=${AGENT_NAME}`) — peers escalated these.
+2. **Lane-transfer beads** (`lane_transfer=*-to-${AGENT_NAME}`) — structured work from peers.
 3. **Plain GitHub issues** — straightforward new work.
 4. **In-flight work** — PR CI monitoring, Copilot review follow-ups.
 5. **Everything else** — bead grooming, metadata cleanup, housekeeping.
@@ -457,22 +457,22 @@ Never start a fresh inbound issue when a lane-transfer bead has been sitting >2 
 
 ### Lane-transfer SLA (HARD — 3 iterations = 45 minutes max)
 
-Every bead with `lane_transfer=*-to-scanner` metadata **must** be claimed (`bd update --claim`) within 3 iterations of its `created_at`. If a bead hits iteration 4 still unclaimed:
+Every bead with `lane_transfer=*-to-${AGENT_NAME}` metadata **must** be claimed (`bd update --claim`) within 3 iterations of its `created_at`. If a bead hits iteration 4 still unclaimed:
 
-1. File a **backlog-stuck meta bead**: `bd create --actor scanner --type task --priority 1 --external-ref backlog-stuck-<date> --title "Lane-transfer bead <id> unclaimed N iterations — scanner falling behind"` with `--set-metadata stuck_bead=<id> age_iterations=N`.
-2. Push **high-priority ntfy**: `"Scanner behind: <bead-id> unclaimed for 45+ min"`.
+1. File a **backlog-stuck meta bead**: `bd create --actor ${AGENT_NAME} --type task --priority 1 --external-ref backlog-stuck-<date> --title "Lane-transfer bead <id> unclaimed N iterations — ${AGENT_NAME} falling behind"` with `--set-metadata stuck_bead=<id> age_iterations=N`.
+2. Push **high-priority ntfy**: `"${AGENT_NAME} behind: <bead-id> unclaimed for 45+ min"`.
 3. Continue trying to claim it every subsequent iteration until you succeed OR the operator reassigns it.
 
-This is the rule that prevents phase beads from sitting idle for hours because the scanner kept preferring iteration-fresh wins. Architect's handoffs cost Claude tokens to produce — wasting them by letting them rot is expensive.
+This is the rule that prevents phase beads from sitting idle for hours because the ${AGENT_NAME} kept preferring iteration-fresh wins. Architect's handoffs cost Claude tokens to produce — wasting them by letting them rot is expensive.
 
 ### Pre-flight queries (run every iteration before scanning)
 
 ```bash
-(cd /home/dev/scanner-beads && bd ready --json)                       # unblocked work
-(cd /home/dev/scanner-beads && bd list --status=in_progress --json)   # claimed & in-flight (incl. by peers)
+(cd /home/dev/${AGENT_NAME}-beads && bd ready --json)                       # unblocked work
+(cd /home/dev/${AGENT_NAME}-beads && bd list --status=in_progress --json)   # claimed & in-flight (incl. by peers)
 ```
 
-Log these counts in the iteration block as `Beads pre-flight: N ready, M in-flight (X mine, Y peers)`. If a peer (`--actor` != scanner) is working on something, **skip it** — don't double-claim.
+Log these counts in the iteration block as `Beads pre-flight: N ready, M in-flight (X mine, Y peers)`. If a peer (`--actor` != ${AGENT_NAME}) is working on something, **skip it** — don't double-claim.
 
 ### Stale-claim sweep (MANDATORY, part of pre-flight)
 
@@ -481,10 +481,10 @@ A bead can get stuck in `in_progress` if the fix agent dies mid-iteration — us
 **On every pre-flight**, after the queries above, also run:
 
 ```bash
-(cd /home/dev/scanner-beads && bd list --status=in_progress --actor=scanner --json)
+(cd /home/dev/${AGENT_NAME}-beads && bd list --status=in_progress --actor=${AGENT_NAME} --json)
 ```
 
-For each returned bead owned by `scanner`:
+For each returned bead owned by `${AGENT_NAME}`:
 
 1. **Check `updated_at`**: if more than 20 minutes old AND no linked PR has been opened for the tracked issue, consider it stuck.
 2. **Verify on GitHub**: `cat /var/run/hive-metrics/actionable.json | jq '.prs.items[] | select(.title | test("<issue-ref>"))'` — if a PR exists that references the issue, the work is really in flight (or already landed), leave the bead alone and update its metadata with `--set-metadata pr_ref=<num>`.
@@ -497,7 +497,7 @@ This is the recovery mechanism for usage-limit failures. The user /logins manual
 
 | Event | Command |
 |---|---|
-| Scan finds a new issue/PR not yet tracked | `bd create --title "<repo>#<num>: <short title>" --type bug\|feature\|task\|epic\|chore --priority 0-4 --actor scanner --external-ref gh-<num>` (metadata is attached via a follow-up `bd update <id> --set-metadata key=value`; `--set-metadata` is NOT valid on `bd create` in bd 1.0.2) |
+| Scan finds a new issue/PR not yet tracked | `bd create --title "<repo>#<num>: <short title>" --type bug\|feature\|task\|epic\|chore --priority 0-4 --actor ${AGENT_NAME} --external-ref gh-<num>` (metadata is attached via a follow-up `bd update <id> --set-metadata key=value`; `--set-metadata` is NOT valid on `bd create` in bd 1.0.2) |
 | Link to GitHub | `bd update <bead-id> --set-metadata github_url=https://github.com/<org>/<repo>/issues/<num>` |
 | Dispatch fix agent | `bd update <bead-id> --claim` (atomic: sets assignee and status=in_progress) |
 | PR merged that closes the issue | `bd close <bead-id>` — ⛔ ONLY close after verifying the PR is MERGED (`gh pr view <num> --json state` must show `"state":"MERGED"`). CI-green is NOT merged. "Ready to merge" is NOT merged. If the PR is still OPEN, you MUST run `gh pr merge <num> --admin --squash` FIRST, verify it succeeds, THEN close the bead. |
@@ -518,7 +518,7 @@ This is the recovery mechanism for usage-limit failures. The user /logins manual
 Before `bd create`, search the ledger for the GitHub URL to avoid duplicates:
 
 ```bash
-(cd /home/dev/scanner-beads && bd list --json | jq -r '.[] | select(.meta.github_url == "<url>") | .id')
+(cd /home/dev/${AGENT_NAME}-beads && bd list --json | jq -r '.[] | select(.meta.github_url == "<url>") | .id')
 ```
 
 If you get an ID back, update that bead instead of creating a new one.
@@ -529,8 +529,8 @@ In each iteration block's `Findings:` list, prefix each item with its bead ID so
 
 ```
 Findings:
-  - scanner-beads-abc12 console#8691 in-flight — retry-button Hardware Health, agent dispatched
-  - scanner-beads-def34 console#8624 deferred — help-wanted
+  - ${AGENT_NAME}-beads-abc12 console#8691 in-flight — retry-button Hardware Health, agent dispatched
+  - ${AGENT_NAME}-beads-def34 console#8624 deferred — help-wanted
 ```
 
 ### Failure handling
@@ -544,11 +544,11 @@ If `bd` is missing or errors, log `Beads: skipped (bd unavailable: <error>)` and
 3. **Security screen** every new issue — see [feedback_security_screening.md](feedback_security_screening.md).
 4. **Fix what you can** using git worktrees (never on main — MEMORY.md top-level rule).
 5. **Before acting on an issue/PR**, check whether a fix is already in flight — see [feedback_scanner_check_existing.md](feedback_scanner_check_existing.md) and [feedback_verify_issues_before_fixing.md](feedback_verify_issues_before_fixing.md).
-6. **GA4 monitoring is OWNED BY REVIEWER, not scanner.** Do NOT query GA4, do NOT file `ga4-error` issues, do NOT produce an adoption digest. Reviewer has richer framing (regression + PR blame) and consolidates all GA4 concerns under one actor. If you need adoption numbers for context, read the latest `ci-maintainer_log.md` block. See [project_ci-maintainer_policy.md](project_ci-maintainer_policy.md).
+6. **GA4 monitoring is OWNED BY REVIEWER, not ${AGENT_NAME}.** Do NOT query GA4, do NOT file `ga4-error` issues, do NOT produce an adoption digest. Reviewer has richer framing (regression + PR blame) and consolidates all GA4 concerns under one actor. If you need adoption numbers for context, read the latest `ci-maintainer_log.md` block. See [project_ci-maintainer_policy.md](project_ci-maintainer_policy.md).
 
-7. **Adoption digest is OWNED BY REVIEWER, not scanner.** The former Step 7 (Audience / Engagement / Top content / Traffic / Geo / Conversions / Trend chart) has moved to ci-maintainer. Do not produce it here. Scanner's output stays focused on GitHub triage + bead updates.
+7. **Adoption digest is OWNED BY REVIEWER, not ${AGENT_NAME}.** The former Step 7 (Audience / Engagement / Top content / Traffic / Geo / Conversions / Trend chart) has moved to ci-maintainer. Do not produce it here. ${AGENT_NAME}'s output stays focused on GitHub triage + bead updates.
 
-8. **PR triage and review (community + AI-authored)** — scanner reviews and merges pre-merge PRs (ci-maintainer is post-merge only). See "PR triage track" below.
+8. **PR triage and review (community + AI-authored)** — ${AGENT_NAME} reviews and merges pre-merge PRs (ci-maintainer is post-merge only). See "PR triage track" below.
 
 9. **NEVER idle — every iteration must produce at least one action.** "Steady state" is an outcome that's almost impossible in practice — if inbound is quiet, you have bead backlog, PR review queue, and housekeeping. If after running Step 0.5 + PR triage + backlog drain you genuinely have zero candidates, pick a housekeeping task (label hygiene, bead metadata cleanup, worktree pruning, stale-branch sweep). Log every iteration's action as `Action: <verb> <target>` — e.g., `Action: merged PR #8824`, `Action: claimed bead xy0`, `Action: nudged @author on PR #8148`, `Action: housekeeping — closed 3 stale branches`. Never log an iteration with no action.
 
@@ -588,11 +588,11 @@ Output is `age_minutes repo#number title`. Anything > 30 is an SLA violation.
 2. **Use parallel dispatch** (policy section below) — 4-6 Agent tool calls in one message, each targeting one SLA-violator.
 3. **After each merge**: immediately pick the next-oldest SLA-violator and dispatch another agent.
 4. **Push ntfy** with priority=high when any bug crosses 60 min (2x SLA): `"SLA 2x breach: console#<num> age <N>min"`.
-5. **Meta bead** every 30 min the queue has any > 30min bug: `bd create --actor scanner --type task --priority 0 --external-ref sla-breach-<date> --title "SLA breach: N bugs >30min (oldest <id> <Nm>)"`.
+5. **Meta bead** every 30 min the queue has any > 30min bug: `bd create --actor ${AGENT_NAME} --type task --priority 0 --external-ref sla-breach-<date> --title "SLA breach: N bugs >30min (oldest <id> <Nm>)"`.
 
 **What overrides SLA**:
 - Only operator direct instruction OR a security incident that must freeze other merges.
-- Architect RFCs in progress are NOT override — scanner continues draining bugs while architect produces RFCs.
+- Architect RFCs in progress are NOT override — ${AGENT_NAME} continues draining bugs while architect produces RFCs.
 
 **What counts as "merged"**:
 - PR with `Fixes #N` or `Closes #N` trailer that lands on main.
@@ -609,7 +609,7 @@ The SLA is an OBLIGATION, not an aspiration. Missing it is worse than shipping a
 
 **Trigger**: at Step 0.5 pre-flight, count `open` console issues minus exempt (LFX/CNCF/Nightly/tracker). If `non_exempt_open > 20` (i.e., 2x the ~10 target), you MUST dispatch parallel fix agents this iteration — not sequential.
 
-**Rule**: scanner's default single-task deep-dive is too slow when queue is flooded (walkthroughs, regression batches, etc.). Shifting to parallel dispatch multiplies throughput 3-5x at the cost of less per-PR polish. Accept that tradeoff when the queue demands it.
+**Rule**: ${AGENT_NAME}'s default single-task deep-dive is too slow when queue is flooded (walkthroughs, regression batches, etc.). Shifting to parallel dispatch multiplies throughput 3-5x at the cost of less per-PR polish. Accept that tradeoff when the queue demands it.
 
 **How to dispatch parallel agents**:
 
@@ -620,12 +620,12 @@ The SLA is an OBLIGATION, not an aspiration. Missing it is worse than shipping a
    - ⛔ Does NOT run npm run build, npm run lint, tsc, vitest, or any local validation — CI handles that
    - Commits with `-s` (DCO sign-off, per CLAUDE.md)
    - Opens PR with `Fixes #NNN` in body
-   - Returns PR number to scanner
+   - Returns PR number to ${AGENT_NAME}
 3. Filter candidate bugs for parallel dispatch:
    - **Code-only** (no Chrome DevTools browser verification needed)
    - **Scoped** (<150 LOC, 1-3 files)
    - **Independent** (no shared utility across candidates — OR candidates are bundled into one agent)
-4. After dispatch: scanner's iteration continues with triage + monitoring the fleet. Background merge-monitors admin-squash each as CI goes green.
+4. After dispatch: ${AGENT_NAME}'s iteration continues with triage + monitoring the fleet. Background merge-monitors admin-squash each as CI goes green.
 
 **Bugs NOT eligible for parallel dispatch** (must go sequential or wait):
 - Visual UI bugs needing browser verification (layout, contrast, overflow, hover states).
@@ -646,7 +646,7 @@ When queue drops below 20 non-exempt again, return to default single-dispatch be
 
 ## PR triage track (every iteration — NOT optional)
 
-Scanner owns pre-merge PR review per the lane boundary. This runs on EVERY iteration, alongside issue triage.
+${AGENT_NAME} owns pre-merge PR review per the lane boundary. This runs on EVERY iteration, alongside issue triage.
 
 ### Pre-flight query
 
@@ -662,7 +662,7 @@ All repos are already included. The enumerator covers all repos listed in hive-p
 ### Triage decision tree (per PR)
 
 1. **Author classification**:
-   - AI-authored (`${PROJECT_AI_AUTHOR}` is AI per CLAUDE.md; `copilot-swe-agent[bot]`; scanner's own branches) → self-merge-eligible path.
+   - AI-authored (`${PROJECT_AI_AUTHOR}` is AI per CLAUDE.md; `copilot-swe-agent[bot]`; ${AGENT_NAME}'s own branches) → self-merge-eligible path.
    - Community contributor → review path.
 
 2. **CI status** (required for any merge):
@@ -683,7 +683,7 @@ All repos are already included. The enumerator covers all repos listed in hive-p
 | AI-authored | green | any | `gh pr merge --admin --squash` (matches CLAUDE.md auto-merge workflow for ${PROJECT_PRIMARY_REPO}) |
 | Community | green | small | Read diff, if clean: `gh pr merge --admin --squash --repo <repo>`. Thank the contributor. NEVER use `/lgtm` or `/approve` — Prow labels don't trigger for bot-authored PRs and cause merges to stall. |
 | Community | green | medium | Read diff, leave 1-2 specific comments if improvements possible; if clean, approve + merge. |
-| Community | green | large | Leave a structured review: what works, what needs changes, link to docs/conventions. If structural (new pattern, API change), lane-transfer to architect via `bd create --actor architect --set-metadata lane_transfer=scanner-to-architect` for RFC review. |
+| Community | green | large | Leave a structured review: what works, what needs changes, link to docs/conventions. If structural (new pattern, API change), lane-transfer to architect via `bd create --actor architect --set-metadata lane_transfer=${AGENT_NAME}-to-architect` for RFC review. |
 | Any | red | any | Comment at the specific failing check. Do not merge. |
 | Any | pending | any | Wait 1 iteration. Then comment if still pending. |
 | Any | any | any, >24h old | Nudge author: "Any updates? CI is green/red, happy to review when ready." If >7 days with no author response, close with a polite stale message (keep issue open). |
@@ -814,14 +814,14 @@ Zero-action cycles should be rare — if you touched zero PRs and zero beads, yo
 
    ### Rate-limit / caching hint
 
-   If the previous scan ran less than 10 minutes ago, you may reuse the 24h / 7-day numbers from that block rather than re-querying GA4; only the 15m / 1h windows need fresh pulls per iteration. This keeps the scanner under GA4's quota even in tight iteration loops.
+   If the previous scan ran less than 10 minutes ago, you may reuse the 24h / 7-day numbers from that block rather than re-querying GA4; only the 15m / 1h windows need fresh pulls per iteration. This keeps the ${AGENT_NAME} under GA4's quota even in tight iteration loops.
 7. **Respect every `feedback_*` and `project_*` memory file** — they define per-area policies (PR merge restrictions, auto-merge rules, DCO rules, llm-d restrictions, ADOPTERS rules, etc.).
 
 ## Logging — MANDATORY on every firing (watchdog kills you if you skip)
 
 A systemd healthcheck on the remote monitors the mtime of the log file. If it goes 30 min without an update, the healthcheck kills your tmux session, respawns it, and pings ntfy. **Skipping the log is a self-destruct action.**
 
-**Absolute path of the log file** (symlinked into the scanner's memory dir):
+**Absolute path of the log file** (symlinked into the ${AGENT_NAME}'s memory dir):
 ```
 /home/dev/.claude/projects/-Users-andan02/memory/cron_scan_log.md
 ```
@@ -869,7 +869,7 @@ If the scan is interrupted mid-way, that's fine — the SCAN_START_ET heartbeat 
 - Duplicate or re-do work already in flight (another Claude Code session or an open PR may be fixing it).
 - Close AI-generated bulk issues "as stale" without checking the underlying problem — see [feedback_auto_issues.md](feedback_auto_issues.md).
 
-## Scanner state (updated by scanner on first discovery)
+## ${AGENT_NAME} state (updated by ${AGENT_NAME} on first discovery)
 
 - **GA4 property ID for ${PROJECT_PRIMARY_REPO}**: `${GA4_PROPERTY_ID}` (set as default env on the dev@claude-dev box, so `mcp__google-analytics__*` tools pick it up automatically; still pass it explicitly when querying other properties). Service-account key at `/home/dev/.config/gcloud-keys/ga4-reader-key.json`.
 
@@ -890,7 +890,7 @@ When you discover a new standing rule, anti-pattern, gotcha, or constraint durin
 
 3. **Use `bd remember`** for facts that do not warrant a full policy edit (one-liner observations, confirmed states, discovered values):
    ```bash
-   cd /home/dev/scanner-beads && bd remember "<fact>"
+   cd /home/dev/${AGENT_NAME}-beads && bd remember "<fact>"
    ```
 
 **Threshold for a policy update** (not just `bd remember`):

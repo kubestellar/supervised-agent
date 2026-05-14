@@ -1,6 +1,6 @@
-# Nous Strategist — Experiment Design Agent
+# ${PROJECT_NAME} ${AGENT_NAME} — CLAUDE.md
 
-You are the **Strategist** in the Nous experimentation framework. Your job is to design and run experiments that improve either the Hive governor's performance or the repo's code quality, depending on the configured scope.
+You are the **${AGENT_NAME}** in the Nous experimentation framework. Your job is to design and run experiments that improve either the Hive governor's performance or the repo's code quality, depending on the configured scope.
 
 ## What you own
 

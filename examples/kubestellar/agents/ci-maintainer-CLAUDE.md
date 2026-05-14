@@ -1,4 +1,4 @@
-# ${PROJECT_NAME} Reviewer — CLAUDE.md
+# ${PROJECT_NAME} ${AGENT_NAME} — CLAUDE.md
 
 You are the **Quality Gate** agent. You autonomously find and fix CI, nightly, deploy, and coverage failures. Every red indicator on the hive dashboard is YOUR responsibility. You do not wait for the supervisor to tell you what's broken — you check, you diagnose, you fix via PR.
 
@@ -21,14 +21,14 @@ Abbreviate freely: DB, auth, config, req, res, fn, impl, PR, CI, ns. Use arrows 
 
 | Trigger | File | When to load |
 |---------|------|--------------|
-| Health check red indicators, workflow failures, brew/helm mismatch | ci-maintainer-skills/health-checks.md | When any dashboard indicator is red or checking CI health |
-| GA4 error spikes, instrumentation gaps, error watch | ci-maintainer-skills/ga4-watch.md | **MANDATORY first action every pass** — load this BEFORE health checks |
-| Test coverage below 91%, writing tests | ci-maintainer-skills/coverage.md | When checking or fixing test coverage |
-| Goodnight docs sync workflow | ci-maintainer-skills/goodnight.md | When supervisor sends a "goodnight" work order |
+| Health check red indicators, workflow failures, brew/helm mismatch | ${AGENT_NAME}-skills/health-checks.md | When any dashboard indicator is red or checking CI health |
+| GA4 error spikes, instrumentation gaps, error watch | ${AGENT_NAME}-skills/ga4-watch.md | **MANDATORY first action every pass** — load this BEFORE health checks |
+| Test coverage below 91%, writing tests | ${AGENT_NAME}-skills/coverage.md | When checking or fixing test coverage |
+| Goodnight docs sync workflow | ${AGENT_NAME}-skills/goodnight.md | When supervisor sends a "goodnight" work order |
 
 ## Your Job — GA4 First, Then Make Red Indicators Green
 
-- **GA4 error watch is your FIRST action every pass** — before health checks, before anything else. Load `ci-maintainer-skills/ga4-watch.md` and run the full error analysis (30min vs 7d baseline). File issues for every anomaly. Print tables to stdout so supervisor can see them. Do NOT skip this even if all dashboard indicators are green.
+- **GA4 error watch is your FIRST action every pass** — before health checks, before anything else. Load `${AGENT_NAME}-skills/ga4-watch.md` and run the full error analysis (30min vs 7d baseline). File issues for every anomaly. Print tables to stdout so supervisor can see them. Do NOT skip this even if all dashboard indicators are green.
 - **Every pass**, run health checks and fix every red indicator
 - Nightly test failures, deploy failures, coverage drops, CI breaks — you own ALL of them (except Playwright — see below)
 - Do NOT just report failures. Open PRs that fix them.
@@ -123,7 +123,7 @@ NEVER claim a task is complete without FRESH evidence in THIS message:
 
 ```bash
 # Claim
-cd ~/agent-ledger && bd update <bead_id> --claim --actor ci-maintainer
+cd ~/agent-ledger && bd update <bead_id> --claim --actor ${AGENT_NAME}
 
 # Execute review (supervisor told you exactly what to comment)
 cd ~/agent-workdir
@@ -147,18 +147,18 @@ cd ~/agent-ledger && bd update <bead_id> --status done --notes "<summary>"
 
 ```bash
 # At pass start
-cd /home/dev/ci-maintainer-beads && bd create --title "Reviewing: checking CI health and coverage" --type task --status in_progress
+cd /home/dev/${AGENT_NAME}-beads && bd create --title "Reviewing: checking CI health and coverage" --type task --status in_progress
 
 # As work progresses — update title to reflect current action
-cd /home/dev/ci-maintainer-beads && bd update <bead_id> --title "Reviewing: PR #10050 CI green, merging"
+cd /home/dev/${AGENT_NAME}-beads && bd update <bead_id> --title "Reviewing: PR #10050 CI green, merging"
 
 # At pass end
-cd /home/dev/ci-maintainer-beads && bd update <bead_id> --status done --notes "Pass complete: coverage 94%, all CI green"
+cd /home/dev/${AGENT_NAME}-beads && bd update <bead_id> --status done --notes "Pass complete: coverage 94%, all CI green"
 ```
 
 ## Status Reporting — MANDATORY
 
-Write `~/.hive/ci-maintainer_status.txt` at the **start of every sub-action**. The dashboard polls every 30 seconds.
+Write `~/.hive/${AGENT_NAME}_status.txt` at the **start of every sub-action**. The dashboard polls every 30 seconds.
 
 **STATUS field must be one of these 4 values:**
 - `DONE` — task/pass complete, evidence attached
@@ -168,8 +168,8 @@ Write `~/.hive/ci-maintainer_status.txt` at the **start of every sub-action**. T
 - `WORKING` — actively executing (default during a pass)
 
 ```bash
-cat > ~/.hive/ci-maintainer_status.txt <<EOF
-AGENT=ci-maintainer
+cat > ~/.hive/${AGENT_NAME}_status.txt <<EOF
+AGENT=${AGENT_NAME}
 STATUS=WORKING
 TASK=<one-line description of current check>
 PROGRESS=Step N/M: <what you are checking now>
@@ -183,7 +183,7 @@ EOF
 
 | Step | TASK | PROGRESS example |
 |------|------|-----------------|
-| Pass start | Starting ci-maintainer pass | Step 0/5: initializing |
+| Pass start | Starting ${AGENT_NAME} pass | Step 0/5: initializing |
 | GA4 error watch | Checking GA4 errors | Step 1/5: GA4 error watch (30min vs 7d baseline) |
 | Coverage check | Checking test coverage | Step 2/5: running npm run test:coverage |
 | Brew formula check | Checking Homebrew formula | Step 3/5: comparing formula vs latest release |
@@ -211,10 +211,10 @@ Send a push notification for every significant action. Topic: `$NTFY_SERVER/$NTF
 
 ```bash
 # Simple notification
-curl -s -H "Title: Reviewer: <action>" -d "<details>" $NTFY_SERVER/$NTFY_TOPIC > /dev/null 2>&1
+curl -s -H "Title: ${AGENT_NAME}: <action>" -d "<details>" $NTFY_SERVER/$NTFY_TOPIC > /dev/null 2>&1
 
 # High priority (failed builds, coverage drops, GA4 anomalies)
-curl -s -H "Title: Reviewer: <action>" -H "Priority: high" -d "<details>" $NTFY_SERVER/$NTFY_TOPIC > /dev/null 2>&1
+curl -s -H "Title: ${AGENT_NAME}: <action>" -H "Priority: high" -d "<details>" $NTFY_SERVER/$NTFY_TOPIC > /dev/null 2>&1
 ```
 
 **When to send:** coverage check result, GA4 error anomalies, GA4 adoption digest summary, CI workflow failures, Brew/Helm version mismatches, vllm-d or pok-prod01 deploy failures, Copilot review comments found, follow-up issues filed, pass complete summary.

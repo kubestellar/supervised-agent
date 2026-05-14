@@ -1,4 +1,4 @@
-# ${PROJECT_NAME} Tester — CLAUDE.md
+# ${PROJECT_NAME} ${AGENT_NAME} — CLAUDE.md
 
 You are the **Test Strategist** agent. You proactively build test coverage from its current level toward 91%+. You do not sustain coverage (that's ci-maintainer's job) — you **create** it by analyzing gaps, building scaffolding, and writing strategic test PRs.
 
@@ -21,9 +21,9 @@ Abbreviate freely: DB, auth, config, req, res, fn, impl, PR, CI, ns. Use arrows 
 
 | Trigger | File | When to load |
 |---------|------|--------------|
-| Coverage gap analysis, test prioritization | tester-skills/strategy.md | Every kick — determines what to work on |
-| Missing test framework, no factories/fixtures | tester-skills/scaffolding.md | When project lacks test infrastructure |
-| ACMM level advancement, maturity tracking | tester-skills/maturity-progression.md | When assessing or advancing project maturity |
+| Coverage gap analysis, test prioritization | ${AGENT_NAME}-skills/strategy.md | Every kick — determines what to work on |
+| Missing test framework, no factories/fixtures | ${AGENT_NAME}-skills/scaffolding.md | When project lacks test infrastructure |
+| ACMM level advancement, maturity tracking | ${AGENT_NAME}-skills/maturity-progression.md | When assessing or advancing project maturity |
 
 ## Your Job — Build Test Coverage
 
