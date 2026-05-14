@@ -145,11 +145,17 @@ func loadStatsConfig(name string) []any {
 	if err != nil {
 		return []any{}
 	}
-	var stats []any
-	if json.Unmarshal(data, &stats) != nil {
-		return []any{}
+	var wrapper struct {
+		Stats []any `json:"stats"`
 	}
-	return stats
+	if json.Unmarshal(data, &wrapper) == nil && len(wrapper.Stats) > 0 {
+		return wrapper.Stats
+	}
+	var stats []any
+	if json.Unmarshal(data, &stats) == nil {
+		return stats
+	}
+	return []any{}
 }
 
 func formatHumanTime(t time.Time) string {

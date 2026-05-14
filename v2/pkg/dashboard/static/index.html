@@ -2427,6 +2427,15 @@
 
     function agentIndicators(name) {
       const m = currentAgentMetrics[name];
+
+      // Config-driven stats rendering — check first so agents without
+      // currentAgentMetrics entries still get their statsConfig rendered.
+      const agentObj = ((window._lastStatus || {}).agents || []).find(a => a.name === name);
+      const statsConfig = agentObj ? agentObj.statsConfig : null;
+      if (statsConfig && statsConfig.length > 0) {
+        return renderStatsFromConfig(statsConfig, name);
+      }
+
       if (!m) return '';
 
       // Scanner always gets its special pair rendering
@@ -2488,13 +2497,6 @@
         }
         if (!html) html = '<div class="agent-indicators"><span class="ind-empty">no active fixes</span></div>';
         return html;
-      }
-
-      // Config-driven rendering for all agents
-      const agentObj = ((window._lastStatus || {}).agents || []).find(a => a.name === name);
-      const statsConfig = agentObj ? agentObj.statsConfig : null;
-      if (statsConfig && statsConfig.length > 0) {
-        return renderStatsFromConfig(statsConfig, name);
       }
 
       return '';
