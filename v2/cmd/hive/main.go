@@ -134,6 +134,19 @@ func main() {
 		if len(saved.BudgetIgnored) > 0 {
 			gov.SetBudgetIgnored(saved.BudgetIgnored)
 		}
+		for modeName, cadences := range saved.CadenceOverrides {
+			mode, ok := cfg.Governor.Modes[modeName]
+			if !ok {
+				continue
+			}
+			if mode.Cadences == nil {
+				mode.Cadences = make(map[string]string)
+			}
+			for agentName, cadence := range cadences {
+				mode.Cadences[agentName] = cadence
+			}
+			cfg.Governor.Modes[modeName] = mode
+		}
 	}
 
 	if gov.GetBudget().WeeklyLimit == 0 && cfg.Governor.Budget.TotalTokens > 0 {
@@ -211,7 +224,7 @@ func main() {
 		Ctx:              ctx,
 		RefreshFunc:      refreshDashboard,
 		PersistFunc: func() {
-			persistState(agentMgr, gov, statePath, logger)
+			persistState(agentMgr, gov, cfg, statePath, logger)
 		},
 	})
 
@@ -262,7 +275,7 @@ func main() {
 		select {
 		case <-ctx.Done():
 			logger.Info("shutting down, persisting state")
-			persistState(agentMgr, gov, statePath, logger)
+			persistState(agentMgr, gov, cfg, statePath, logger)
 			return
 		case <-ticker.C:
 			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, &lastActionable, logger)
@@ -371,7 +384,7 @@ func convertKnowledgeLayers(cfgLayers []config.KnowledgeLayer) []knowledge.Layer
 	return layers
 }
 
-func persistState(agentMgr *agent.Manager, gov *governor.Governor, path string, logger *slog.Logger) {
+func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.Config, path string, logger *slog.Logger) {
 	statuses := agentMgr.AllStatuses()
 	agents := make(map[string]snapshot.AgentState, len(statuses))
 	for name, proc := range statuses {
@@ -385,12 +398,23 @@ func persistState(agentMgr *agent.Manager, gov *governor.Governor, path string, 
 		}
 	}
 
+	cadenceOverrides := make(map[string]map[string]string)
+	for modeName, mode := range cfg.Governor.Modes {
+		if len(mode.Cadences) > 0 {
+			cadenceOverrides[modeName] = make(map[string]string, len(mode.Cadences))
+			for agentName, cadence := range mode.Cadences {
+				cadenceOverrides[modeName][agentName] = cadence
+			}
+		}
+	}
+
 	budget := gov.GetBudget()
 	state := &snapshot.PersistedState{
-		Agents:        agents,
-		GovernorMode:  string(gov.GetState().Mode),
-		BudgetLimit:   budget.WeeklyLimit,
-		BudgetIgnored: budget.IgnoredAgents,
+		Agents:           agents,
+		GovernorMode:     string(gov.GetState().Mode),
+		BudgetLimit:      budget.WeeklyLimit,
+		BudgetIgnored:    budget.IgnoredAgents,
+		CadenceOverrides: cadenceOverrides,
 	}
 
 	if err := snapshot.SaveState(path, state, logger); err != nil {

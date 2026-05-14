@@ -7,6 +7,7 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
+      - "7681:7681"
     volumes:
       - ./hive.yaml:/etc/hive/hive.yaml:ro
       - hive-data:/data

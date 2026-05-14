@@ -11,11 +11,12 @@ import (
 const maxStateAge = 7 * 24 * time.Hour
 
 type PersistedState struct {
-	SavedAt       time.Time                  `json:"saved_at"`
-	Agents        map[string]AgentState      `json:"agents"`
-	GovernorMode  string                     `json:"governor_mode"`
-	BudgetLimit   int64                      `json:"budget_limit"`
-	BudgetIgnored []string                   `json:"budget_ignored"`
+	SavedAt          time.Time                        `json:"saved_at"`
+	Agents           map[string]AgentState            `json:"agents"`
+	GovernorMode     string                           `json:"governor_mode"`
+	BudgetLimit      int64                            `json:"budget_limit"`
+	BudgetIgnored    []string                         `json:"budget_ignored"`
+	CadenceOverrides map[string]map[string]string     `json:"cadence_overrides,omitempty"`
 }
 
 type AgentState struct {

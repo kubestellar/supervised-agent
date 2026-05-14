@@ -2559,10 +2559,11 @@
       strategist: 'hive-strategist',
       'sec-check': 'hive-sec-check',
     };
+    const TTYD_PORT = 7681;
     function terminalUrl(agentName) {
       const session = AGENT_TMUX_SESSION[agentName] || agentName;
-      const origin = window.location.origin;
-      return `${origin}/terminal/?arg=${encodeURIComponent(session)}`;
+      const host = window.location.hostname;
+      return `http://${host}:${TTYD_PORT}/?arg=${encodeURIComponent(session)}`;
     }
 
     function renderAgents(agents) {
