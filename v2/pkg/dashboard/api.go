@@ -995,6 +995,14 @@ func (s *Server) handleAgentConfigGeneral(w http.ResponseWriter, r *http.Request
 	}
 	s.deps.Config.Agents[name] = agentCfg
 
+	// Sync the updated config into the agent process so that status builders
+	// (which read from AgentProcess.Config, not the global config map) reflect
+	// changes like display_name immediately.
+	if err := s.deps.AgentMgr.UpdateConfig(name, agentCfg); err != nil {
+		s.logger.Warn("failed to sync agent config to process", "agent", name, "error", err)
+	}
+
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated", "agent": name})
 }
 
@@ -1056,6 +1064,13 @@ func (s *Server) handleAgentConfigModels(w http.ResponseWriter, r *http.Request)
 	}
 	s.deps.Config.Agents[name] = agentCfg
 
+	// Sync updated backend/model into the agent process so status builders
+	// reflect the change without requiring a restart.
+	if err := s.deps.AgentMgr.UpdateConfig(name, agentCfg); err != nil {
+		s.logger.Warn("failed to sync agent config to process", "agent", name, "error", err)
+	}
+
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated", "agent": name})
 }
 

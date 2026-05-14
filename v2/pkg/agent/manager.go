@@ -313,6 +313,22 @@ func (m *Manager) AddAgent(name string, cfg config.AgentConfig) {
 	m.logger.Info("agent added", "name", name)
 }
 
+// UpdateConfig updates the stored config for a running agent process so that
+// status builders (which read from AgentProcess.Config) reflect changes made
+// via the config dialog (which writes to the global Config.Agents map).
+func (m *Manager) UpdateConfig(name string, cfg config.AgentConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	agent, ok := m.agents[name]
+	if !ok {
+		return fmt.Errorf("agent %s not found", name)
+	}
+
+	agent.Config = cfg
+	return nil
+}
+
 func (m *Manager) RemoveAgent(name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
