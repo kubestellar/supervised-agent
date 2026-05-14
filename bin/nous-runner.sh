@@ -147,7 +147,7 @@ elif [ "$EFFECTIVE_MODE" = "observe" ]; then
   AUTO_APPROVE="true"
 fi
 
-NOUS_AGENT="${NOUS_AGENT:-cli}"
+NOUS_AGENT="${NOUS_AGENT:-inline}"
 echo "[nous-runner] invoking run_campaign.py (agent=$NOUS_AGENT, auto_approve=$AUTO_APPROVE, timeout=${TIMEOUT_SEC}s)"
 NOUS_HIVE_MODE="$EFFECTIVE_MODE" \
 NOUS_HIVE_SCOPE="$EFFECTIVE_SCOPE" \
