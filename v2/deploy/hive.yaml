@@ -201,3 +201,4 @@ dashboard:
 data:
   metrics_dir: /data/metrics
   logs_dir: /data/logs
+  claude_sessions_dir: /root/.claude/projects

@@ -64,13 +64,14 @@ type AggregateSummary struct {
 const defaultScanInterval = 30 * time.Second
 
 type Collector struct {
-	sessionsDir   string
-	detector      func(string) string
-	logger        *slog.Logger
-	mu            sync.RWMutex
-	latest        *AggregateSummary
-	issueCosts    map[string]int64
-	scanInterval  time.Duration
+	sessionsDir        string
+	claudeSessionsDir  string
+	detector           func(string) string
+	logger             *slog.Logger
+	mu                 sync.RWMutex
+	latest             *AggregateSummary
+	issueCosts         map[string]int64
+	scanInterval       time.Duration
 }
 
 func NewCollector(sessionsDir string, logger *slog.Logger) *Collector {
@@ -81,6 +82,13 @@ func NewCollector(sessionsDir string, logger *slog.Logger) *Collector {
 		issueCosts:   make(map[string]int64),
 		scanInterval: defaultScanInterval,
 	}
+}
+
+// SetClaudeSessionsDir configures the collector to also scan Claude Code's
+// native session files. The path is the Claude projects directory, typically
+// ~/.claude/projects (or /root/.claude/projects in containers).
+func (c *Collector) SetClaudeSessionsDir(dir string) {
+	c.claudeSessionsDir = dir
 }
 
 func (c *Collector) Start(stop <-chan struct{}) {
@@ -103,6 +111,21 @@ func (c *Collector) scan() {
 		c.logger.Warn("token scan failed", "error", err)
 		return
 	}
+
+	// Merge Claude Code native session data if configured
+	if c.claudeSessionsDir != "" {
+		claudeAgg, err := ScanClaudeSessionsWithPathDetection(c.claudeSessionsDir)
+		if err != nil {
+			c.logger.Warn("claude session scan failed", "error", err)
+		} else if claudeAgg != nil && claudeAgg.SessionCount > 0 {
+			MergeAggregates(agg, claudeAgg)
+			c.logger.Info("merged claude sessions",
+				"claude_sessions", claudeAgg.SessionCount,
+				"total_sessions", agg.SessionCount,
+			)
+		}
+	}
+
 	c.mu.Lock()
 	c.latest = agg
 	c.mu.Unlock()
