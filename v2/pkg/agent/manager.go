@@ -155,6 +155,7 @@ func (m *Manager) launchInTmux(ctx context.Context, agent *AgentProcess) error {
 	if agent.ModelOverride != "" {
 		model = agent.ModelOverride
 	}
+	model = normalizeModelName(model)
 
 	switch backend {
 	case "claude":
@@ -487,6 +488,28 @@ func backendBinary(backend string) (string, error) {
 	}
 
 	return path, nil
+}
+
+// normalizeModelName converts YAML-friendly model names (claude-sonnet-4-6) to
+// the format CLIs expect (claude-sonnet-4.6). The last hyphen before a trailing
+// digit group becomes a dot.
+func normalizeModelName(model string) string {
+	idx := strings.LastIndex(model, "-")
+	if idx < 0 || idx == len(model)-1 {
+		return model
+	}
+	suffix := model[idx+1:]
+	allDigits := true
+	for _, c := range suffix {
+		if c < '0' || c > '9' {
+			allDigits = false
+			break
+		}
+	}
+	if allDigits {
+		return model[:idx] + "." + suffix
+	}
+	return model
 }
 
 func agentEnvVars(agent *AgentProcess) []string {
