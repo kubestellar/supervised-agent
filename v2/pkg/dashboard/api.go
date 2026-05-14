@@ -3,6 +3,7 @@ package dashboard
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -2028,11 +2029,22 @@ func (s *Server) handleObsidianSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req knowledge.ObsidianSyncRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "invalid request body", http.StatusBadRequest)
+	bodyBytes, readErr := io.ReadAll(r.Body)
+	if readErr != nil {
+		s.logger.Warn("obsidian sync: failed to read body", "error", readErr)
+		jsonError(w, "failed to read body", http.StatusBadRequest)
 		return
 	}
+	s.logger.Info("obsidian sync request", "bodyLen", len(bodyBytes), "body", string(bodyBytes[:min(len(bodyBytes), 500)]))
+
+	var req knowledge.ObsidianSyncRequest
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
+		s.logger.Warn("obsidian sync: json decode failed", "error", err, "body", string(bodyBytes[:min(len(bodyBytes), 200)]))
+		jsonError(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	s.logger.Info("obsidian sync parsed", "filename", req.Filename, "contentLen", len(req.Content), "frontmatterKeys", fmt.Sprintf("%v", req.Frontmatter))
 
 	if req.Filename == "" {
 		jsonError(w, "filename is required", http.StatusBadRequest)
