@@ -9,6 +9,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROXY_PORT = parseInt(process.env.HIVE_PROXY_PORT || '3001', 10);
 const GO_API_PORT = parseInt(process.env.HIVE_API_PORT || '3002', 10);
 const GO_API_URL = process.env.HIVE_API_URL || `http://127.0.0.1:${GO_API_PORT}`;
+const TTYD_PORT = parseInt(process.env.HIVE_TTYD_PORT || '7681', 10);
+const TTYD_URL = `http://127.0.0.1:${TTYD_PORT}`;
 const DASHBOARD_TOKEN = process.env.HIVE_DASHBOARD_TOKEN || '';
 const STATIC_DIR = process.env.HIVE_STATIC_DIR || path.join(__dirname, 'public');
 
@@ -39,7 +41,7 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "font-src 'self' https:",
-    "connect-src 'self' https:",
+    "connect-src 'self' https: ws: wss:",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -74,11 +76,34 @@ app.use('/api', createProxyMiddleware({
   },
 }));
 
+const ttydProxy = createProxyMiddleware({
+  target: TTYD_URL,
+  changeOrigin: true,
+  ws: true,
+  pathRewrite: (p) => p.replace(/^\/terminal/, ''),
+  on: {
+    error(err, req, res) {
+      console.error(`[ttyd-proxy] ${req.method} ${req.url} → ${err.message}`);
+      if (res.writeHead) {
+        res.writeHead(502, { 'Content-Type': 'text/plain' });
+        res.end('Terminal unavailable');
+      }
+    },
+  },
+});
+app.use('/terminal', ttydProxy);
+
 app.use(express.static(STATIC_DIR));
 app.get('/{*splat}', (req, res) => {
   res.sendFile(path.join(STATIC_DIR, 'index.html'));
 });
 
-app.listen(PROXY_PORT, () => {
+const server = app.listen(PROXY_PORT, () => {
   console.log(`[hive-proxy] Dashboard proxy on :${PROXY_PORT} → Go API at ${GO_API_URL}`);
+});
+
+server.on('upgrade', (req, socket, head) => {
+  if (req.url.startsWith('/terminal')) {
+    ttydProxy.upgrade(req, socket, head);
+  }
 });
