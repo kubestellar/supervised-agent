@@ -71,8 +71,9 @@ RUN chmod +x /usr/local/bin/ttyd-tmux.sh /usr/local/bin/gh-app-token.sh \
     /usr/local/bin/hive-config.sh /usr/local/bin/agent-launch.sh /usr/local/bin/gh
 
 # --- Nous framework (strategist experiment engine) ---
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip jq && rm -rf /var/lib/apt/lists/*
+RUN (apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-venv python3-pip jq && rm -rf /var/lib/apt/lists/*) || \
+    echo "WARN: apt-get failed — Nous framework will not be available"
 COPY bin/nous-runner.sh bin/nous-sync.py bin/nous-hive-gate.py bin/nous-install.sh /tmp/hive/bin/
 RUN chmod +x /tmp/hive/bin/*.sh
 COPY examples/kubestellar/nous-campaign.yaml examples/kubestellar/nous-governor-campaign.yaml examples/kubestellar/nous-repo-campaign.yaml /etc/hive/
