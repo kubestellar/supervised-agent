@@ -1,82 +1,166 @@
-# Hive v2
+# Hive
 
-Single Go binary that replaces ~34 shell scripts, the Node.js dashboard, and the external `bd` binary. Run it in a container against your own GitHub repos.
+AI agent orchestrator for GitHub repositories. A single Go binary that enumerates issues and PRs, classifies them by complexity, and dispatches work to AI agents (Claude, Copilot, Gemini, Goose) on adaptive cadences.
 
-## Quick Start
+## Quick Start (Docker)
 
 ```bash
-# 1. Create a config file (see hive.yaml.example for all options)
 cp hive.yaml.example hive.yaml
-# Edit hive.yaml with your org, repos, and agent config
+# Edit hive.yaml — set your org, repos, and agent config
 
-# 2. Set your GitHub token
 export HIVE_GITHUB_TOKEN=ghp_...
-
-# 3. Run with Docker
 docker compose up -d
 
-# 4. Open the dashboard
-open http://localhost:3001
+# Dashboard at http://localhost:3001
 ```
 
-## Run Without Docker
+## Kubernetes
 
 ```bash
-# Build
-go build -o hive ./cmd/hive
-
-# Run
-./hive --config ./hive.yaml
+# Create the namespace, config, secret, and storage
+kubectl apply -f deploy/k8s/namespace.yaml
+kubectl -n hive create secret generic hive-secrets \
+  --from-literal=HIVE_GITHUB_TOKEN=ghp_...
+kubectl create configmap hive-config -n hive --from-file=hive.yaml=hive.yaml
+kubectl apply -f deploy/k8s/pvc.yaml
+kubectl apply -f deploy/k8s/deployment.yaml
+kubectl apply -f deploy/k8s/service.yaml
 ```
-
-## What It Does
-
-Hive is an AI agent orchestrator for GitHub repositories. It:
-
-- **Enumerates** open issues and PRs across your repos via the GitHub API
-- **Classifies** issues by complexity (Simple/Medium/Complex) and routes to the right AI model
-- **Governs** agent cadence adaptively — SURGE/BUSY/QUIET/IDLE modes based on queue depth
-- **Dispatches** work to AI agents (Claude, Copilot, Gemini, Goose) as child processes
-- **Tracks** work items in an embedded ledger (beads)
-- **Notifies** via ntfy, Slack, or Discord on SLA violations
-- **Serves** a live dashboard with SSE updates at `:3001`
 
 ## Configuration
 
-All config lives in a single `hive.yaml` file. Environment variables are interpolated via `${VAR}` syntax. See `hive.yaml.example` for the full reference.
+All config lives in a single `hive.yaml`. Environment variables are interpolated with `${VAR}` syntax. See `hive.yaml.example` for the full reference.
 
-Agent policies (CLAUDE.md files) can be managed via a git config repo that's cloned on startup and polled for changes.
-
-## Architecture
-
-```
-cmd/hive/main.go          Entry point — wires all packages, runs governor loop
-pkg/config/               Single YAML config with env var interpolation
-pkg/governor/             Adaptive scheduler (SURGE/BUSY/QUIET/IDLE modes)
-pkg/scheduler/            Builds kick messages per agent from classified work
-pkg/github/               GitHub API client — issues, PRs, hold/exempt filtering
-pkg/classify/             Issue classifier — tier, model recommendation, lane
-pkg/beads/                Embedded work item ledger (JSON-backed CRUD)
-pkg/agent/                Process manager — spawns CLI agents as child processes
-pkg/dashboard/            HTTP + SSE server with embedded static UI
-pkg/tokens/               Session file parser for token usage tracking
-pkg/notify/               Pluggable notifications (ntfy, Slack, Discord)
-pkg/policies/             Config repo watcher — git clone + poll + hot reload
-pkg/discord/              Discord bot (optional, responds to !hive commands)
-pkg/snapshot/             Static dashboard snapshot builder
+```yaml
+project:
+  org: your-org
+  repos:
+    - repo-one
+    - repo-two
+  primary_repo: repo-one
+  ai_author: your-bot-user
 ```
 
-## Container Volumes
+## Agents
 
-| Mount | Purpose |
-|---|---|
-| `/etc/hive/hive.yaml` | Config file (read-only) |
-| `/data` | Metrics, beads, logs, snapshots (persistent) |
-| `/secrets` | GitHub App key, API tokens (read-only) |
+Seven agents ship as defaults (scanner, ci-maintainer, tester, architect, supervisor, outreach, sec-check). Enable or disable each in config:
 
-## Agent CLIs
+```yaml
+agents:
+  scanner:
+    enabled: true
+    backend: claude        # claude | copilot | gemini | goose
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/scanner
+    clear_on_kick: true
+```
 
-The container needs the agent CLIs installed. Options:
-1. Multi-stage Docker build that includes them
-2. Volume-mount from host
-3. Sidecar containers per agent
+### Adding a Custom Agent
+
+Add a block under `agents:` and a cadence entry under each governor mode:
+
+```yaml
+agents:
+  my-agent:
+    enabled: true
+    backend: claude
+    model: claude-sonnet-4-6
+    beads_dir: /data/beads/my-agent
+    clear_on_kick: true
+
+governor:
+  modes:
+    surge:
+      my-agent: pause
+    busy:
+      my-agent: 1h
+    quiet:
+      my-agent: 30m
+    idle:
+      my-agent: 15m
+```
+
+Place a `CLAUDE.md` policy file in the agent's working directory, or use a git config repo for hot-reloadable policies:
+
+```yaml
+policies:
+  repo: https://github.com/your-org/hive-config
+  path: agents/
+  poll_interval: 5m
+```
+
+## Governor
+
+The governor evaluates queue depth every `eval_interval_s` seconds and switches between four modes — **SURGE**, **BUSY**, **QUIET**, **IDLE** — each with its own cadences per agent. Agents can be paused in any mode by setting their cadence to `pause`.
+
+```yaml
+governor:
+  eval_interval_s: 300
+  modes:
+    surge:
+      threshold: 20    # queue depth >= 20
+    busy:
+      threshold: 10
+    quiet:
+      threshold: 2
+    idle:
+      threshold: 0
+```
+
+## Knowledge
+
+A 4-layer wiki system (powered by [llm-wiki](https://github.com/geronimo-iia/llm-wiki)) that primes agents with relevant facts on each kick. Layers are merged by precedence: personal > project > org > community.
+
+```yaml
+knowledge:
+  enabled: true
+  engine: llm-wiki
+  layers:
+    - type: personal
+      path: ~/.hive/wiki
+    - type: project
+      path: .hive/wiki
+  primer:
+    max_facts: 25
+    merge_strategy: precedence
+```
+
+## Strategy Lab (Nous)
+
+An experiment framework that lets you test configuration changes (models, cadences, thresholds) against live data before committing them. Experiments run in a sandbox with rollback on failure.
+
+Configure via the dashboard or the `/api/nous/*` endpoints. See `hive.yaml.example` for available options.
+
+## Ports and Volumes
+
+| Port | Purpose |
+|------|---------|
+| 3001 | Dashboard (public, auth) |
+| 3002 | Internal API |
+| 7681 | ttyd terminal |
+
+| Volume | Purpose |
+|--------|---------|
+| `/etc/hive/hive.yaml` | Config (read-only) |
+| `/data` | Metrics, beads, logs, state |
+| `/secrets` | GitHub App key (if using App auth) |
+
+## GitHub Auth
+
+Use a personal access token (simplest) or a GitHub App (recommended for production):
+
+```yaml
+github:
+  token: ${HIVE_GITHUB_TOKEN}
+  # Or GitHub App:
+  # app_id: 12345
+  # installation_id: 67890
+  # key_file: /secrets/gh-app-key.pem
+```
+
+## Build from Source
+
+```bash
+go build -o hive ./cmd/hive
+./hive --config ./hive.yaml
+```
