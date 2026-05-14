@@ -2,6 +2,9 @@ package dashboard
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -58,7 +61,16 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, go
 	for name := range statuses {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	sort.Slice(names, func(i, j int) bool {
+		// Supervisor always comes first in the sidebar.
+		if names[i] == "supervisor" {
+			return true
+		}
+		if names[j] == "supervisor" {
+			return false
+		}
+		return names[i] < names[j]
+	})
 
 	agents := make([]FrontendAgent, 0, len(statuses))
 	for _, name := range names {
@@ -118,11 +130,26 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, go
 			GovModel:      model,
 			GovCostWeight: 0,
 			LiveSummary:   liveSummary,
-			StatsConfig:   []any{},
+			StatsConfig:   loadStatsConfig(name),
 		}
 		agents = append(agents, a)
 	}
 	return agents
+}
+
+// loadStatsConfig reads the per-agent stats configuration from /data/agents/{name}/stats.json.
+// This is the same data source used by the agent config API endpoint (loadAgentStats on *Server).
+func loadStatsConfig(name string) []any {
+	statsFile := fmt.Sprintf("/data/agents/%s/stats.json", name)
+	data, err := os.ReadFile(statsFile)
+	if err != nil {
+		return []any{}
+	}
+	var stats []any
+	if json.Unmarshal(data, &stats) != nil {
+		return []any{}
+	}
+	return stats
 }
 
 func formatHumanTime(t time.Time) string {
