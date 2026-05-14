@@ -90,8 +90,8 @@ type IssueCluster struct {
 	Issues []Issue `json:"issues"`
 }
 
-var holdSubstrings = []string{"hold", "on-hold", "hold/review", "do-not-merge"}
-var exemptPrefixes = []string{"LFX"}
+var holdSubstrings = []string{"hold", "on-hold", "hold/review"}
+var exemptPrefixes = []string{"LFX", "do-not-merge"}
 var exemptFiles = []string{"ADOPTERS.md", "ADOPTERS.MD"}
 
 const slaThresholdMinutes = 30
@@ -251,6 +251,10 @@ func (c *Client) fetchPRs(ctx context.Context, repo string) (actionable []PullRe
 				Title:  pr.GetTitle(),
 				Type:   "pr",
 			})
+			continue
+		}
+
+		if isExempt(labels) {
 			continue
 		}
 
