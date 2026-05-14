@@ -667,7 +667,7 @@ func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.C
 
 const (
 	nousGovernorDir = "/var/run/nous/governor"
-	nousSnapshotDir = "/var/run/nous/snapshots"
+	nousSnapshotDir = "/data/nous/snapshots"
 )
 
 func loadNousState(logger *slog.Logger) *dashboard.NousState {

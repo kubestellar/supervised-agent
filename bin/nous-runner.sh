@@ -6,6 +6,7 @@ set -euo pipefail
 NOUS_DIR="${NOUS_DIR:-/opt/nous}"
 NOUS_PYTHON="${NOUS_DIR}/venv/bin/python3"
 NOUS_RUN_DIR="${NOUS_RUN_DIR:-/var/run/nous}"
+NOUS_DATA_DIR="${NOUS_DATA_DIR:-/data/nous}"
 CAMPAIGN_PATH="${NOUS_CAMPAIGN_PATH:-/etc/hive/nous-campaign.yaml}"
 HIVE_METRICS_DIR="${HIVE_METRICS_DIR:-/var/run/hive-metrics}"
 GOV_STATE_DIR="${GOV_STATE_DIR:-/var/run/kick-governor}"
@@ -71,6 +72,7 @@ out_path = sys.argv[1]
 metrics_dir = os.environ.get("HIVE_METRICS_DIR", "/var/run/hive-metrics")
 gov_dir = os.environ.get("GOV_STATE_DIR", "/var/run/kick-governor")
 nous_dir = os.environ.get("NOUS_RUN_DIR", "/var/run/nous")
+nous_data = os.environ.get("NOUS_DATA_DIR", "/data/nous")
 
 def read_file(p):
     try:
@@ -94,7 +96,7 @@ def read_jsonl_tail(p, n=10):
     except Exception:
         return []
 
-snapshots_dir = os.path.join(nous_dir, "snapshots")
+snapshots_dir = os.path.join(nous_data, "snapshots")
 snapshot_files = sorted(glob.glob(os.path.join(snapshots_dir, "*.json")))[-20:]
 snapshots = []
 for sf in snapshot_files:
@@ -109,8 +111,8 @@ ctx = {
     "mttr": read_json(os.path.join(metrics_dir, "issue_to_merge.json")),
     "tokens": read_json(os.path.join(metrics_dir, "tokens.json")),
     "kick_outcomes": read_jsonl_tail(os.path.join(metrics_dir, "kick-outcomes.jsonl")),
-    "principles": read_json(os.path.join(nous_dir, "principles.json")) or [],
-    "ledger_recent": read_jsonl_tail(os.path.join(nous_dir, "ledger.jsonl")),
+    "principles": read_json(os.path.join(nous_data, "principles.json")) or [],
+    "ledger_recent": read_jsonl_tail(os.path.join(nous_data, "ledger.jsonl")),
     "recent_snapshots": snapshots,
 }
 
@@ -244,11 +246,12 @@ if [ "$EFFECTIVE_SCOPE" = "repo" ]; then
 fi
 
 python3 - "$EFFECTIVE_SCOPE" "$EFFECTIVE_MODE" <<'PYEOF'
-import json, sys, time
+import json, os, sys, time
 
 scope = sys.argv[1]
 mode = sys.argv[2]
-nous_dir = "/var/run/nous"
+nous_data = os.environ.get("NOUS_DATA_DIR", "/data/nous")
+os.makedirs(nous_data, exist_ok=True)
 entry = {
     "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     "scope": scope,
@@ -256,7 +259,7 @@ entry = {
     "type": "nous_kick",
 }
 try:
-    with open(f"{nous_dir}/ledger.jsonl", "a") as f:
+    with open(f"{nous_data}/ledger.jsonl", "a") as f:
         f.write(json.dumps(entry) + "\n")
 except Exception:
     pass
