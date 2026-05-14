@@ -871,13 +871,20 @@ func (s *Server) loadPromptTemplate(name string) string {
 }
 
 func (s *Server) loadAgentStats(name string) []any {
-	// Check for agent stats config file
 	statsFile := fmt.Sprintf("/data/agents/%s/stats.json", name)
-	if data, err := os.ReadFile(statsFile); err == nil {
-		var stats []any
-		if json.Unmarshal(data, &stats) == nil {
-			return stats
-		}
+	data, err := os.ReadFile(statsFile)
+	if err != nil {
+		return []any{}
+	}
+	var wrapper struct {
+		Stats []any `json:"stats"`
+	}
+	if json.Unmarshal(data, &wrapper) == nil && len(wrapper.Stats) > 0 {
+		return wrapper.Stats
+	}
+	var stats []any
+	if json.Unmarshal(data, &stats) == nil {
+		return stats
 	}
 	return []any{}
 }
