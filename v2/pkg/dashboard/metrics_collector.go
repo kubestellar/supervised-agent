@@ -19,6 +19,7 @@ const (
 	metricsCollectInterval = 5 * time.Minute
 	httpTimeout            = 10 * time.Second
 	metricsCacheFile       = "/data/metrics/agent-metrics-cache.json"
+	mttrCacheFile          = "/data/metrics/issue-to-merge.json"
 )
 
 type MetricsCollector struct {
@@ -31,6 +32,8 @@ type MetricsCollector struct {
 	logger      *slog.Logger
 	mu          sync.RWMutex
 	metrics     map[string]any
+	mttrMu      sync.RWMutex
+	mttr        *ghpkg.MTTRResult
 }
 
 func NewMetricsCollector(ghClient *ghpkg.Client, org, primaryRepo, badgeURL, aiAuthor, projectName string, logger *slog.Logger) *MetricsCollector {
@@ -48,6 +51,7 @@ func NewMetricsCollector(ghClient *ghpkg.Client, org, primaryRepo, badgeURL, aiA
 		logger.Warn("project.name is empty — outreach PR counts will be zero (set project.name in config)")
 	}
 	mc.loadFromDisk()
+	mc.loadMTTRFromDisk()
 	return mc
 }
 
@@ -75,6 +79,13 @@ func (mc *MetricsCollector) Get() map[string]any {
 	return result
 }
 
+// GetMTTR returns the latest MTTR result, or nil if no data is available.
+func (mc *MetricsCollector) GetMTTR() *ghpkg.MTTRResult {
+	mc.mttrMu.RLock()
+	defer mc.mttrMu.RUnlock()
+	return mc.mttr
+}
+
 func (mc *MetricsCollector) collect(ctx context.Context) {
 	metrics := make(map[string]any)
 
@@ -87,6 +98,8 @@ func (mc *MetricsCollector) collect(ctx context.Context) {
 	architect := mc.collectArchitect()
 	metrics["architect"] = architect
 
+	mc.collectMTTR(ctx)
+
 	mc.mu.Lock()
 	mc.metrics = metrics
 	mc.mu.Unlock()
@@ -95,6 +108,31 @@ func (mc *MetricsCollector) collect(ctx context.Context) {
 	mc.logger.Info("agent metrics collected",
 		"stars", outreach["stars"],
 		"coverage", reviewer["coverage"],
+	)
+}
+
+// collectMTTR computes issue-to-merge time from recently merged PRs with
+// "Fixes #N" references, persists the result to disk, and stores it in memory.
+func (mc *MetricsCollector) collectMTTR(ctx context.Context) {
+	if mc.ghClient == nil || mc.repo == "" {
+		return
+	}
+
+	result, err := mc.ghClient.ComputeMTTR(ctx, mc.repo)
+	if err != nil {
+		mc.logger.Warn("failed to compute MTTR", "error", err)
+		return
+	}
+
+	mc.mttrMu.Lock()
+	mc.mttr = result
+	mc.mttrMu.Unlock()
+
+	mc.saveMTTRToDisk(result)
+	mc.logger.Info("MTTR computed",
+		"avg_minutes", result.AvgMinutes,
+		"median_minutes", result.MedianMinutes,
+		"count", result.Count,
 	)
 }
 
@@ -276,4 +314,28 @@ func (mc *MetricsCollector) saveToDisk(metrics map[string]any) {
 	}
 	_ = os.MkdirAll("/data/metrics", 0o755)
 	_ = os.WriteFile(metricsCacheFile, data, 0o644)
+}
+
+func (mc *MetricsCollector) loadMTTRFromDisk() {
+	data, err := os.ReadFile(mttrCacheFile)
+	if err != nil {
+		return
+	}
+	var result ghpkg.MTTRResult
+	if json.Unmarshal(data, &result) == nil && result.Count > 0 {
+		mc.mttr = &result
+		mc.logger.Info("MTTR loaded from disk cache",
+			"median_minutes", result.MedianMinutes,
+			"count", result.Count,
+		)
+	}
+}
+
+func (mc *MetricsCollector) saveMTTRToDisk(result *ghpkg.MTTRResult) {
+	data, err := json.Marshal(result)
+	if err != nil {
+		return
+	}
+	_ = os.MkdirAll("/data/metrics", 0o755)
+	_ = os.WriteFile(mttrCacheFile, data, 0o644)
 }
