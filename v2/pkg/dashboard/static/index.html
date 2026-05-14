@@ -4277,7 +4277,7 @@ function burnAreaChart() {
       html += '</div>';
 
       // Search
-      html += `<input type="text" class="kb-search-box" placeholder="Search facts..." value="${escapeHtml(_kbSearchQuery)}" onkeyup="if(event.key==='Enter'){_kbSearchQuery=this.value;kbSearch()}" onchange="_kbSearchQuery=this.value">`;
+      html += `<input type="text" class="kb-search-box" placeholder="Search facts..." value="${escapeHtml(_kbSearchQuery)}" onkeyup="if(event.key==='Enter'){_kbSearchQuery=this.value;kbSearch()}" onchange="_kbSearchQuery=this.value" title="Search across all knowledge layers by keyword. Press Enter to search. Results are filtered by the selected layer and type.">`;
 
       // Type filter pills
       html += '<div class="kb-filter-row">';
