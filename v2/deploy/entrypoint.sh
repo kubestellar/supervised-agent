@@ -37,6 +37,15 @@ if [ -d /etc/hive/agents ] || [ -d /data/beads ]; then
   done
 fi
 
+# Ensure vault directories exist (the Go binary will seed content + start git sync)
+mkdir -p /data/vaults
+if [ -n "${HIVE_WIKI_GIT_URL:-}" ] && [ ! -d /data/vaults/hive-wiki/.git ]; then
+  echo "[entrypoint] Cloning wiki vault from ${HIVE_WIKI_GIT_URL}..."
+  git clone "${HIVE_WIKI_GIT_URL}" /data/vaults/hive-wiki 2>/dev/null || \
+    echo "[entrypoint] Git clone failed — vault will be initialized empty"
+fi
+mkdir -p /data/vaults/hive-wiki
+
 echo "[entrypoint] Starting Go binary on :${HIVE_API_PORT}"
 hive "$@" &
 HIVE_PID=$!

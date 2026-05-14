@@ -28,8 +28,17 @@ type KnowledgeConfig struct {
 	Enabled bool                `yaml:"enabled"`
 	Engine  string              `yaml:"engine"`
 	Layers  []KnowledgeLayer    `yaml:"layers"`
+	Vaults  []VaultConfig       `yaml:"vaults"`
 	Curator KnowledgeCurator    `yaml:"curator"`
 	Primer  KnowledgePrimer     `yaml:"primer"`
+}
+
+// VaultConfig describes a file-based Obsidian vault to auto-connect on startup.
+type VaultConfig struct {
+	Name      string `yaml:"name"`
+	Path      string `yaml:"path"`
+	AutoIndex bool   `yaml:"auto_index"`
+	GitSync   bool   `yaml:"git_sync"`
 }
 
 type KnowledgeLayer struct {

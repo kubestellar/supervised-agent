@@ -243,6 +243,41 @@ func main() {
 		}, logger)
 	}
 
+	// Auto-connect configured vaults and start git-sync for Obsidian Git integration
+	gitSyncer := knowledge.NewGitSyncer(logger)
+	const seedDataDir = "/opt/hive/seed-data/wiki"
+	for _, vc := range cfg.Knowledge.Vaults {
+		if err := knowledge.InitVaultRepo(vc.Path, logger); err != nil {
+			logger.Warn("failed to init vault directory", "name", vc.Name, "path", vc.Path, "error", err)
+			continue
+		}
+		if err := knowledge.SeedVaultContent(vc.Path, seedDataDir, logger); err != nil {
+			logger.Warn("failed to seed vault content", "name", vc.Name, "error", err)
+		}
+		if knowledgeAPI != nil {
+			if err := knowledgeAPI.ConnectVault(vc.Path, vc.Name); err != nil {
+				logger.Warn("failed to connect vault", "name", vc.Name, "path", vc.Path, "error", err)
+				continue
+			}
+			logger.Info("vault auto-connected", "name", vc.Name, "path", vc.Path, "auto_index", vc.AutoIndex)
+		}
+		if vc.GitSync {
+			// Find the store we just connected so the syncer can trigger reindex
+			for _, vi := range knowledgeAPI.Vaults() {
+				if vi.Name == vc.Name {
+					// Re-fetch the FileStore by connecting info — the syncer needs it
+					// to call Reindex() after each pull
+					store := knowledgeAPI.GetVaultStore(vc.Path)
+					if store != nil {
+						gitSyncer.Add(vc.Name, vc.Path, store)
+					}
+					break
+				}
+			}
+		}
+	}
+	go gitSyncer.Start(ctx)
+
 	os.MkdirAll(nousSnapshotDir, 0o755)
 	os.MkdirAll(nousGovernorDir, 0o755)
 	nousState := loadNousState(logger)

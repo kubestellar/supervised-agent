@@ -204,6 +204,15 @@ notifications:
     server: ${NTFY_SERVER}
     topic: ${NTFY_TOPIC}
 
+knowledge:
+  enabled: true
+  engine: llm-wiki
+  vaults:
+    - name: hive-wiki
+      path: /data/vaults/hive-wiki
+      auto_index: true
+      git_sync: true
+
 dashboard:
   port: 3001
   snapshot_dir: /data/snapshots
