@@ -1783,7 +1783,7 @@ func (s *Server) handleKnowledgeDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleKnowledgePromote(w http.ResponseWriter, r *http.Request) {
-	if s.deps.Knowledge == nil {
+	if !s.ensureKnowledge() {
 		jsonError(w, "knowledge not enabled", http.StatusServiceUnavailable)
 		return
 	}
@@ -1804,7 +1804,33 @@ func (s *Server) handleKnowledgePromote(w http.ResponseWriter, r *http.Request) 
 
 	result := s.deps.Knowledge.PromoteFact(s.deps.Ctx, req)
 	if !result.Success {
-		jsonError(w, result.Error, http.StatusBadRequest)
+		fact, err := s.deps.Knowledge.VaultFact(req.Slug)
+		if err != nil || fact == nil {
+			jsonError(w, result.Error, http.StatusBadRequest)
+			return
+		}
+		syncReq := knowledge.ObsidianSyncRequest{
+			Filename: req.Slug + ".md",
+			Content:  fact.Body,
+		}
+		syncReq.Frontmatter = map[string]interface{}{
+			"title":      fact.Title,
+			"type":       string(fact.Type),
+			"layer":      string(req.ToLayer),
+			"confidence": fact.Confidence,
+			"tags":       fact.Tags,
+		}
+		syncResult, syncErr := s.deps.Knowledge.ObsidianSync(s.deps.Ctx, syncReq)
+		if syncErr != nil {
+			jsonError(w, syncErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		jsonResponse(w, knowledge.PromoteResult{
+			Slug:      syncResult.Slug,
+			FromLayer: req.FromLayer,
+			ToLayer:   req.ToLayer,
+			Success:   true,
+		})
 		return
 	}
 	jsonResponse(w, result)
