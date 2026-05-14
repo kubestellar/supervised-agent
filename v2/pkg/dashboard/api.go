@@ -712,18 +712,8 @@ func (s *Server) handleAgentConfigGet(w http.ResponseWriter, r *http.Request) {
 	// Read stat sources from config
 	stats := s.loadAgentStats(name)
 
-	// Default pipeline — all steps enabled (matches old hive behavior)
-	pipeline := map[string]bool{
-		"resolve-beads":  true,
-		"track-prs":      true,
-		"stale-check":    true,
-		"repo-scan":      true,
-		"coverage-gate":  true,
-		"prompt-compose": true,
-		"budget-check":   true,
-		"api-collect":    true,
-		"final-compose":  true,
-	}
+	pipeline := s.getAgentPipeline(name)
+	hooks := s.getAgentHooks(name)
 
 	jsonResponse(w, map[string]interface{}{
 		"general": map[string]interface{}{
@@ -739,7 +729,7 @@ func (s *Server) handleAgentConfigGet(w http.ResponseWriter, r *http.Request) {
 		"cadences": cadences,
 		"models":   models,
 		"pipeline": pipeline,
-		"hooks":    map[string]interface{}{"preKick": []any{}, "postIdle": []any{}},
+		"hooks":    hooks,
 		"restrictions":   restrictions,
 		"stats":          stats,
 		"prompt":         lastPrompt,
@@ -922,7 +912,36 @@ func (s *Server) handleAgentConfigGeneral(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleAgentConfigCadences(w http.ResponseWriter, r *http.Request) {
-	s.handleConfigStub(w, r, "cadences")
+	name := r.PathValue("name")
+	if _, ok := s.deps.Config.Agents[name]; !ok {
+		jsonError(w, "agent not found", http.StatusNotFound)
+		return
+	}
+
+	var body map[string]int64
+	if err := decodeBody(r, &body); err != nil {
+		jsonError(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	for modeName, seconds := range body {
+		mode, ok := s.deps.Config.Governor.Modes[modeName]
+		if !ok {
+			continue
+		}
+		if mode.Cadences == nil {
+			mode.Cadences = make(map[string]string)
+		}
+		if seconds <= 0 {
+			mode.Cadences[name] = "pause"
+		} else {
+			mode.Cadences[name] = formatCadenceDuration(seconds)
+		}
+		s.deps.Config.Governor.Modes[modeName] = mode
+	}
+
+	s.refreshAndPersist()
+	okResponse(w, map[string]string{"status": "updated", "agent": name})
 }
 
 func (s *Server) handleAgentConfigModels(w http.ResponseWriter, r *http.Request) {
@@ -954,19 +973,104 @@ func (s *Server) handleAgentConfigModels(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleAgentConfigPipeline(w http.ResponseWriter, r *http.Request) {
-	s.handleConfigStub(w, r, "pipeline")
+	name := r.PathValue("name")
+	if _, ok := s.deps.Config.Agents[name]; !ok {
+		jsonError(w, "agent not found", http.StatusNotFound)
+		return
+	}
+
+	var body map[string]bool
+	if err := decodeBody(r, &body); err != nil {
+		jsonError(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	s.pipelineMu.Lock()
+	s.agentPipelines[name] = body
+	s.pipelineMu.Unlock()
+
+	s.refreshAndPersist()
+	okResponse(w, map[string]string{"status": "updated", "agent": name})
 }
 
 func (s *Server) handleAgentConfigHooks(w http.ResponseWriter, r *http.Request) {
-	s.handleConfigStub(w, r, "hooks")
+	name := r.PathValue("name")
+	if _, ok := s.deps.Config.Agents[name]; !ok {
+		jsonError(w, "agent not found", http.StatusNotFound)
+		return
+	}
+
+	var body map[string][]any
+	if err := decodeBody(r, &body); err != nil {
+		jsonError(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	s.hooksMu.Lock()
+	s.agentHooks[name] = body
+	s.hooksMu.Unlock()
+
+	s.refreshAndPersist()
+	okResponse(w, map[string]string{"status": "updated", "agent": name})
 }
 
 func (s *Server) handleAgentConfigRestrictions(w http.ResponseWriter, r *http.Request) {
-	s.handleConfigStub(w, r, "restrictions")
+	name := r.PathValue("name")
+	if _, ok := s.deps.Config.Agents[name]; !ok {
+		jsonError(w, "agent not found", http.StatusNotFound)
+		return
+	}
+
+	var body struct {
+		Agent []restriction `json:"agent"`
+	}
+	if err := decodeBody(r, &body); err != nil {
+		jsonError(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	restFile := fmt.Sprintf("/data/agents/%s/restrictions.conf", name)
+	_ = os.MkdirAll(fmt.Sprintf("/data/agents/%s", name), 0o755)
+
+	var lines []string
+	for _, r := range body.Agent {
+		line := r.Pattern
+		if r.Reason != "" {
+			line += "|" + r.Reason
+		}
+		lines = append(lines, line)
+	}
+	_ = os.WriteFile(restFile, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
+
+	s.refreshAndPersist()
+	okResponse(w, map[string]string{"status": "updated", "agent": name})
 }
 
 func (s *Server) handleAgentConfigStats(w http.ResponseWriter, r *http.Request) {
-	s.handleConfigStub(w, r, "stats")
+	name := r.PathValue("name")
+	if _, ok := s.deps.Config.Agents[name]; !ok {
+		jsonError(w, "agent not found", http.StatusNotFound)
+		return
+	}
+
+	var body struct {
+		Stats []any `json:"stats"`
+	}
+	if err := decodeBody(r, &body); err != nil {
+		jsonError(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	statsFile := fmt.Sprintf("/data/agents/%s/stats.json", name)
+	_ = os.MkdirAll(fmt.Sprintf("/data/agents/%s", name), 0o755)
+
+	data, err := json.Marshal(body)
+	if err == nil {
+		_ = os.WriteFile(statsFile, data, 0o644)
+	}
+
+	s.refreshAndPersist()
+	okResponse(w, map[string]string{"status": "updated", "agent": name})
 }
 
 func (s *Server) handleAgentPrompt(w http.ResponseWriter, r *http.Request) {
@@ -1686,7 +1790,29 @@ func (s *Server) handleNousPhase(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNousGateDecision(w http.ResponseWriter, r *http.Request) {
-	s.handleConfigStub(w, r, "gate-decision")
+	if s.deps.Nous == nil {
+		jsonError(w, "nous not configured", http.StatusNotFound)
+		return
+	}
+
+	var body struct {
+		Decision string `json:"decision"`
+		Reason   string `json:"reason"`
+	}
+	if err := decodeBody(r, &body); err != nil || body.Decision == "" {
+		jsonError(w, "decision is required", http.StatusBadRequest)
+		return
+	}
+
+	if s.deps.Nous.GatePending == nil {
+		s.deps.Nous.GatePending = make(map[string]interface{})
+	}
+	s.deps.Nous.GateResponse = map[string]interface{}{
+		"decision": body.Decision,
+		"reason":   body.Reason,
+	}
+
+	okResponse(w, map[string]string{"status": "decided", "decision": body.Decision})
 }
 
 func (s *Server) handleNousGatePending(w http.ResponseWriter, r *http.Request) {
@@ -1791,6 +1917,40 @@ func (s *Server) handleNousConfigSection(w http.ResponseWriter, r *http.Request,
 	s.deps.Nous.Config[section] = body
 
 	okResponse(w, map[string]string{"status": "updated", "section": section})
+}
+
+var defaultPipelineSteps = map[string]bool{
+	"resolve-beads":  true,
+	"track-prs":      true,
+	"stale-check":    true,
+	"repo-scan":      true,
+	"coverage-gate":  true,
+	"prompt-compose": true,
+	"budget-check":   true,
+	"api-collect":    true,
+	"final-compose":  true,
+}
+
+func (s *Server) getAgentPipeline(name string) map[string]bool {
+	s.pipelineMu.RLock()
+	defer s.pipelineMu.RUnlock()
+	if p, ok := s.agentPipelines[name]; ok {
+		return p
+	}
+	result := make(map[string]bool, len(defaultPipelineSteps))
+	for k, v := range defaultPipelineSteps {
+		result[k] = v
+	}
+	return result
+}
+
+func (s *Server) getAgentHooks(name string) map[string][]any {
+	s.hooksMu.RLock()
+	defer s.hooksMu.RUnlock()
+	if h, ok := s.agentHooks[name]; ok {
+		return h
+	}
+	return map[string][]any{"preKick": {}, "postIdle": {}}
 }
 
 func (s *Server) handleConfigStub(w http.ResponseWriter, r *http.Request, section string) {

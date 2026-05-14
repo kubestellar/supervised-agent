@@ -28,6 +28,11 @@ type Server struct {
 	deps       *Dependencies
 	sidebar    interface{}
 	sidebarMu  sync.RWMutex
+
+	agentPipelines map[string]map[string]bool
+	agentHooks     map[string]map[string][]any
+	pipelineMu     sync.RWMutex
+	hooksMu        sync.RWMutex
 }
 
 // StatusPayload matches the JSON contract the dashboard frontend render() expects.
@@ -162,10 +167,12 @@ const sseRetryMs = 3000
 
 func NewServer(port int, logger *slog.Logger) *Server {
 	s := &Server{
-		port:       port,
-		sseClients: make(map[chan []byte]struct{}),
-		logger:     logger,
-		mux:        http.NewServeMux(),
+		port:           port,
+		sseClients:     make(map[chan []byte]struct{}),
+		logger:         logger,
+		mux:            http.NewServeMux(),
+		agentPipelines: make(map[string]map[string]bool),
+		agentHooks:     make(map[string]map[string][]any),
 	}
 	s.registerCoreRoutes()
 	return s
@@ -173,11 +180,13 @@ func NewServer(port int, logger *slog.Logger) *Server {
 
 func NewServerWithAuth(port int, authToken string, logger *slog.Logger) *Server {
 	s := &Server{
-		port:       port,
-		authToken:  authToken,
-		sseClients: make(map[chan []byte]struct{}),
-		logger:     logger,
-		mux:        http.NewServeMux(),
+		port:           port,
+		authToken:      authToken,
+		sseClients:     make(map[chan []byte]struct{}),
+		logger:         logger,
+		mux:            http.NewServeMux(),
+		agentPipelines: make(map[string]map[string]bool),
+		agentHooks:     make(map[string]map[string][]any),
 	}
 	s.registerCoreRoutes()
 	return s

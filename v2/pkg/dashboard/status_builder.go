@@ -204,6 +204,18 @@ func parseCadenceDuration(cadence string) time.Duration {
 	return 0
 }
 
+func formatCadenceDuration(seconds int64) string {
+	const secondsPerHour = 3600
+	const secondsPerMinute = 60
+	if seconds%secondsPerHour == 0 {
+		return fmt.Sprintf("%dh", seconds/secondsPerHour)
+	}
+	if seconds%secondsPerMinute == 0 {
+		return fmt.Sprintf("%dm", seconds/secondsPerMinute)
+	}
+	return fmt.Sprintf("%ds", seconds)
+}
+
 func lookupCadence(agentName string, cfg *config.Config) string {
 	return lookupCadenceForMode(agentName, "idle", cfg)
 }
