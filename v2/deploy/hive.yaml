@@ -4,6 +4,7 @@
 
 project:
   org: kubestellar
+  name: KubeStellar
   repos:
     - console
     - docs

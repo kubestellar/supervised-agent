@@ -424,8 +424,7 @@ func (c *Client) GetFileContent(ctx context.Context, owner, repo, path string) (
 	return content, nil
 }
 
-// SearchPRCount searches GitHub for outreach PRs by author on repos outside the org.
-// Filters to outreach-related PRs (awesome-lists, adopters, install missions).
+// SearchPRCount searches GitHub for PRs by author within an org.
 // state is "open" or "merged".
 func (c *Client) SearchPRCount(ctx context.Context, author, org, state string) (int, error) {
 	qualifier := fmt.Sprintf("type:pr author:%s org:%s", author, org)
@@ -440,6 +439,32 @@ func (c *Client) SearchPRCount(ctx context.Context, author, org, state string) (
 	})
 	if err != nil {
 		return 0, fmt.Errorf("searching PRs: %w", err)
+	}
+	return result.GetTotal(), nil
+}
+
+// SearchOutreachPRCount searches GitHub for outreach PRs by author on repos
+// OUTSIDE the org. These are PRs with the project name in the title, authored
+// by the AI author, on external repos (e.g., awesome-lists, adopters, install missions).
+// state is "open" or "merged".
+func (c *Client) SearchOutreachPRCount(ctx context.Context, author, org, projectName, state string) (int, error) {
+	// Match the old hive query: author:X type:pr is:STATE "ProjectName" in:title -org:ORG
+	// The -org: prefix excludes PRs within the org, showing only external outreach PRs.
+	qualifier := fmt.Sprintf("type:pr author:%s -org:%s", author, org)
+	if projectName != "" {
+		qualifier += fmt.Sprintf(" \"%s\" in:title", projectName)
+	}
+	if state == "merged" {
+		qualifier += " is:merged"
+	} else {
+		qualifier += " is:open"
+	}
+
+	result, _, err := c.client.Search.Issues(ctx, qualifier, &gh.SearchOptions{
+		ListOptions: gh.ListOptions{PerPage: 1},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("searching outreach PRs: %w", err)
 	}
 	return result.GetTotal(), nil
 }

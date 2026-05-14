@@ -52,6 +52,7 @@ type KnowledgePrimer struct {
 
 type ProjectConfig struct {
 	Org         string   `yaml:"org"`
+	Name        string   `yaml:"name"`
 	Repos       []string `yaml:"repos"`
 	AIAuthor    string   `yaml:"ai_author"`
 	PrimaryRepo string   `yaml:"primary_repo"`

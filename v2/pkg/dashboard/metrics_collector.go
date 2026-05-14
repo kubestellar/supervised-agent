@@ -22,25 +22,27 @@ const (
 )
 
 type MetricsCollector struct {
-	ghClient *ghpkg.Client
-	org      string
-	repo     string
-	badgeURL string
-	aiAuthor string
-	logger   *slog.Logger
-	mu       sync.RWMutex
-	metrics  map[string]any
+	ghClient    *ghpkg.Client
+	org         string
+	repo        string
+	badgeURL    string
+	aiAuthor    string
+	projectName string
+	logger      *slog.Logger
+	mu          sync.RWMutex
+	metrics     map[string]any
 }
 
-func NewMetricsCollector(ghClient *ghpkg.Client, org, primaryRepo, badgeURL, aiAuthor string, logger *slog.Logger) *MetricsCollector {
+func NewMetricsCollector(ghClient *ghpkg.Client, org, primaryRepo, badgeURL, aiAuthor, projectName string, logger *slog.Logger) *MetricsCollector {
 	mc := &MetricsCollector{
-		ghClient: ghClient,
-		org:      org,
-		repo:     primaryRepo,
-		badgeURL: badgeURL,
-		aiAuthor: aiAuthor,
-		logger:   logger,
-		metrics:  make(map[string]any),
+		ghClient:    ghClient,
+		org:         org,
+		repo:        primaryRepo,
+		badgeURL:    badgeURL,
+		aiAuthor:    aiAuthor,
+		projectName: projectName,
+		logger:      logger,
+		metrics:     make(map[string]any),
 	}
 	mc.loadFromDisk()
 	return mc
@@ -200,18 +202,36 @@ func (mc *MetricsCollector) countAdopters(ctx context.Context, owner, repo strin
 	return count
 }
 
+// countACMM counts ACMM badge participants by reading the leaderboard page source
+// from the docs repo (kubestellar/docs). It looks for entries in the
+// BADGE_PARTICIPANTS Set definition in acmm-leaderboard/page.tsx.
 func (mc *MetricsCollector) countACMM(ctx context.Context, owner, repo string) int {
-	content, err := mc.ghClient.GetFileContent(ctx, owner, repo, "ADOPTERS.MD")
+	// ACMM leaderboard lives in the docs repo, not the primary repo
+	const acmmLeaderboardPath = "src/app/[locale]/acmm-leaderboard/page.tsx"
+	content, err := mc.ghClient.GetFileContent(ctx, owner, "docs", acmmLeaderboardPath)
 	if err != nil {
-		content, err = mc.ghClient.GetFileContent(ctx, owner, repo, "ADOPTERS.md")
-		if err != nil {
-			return 0
-		}
+		mc.logger.Warn("failed to fetch ACMM leaderboard page", "error", err)
+		return 0
 	}
+
+	// Find the BADGE_PARTICIPANTS = new Set([...]) block and count quoted entries
+	inSet := false
 	count := 0
 	for _, line := range strings.Split(content, "\n") {
-		if strings.Contains(line, "acmm") || strings.Contains(line, "ACMM") {
-			count++
+		if strings.Contains(line, "BADGE_PARTICIPANTS") && strings.Contains(line, "new Set") {
+			inSet = true
+			continue
+		}
+		if inSet {
+			trimmed := strings.TrimSpace(line)
+			// End of the Set definition
+			if strings.Contains(trimmed, "])") || strings.Contains(trimmed, "]);") {
+				break
+			}
+			// Count lines that start with a quoted string (project name entries)
+			if strings.HasPrefix(trimmed, "\"") && len(trimmed) > 1 {
+				count++
+			}
 		}
 	}
 	return count
@@ -222,12 +242,12 @@ func (mc *MetricsCollector) countOutreachPRs(ctx context.Context) (open, merged 
 		return 0, 0
 	}
 
-	openCount, err := mc.ghClient.SearchPRCount(ctx, mc.aiAuthor, mc.org, "open")
+	openCount, err := mc.ghClient.SearchOutreachPRCount(ctx, mc.aiAuthor, mc.org, mc.projectName, "open")
 	if err != nil {
 		mc.logger.Warn("failed to count open outreach PRs", "error", err)
 	}
 
-	mergedCount, err := mc.ghClient.SearchPRCount(ctx, mc.aiAuthor, mc.org, "merged")
+	mergedCount, err := mc.ghClient.SearchOutreachPRCount(ctx, mc.aiAuthor, mc.org, mc.projectName, "merged")
 	if err != nil {
 		mc.logger.Warn("failed to count merged outreach PRs", "error", err)
 	}
