@@ -232,6 +232,8 @@ func main() {
 		}, logger)
 	}
 
+	nousState := loadNousState(logger)
+
 	dashSrv.RegisterAPI(&dashboard.Dependencies{
 		Config:           cfg,
 		AgentMgr:         agentMgr,
@@ -239,6 +241,7 @@ func main() {
 		GHClient:         ghClient,
 		Tokens:           tokenCollector,
 		Knowledge:        knowledgeAPI,
+		Nous:             nousState,
 		MetricsCollector: metricsCollector,
 		Logger:           logger,
 		Ctx:              ctx,
@@ -455,5 +458,96 @@ func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.C
 		if err == nil {
 			_ = os.WriteFile("/data/mode-history.json", modeData, 0o644)
 		}
+	}
+}
+
+const (
+	nousGovernorDir = "/var/run/nous/governor"
+	nousSnapshotDir = "/var/run/nous/snapshots"
+)
+
+func loadNousState(logger *slog.Logger) *dashboard.NousState {
+	state := &dashboard.NousState{
+		Mode:   "observe",
+		Scope:  "governor",
+		Phase:  "collecting",
+		Status: make(map[string]interface{}),
+		Config: make(map[string]interface{}),
+	}
+
+	if ledgerData, err := os.ReadFile(nousGovernorDir + "/ledger.json"); err == nil {
+		var ledger struct {
+			Iterations []map[string]interface{} `json:"iterations"`
+		}
+		if err := json.Unmarshal(ledgerData, &ledger); err == nil {
+			state.Ledger = ledger.Iterations
+			logger.Info("nous ledger loaded", "iterations", len(state.Ledger))
+		}
+	}
+
+	if principlesData, err := os.ReadFile(nousGovernorDir + "/principles.json"); err == nil {
+		var pFile struct {
+			Principles []json.RawMessage `json:"principles"`
+		}
+		if err := json.Unmarshal(principlesData, &pFile); err == nil {
+			for _, raw := range pFile.Principles {
+				var p map[string]interface{}
+				if json.Unmarshal(raw, &p) == nil {
+					state.Principles = append(state.Principles, dashboard.NousPrinciple{
+						ID:         stringFromMap(p, "id"),
+						Text:       stringFromMap(p, "statement"),
+						Confidence: confidenceToFloat(stringFromMap(p, "confidence")),
+						Source:     stringFromMap(p, "category"),
+					})
+				}
+			}
+			logger.Info("nous principles loaded", "count", len(state.Principles))
+		}
+	}
+
+	snapshotCount := 0
+	if entries, err := os.ReadDir(nousSnapshotDir); err == nil {
+		snapshotCount = len(entries)
+	}
+
+	iterationCount := len(state.Ledger)
+	if iterationCount > 0 {
+		state.Phase = "observing"
+	}
+
+	state.Status = map[string]interface{}{
+		"status":          "active",
+		"mode":            state.Mode,
+		"scope":           state.Scope,
+		"phase":           state.Phase,
+		"snapshots":       snapshotCount,
+		"iterations":      iterationCount,
+		"principles":      len(state.Principles),
+		"baseline_target": 672,
+		"baseline_pct":    float64(snapshotCount) * 100 / 672,
+	}
+
+	return state
+}
+
+func stringFromMap(m map[string]interface{}, key string) string {
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func confidenceToFloat(s string) float64 {
+	switch s {
+	case "high":
+		return 0.9
+	case "medium":
+		return 0.7
+	case "low":
+		return 0.4
+	default:
+		return 0.5
 	}
 }
