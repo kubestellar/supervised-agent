@@ -5,7 +5,7 @@ AI agent orchestrator for GitHub repositories. A single Go binary that enumerate
 ## Quick Start (Docker)
 
 ```bash
-git clone https://github.com/kubestellar/hive.git
+git clone -b v2 https://github.com/kubestellar/hive.git
 cd hive/v2
 
 cp hive.yaml.example hive.yaml
