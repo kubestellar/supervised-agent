@@ -2303,6 +2303,7 @@ func (s *Server) handleNousConfigSection(w http.ResponseWriter, r *http.Request,
 	}
 	s.deps.Nous.Config[section] = body
 
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated", "section": section})
 }
 
