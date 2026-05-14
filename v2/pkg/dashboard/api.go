@@ -2077,7 +2077,7 @@ func (s *Server) handleHiveIDSet(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("failed to persist hive ID", "error", err)
 	}
 
-	s.refreshAfterMutation()
+	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated", "id": body.ID})
 }
 

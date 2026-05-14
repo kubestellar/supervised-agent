@@ -6130,7 +6130,7 @@ function burnAreaChart() {
         <div class="config-field">
           <label>Hive ID <span class="config-info">i<span class="config-tooltip">Unique identifier for this hive instance. Stamped into beads and available as \${HIVE_ID} in agent CLAUDE.md templates. Persists across container restarts.</span></span></label>
           <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="cfg-hive-id" value="${esc(currentId)}" placeholder="hive-xxxxxxxx" style="flex:1">
+            <input type="text" id="cfg-hive-id" value="${esc(currentId)}" placeholder="hive-xxxxxxxx" style="flex:1" oninput="markDirty('general','hiveId',this.value)">
             <button onclick="saveHiveId()" style="font-size:0.75rem;padding:6px 14px;background:var(--green);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">Save</button>
           </div>
           <span style="font-size:0.65rem;color:var(--muted);margin-top:4px;display:block">Format: hive-adjective-noun (e.g. hive-bold-hawk). Changes take effect immediately.</span>
@@ -6685,12 +6685,22 @@ function burnAreaChart() {
       let success = true;
       for (const [section, values] of Object.entries(dirty)) {
         try {
-          const res = await fetch(`${base}/${section}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(values)
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          // Governor "General" tab stores hive-id via its own endpoint
+          if (_configState.type === 'governor' && section === 'general' && values.hiveId !== undefined) {
+            const idRes = await fetch('/api/hive-id', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: values.hiveId })
+            });
+            if (!idRes.ok) throw new Error('HTTP ' + idRes.status);
+          } else {
+            const res = await fetch(`${base}/${section}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(values)
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          }
         } catch (err) {
           showToast(`Failed to save ${section}: ${err.message}`, 'error');
           success = false;
