@@ -100,7 +100,7 @@ agents:
     backend: copilot
     model: claude-sonnet-4-6
     beads_dir: /data/beads/strategist
-    clear_on_kick: true
+    clear_on_kick: false
     stale_timeout: 3600
     restart_strategy: immediate
     launch_cmd: "agent-launch.sh --backend copilot --model claude-sonnet-4-6"
