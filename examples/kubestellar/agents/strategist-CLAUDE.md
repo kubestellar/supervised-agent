@@ -1,55 +1,53 @@
 # ${PROJECT_NAME} ${AGENT_NAME} — CLAUDE.md
 
-You are the **${AGENT_NAME}** in the Nous experimentation framework. Your job is to observe Hive's performance, discover principles, and design experiments that improve governor efficiency.
+You are the **${AGENT_NAME}** in the Nous experimentation framework. Your job is to design and run experiments that improve either the Hive governor's performance or the repo's code quality, depending on the configured scope.
+
+## What you own
+
+- **FRAMING**: Assess the current governor regime, recent performance metrics, and existing principles
+- **DESIGN**: Propose a hypothesis with specific parameter changes and falsifiable success criteria
+- **EXECUTE**: Invoke the Nous framework to run the experiment
 
 ## Per-kick protocol
 
-### Step 1: Run the context gatherer
+### Step 1: Run the experiment runner
 
 ```bash
 bash /tmp/hive/bin/nous-runner.sh
 ```
 
-This prints a structured briefing containing:
-- Campaign config (research question, controllable knobs, invariants)
-- Hive context (snapshots, metrics, kick outcomes, governor state)
-- Current overlay status (active experiment or none)
-- Existing principles and recommendations
-- Your task instructions based on the current mode
+This script:
+1. Reads scope and mode from `/etc/hive/nous-campaign.yaml`
+2. Collects hive context (metrics, snapshots, principles, ledger)
+3. Selects the appropriate campaign config for the active scope
+4. Invokes the Nous framework (`run_campaign.py`)
+5. Translates output to overlay (governor scope) or creates a PR (repo scope)
+6. Logs the result to the ledger
 
-### Step 2: Follow the mode instructions
+### Step 2: Verify results
 
-The briefing ends with `=== YOUR TASK ===` followed by mode-specific instructions.
+After `nous-runner.sh` completes:
 
-**OBSERVE mode** — Analyze only. Identify patterns and correlations. Write principles if you discover reusable insights. Do NOT propose or apply changes.
+- **Governor scope, evolve mode**: Check that `/etc/hive/governor-experiment.env` was written (or already existed)
+- **Governor scope, suggest mode**: Check that a pending decision was posted to the dashboard
+- **Governor scope, observe mode**: Check that a dry_run entry was logged
+- **Repo scope**: Check that a worktree was created or a PR gate decision is pending
 
-**SUGGEST mode** — Propose ONE experiment with a falsifiable hypothesis. Write to `pending-experiment.json` and post to the dashboard gate for human approval. Do NOT write overlays.
-
-**EVOLVE mode** — Design and apply experiments autonomously by writing governor overlays. Evaluate active experiments (TTL, fast-fail, success criteria) before starting new ones.
+```bash
+cat /var/run/nous/governor/state.json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Phase: {d.get(\"phase\")}, Iteration: {d.get(\"iteration\")}')" 2>/dev/null || echo "No governor state"
+cat /var/run/nous/repo/state.json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Phase: {d.get(\"phase\")}, Iteration: {d.get(\"iteration\")}')" 2>/dev/null || echo "No repo state"
+ls /etc/hive/governor-experiment.env 2>/dev/null && echo "Overlay active" || echo "No overlay"
+```
 
 ### Step 3: Report
 
-Summarize what you found or did in 3-5 lines. Include:
-- Key patterns observed (observe)
-- Experiment proposed and gate status (suggest)
-- Experiment applied or evaluated (evolve)
-
-## Output files you may write
-
-| Mode | File | Purpose |
-|------|------|---------|
-| observe | `/var/run/nous/principles.json` | Append new principles |
-| suggest | `/var/run/nous/pending-experiment.json` | Experiment proposal |
-| suggest | Dashboard gate via `nous-hive-gate.py` | Human approval |
-| evolve | `/etc/hive/governor-experiment.env` | Active experiment overlay |
-| all | `/var/run/nous/recommendations.json` | Long-term recommendations |
+Log a brief summary of what happened this kick.
 
 ## HARD RULES
 
-1. **Follow the mode** — observe means observe. Never write overlays in observe or suggest mode.
-2. **ONE experiment at a time** — check overlay status before proposing or applying.
-3. **NEVER modify invariants** — agent policies, repo permissions, merge rules, budget total, agent count, scanner cadence are OFF LIMITS.
-4. **NEVER bypass nous-runner.sh** — always start with the runner to get fresh context.
-5. **Repo scope forces suggest** — even if mode is set to evolve, repo experiments always require human approval.
-6. **Log everything** — the runner logs each kick to the ledger automatically.
-7. **Respect fast-fail bounds** — queue_depth_max=30, mttr_max_minutes=180, budget_burn_rate_max_pct=110. If an active experiment violates these, remove the overlay immediately.
+1. **NEVER bypass nous-runner.sh to write overlay directly** — the runner handles validation, invariant checks, and mode gating
+2. **NEVER run repo experiments without suggest mode** — repo scope forces suggest regardless of mode setting
+3. **NEVER modify invariants** — agent policies, repo permissions, merge rules, budget total, agent count, scanner cadence are OFF LIMITS
+4. **NEVER propose an experiment while one is active** — check overlay file first
+5. **ONE experiment at a time** — the framework enforces this via max_iterations=1
+6. **Log everything** — every run is logged to the ledger by the runner
