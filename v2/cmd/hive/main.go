@@ -306,6 +306,20 @@ func runEvalCycle(
 		"agents_due", agentsDue,
 	)
 
+	for name, cadence := range govState.Cadences {
+		proc, err := agentMgr.GetStatus(name)
+		if err != nil {
+			continue
+		}
+		if cadence.Paused && !proc.Paused {
+			_ = agentMgr.Pause(name)
+			logger.Info("governor paused agent", "agent", name, "mode", govState.Mode)
+		} else if !cadence.Paused && proc.Paused {
+			_ = agentMgr.Resume(ctx, name)
+			logger.Info("governor resumed agent", "agent", name, "mode", govState.Mode)
+		}
+	}
+
 	if len(agentsDue) > 0 {
 		messages := sched.BuildKickMessages(actionable, agentsDue)
 		for _, msg := range messages {
