@@ -13,17 +13,18 @@ import (
 )
 
 type Dependencies struct {
-	Config      *config.Config
-	AgentMgr    *agent.Manager
-	Governor    *governor.Governor
-	GHClient    *ghpkg.Client
-	Tokens      *tokens.Collector
-	Knowledge   *knowledge.KnowledgeAPI
-	Nous        *NousState
-	Logger      *slog.Logger
-	Ctx         context.Context
-	RefreshFunc func()
-	PersistFunc func()
+	Config           *config.Config
+	AgentMgr         *agent.Manager
+	Governor         *governor.Governor
+	GHClient         *ghpkg.Client
+	Tokens           *tokens.Collector
+	Knowledge        *knowledge.KnowledgeAPI
+	Nous             *NousState
+	MetricsCollector *MetricsCollector
+	Logger           *slog.Logger
+	Ctx              context.Context
+	RefreshFunc      func()
+	PersistFunc      func()
 }
 
 type NousState struct {

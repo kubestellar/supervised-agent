@@ -159,6 +159,17 @@ func main() {
 	go tokenCollector.Start(tokenStop)
 	defer close(tokenStop)
 
+	badgeURL := os.Getenv("HIVE_COVERAGE_BADGE_URL")
+	if badgeURL == "" {
+		badgeURL = "https://gist.githubusercontent.com/clubanderson/b9a9ae8469f1897a22d5a40629bc1e82/raw/coverage-badge.json"
+	}
+		primaryRepo := cfg.Project.PrimaryRepo
+	if primaryRepo == "" && len(cfg.Project.Repos) > 0 {
+		primaryRepo = cfg.Project.Repos[0]
+	}
+	metricsCollector := dashboard.NewMetricsCollector(ghClient, cfg.Project.Org, primaryRepo, badgeURL, logger)
+	go metricsCollector.Start(ctx)
+
 	var lastActionable atomic.Pointer[github.ActionableResult]
 	refreshDashboard := func() {
 		actionable := lastActionable.Load()
@@ -174,6 +185,7 @@ func main() {
 			beadStores,
 			ghClient,
 			ctx,
+			metricsCollector,
 		))
 	}
 
@@ -187,15 +199,16 @@ func main() {
 	}
 
 	dashSrv.RegisterAPI(&dashboard.Dependencies{
-		Config:      cfg,
-		AgentMgr:    agentMgr,
-		Governor:    gov,
-		GHClient:    ghClient,
-		Tokens:      tokenCollector,
-		Knowledge:   knowledgeAPI,
-		Logger:      logger,
-		Ctx:         ctx,
-		RefreshFunc: refreshDashboard,
+		Config:           cfg,
+		AgentMgr:         agentMgr,
+		Governor:         gov,
+		GHClient:         ghClient,
+		Tokens:           tokenCollector,
+		Knowledge:        knowledgeAPI,
+		MetricsCollector: metricsCollector,
+		Logger:           logger,
+		Ctx:              ctx,
+		RefreshFunc:      refreshDashboard,
 		PersistFunc: func() {
 			persistState(agentMgr, gov, statePath, logger)
 		},
@@ -242,7 +255,7 @@ func main() {
 		return
 	}
 
-	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, &lastActionable, logger)
+	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, &lastActionable, logger)
 
 	for {
 		select {
@@ -251,7 +264,7 @@ func main() {
 			persistState(agentMgr, gov, statePath, logger)
 			return
 		case <-ticker.C:
-			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, &lastActionable, logger)
+			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, &lastActionable, logger)
 		}
 	}
 }
@@ -267,6 +280,7 @@ func runEvalCycle(
 	notifier *notify.Notifier,
 	beadStores map[string]*beads.Store,
 	tokenCollector *tokens.Collector,
+	metricsCollector *dashboard.MetricsCollector,
 	lastActionable *atomic.Pointer[github.ActionableResult],
 	logger *slog.Logger,
 ) {
@@ -328,6 +342,7 @@ func runEvalCycle(
 		beadStores,
 		ghClient,
 		ctx,
+		metricsCollector,
 	))
 }
 

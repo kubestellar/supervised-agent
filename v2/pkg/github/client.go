@@ -384,3 +384,76 @@ func (c *Client) LatestCommitHash(ctx context.Context, owner, repo, branch strin
 	}
 	return ref.GetObject().GetSHA(), nil
 }
+
+func (c *Client) GetRepo(ctx context.Context, owner, repo string) (*gh.Repository, *gh.Response, error) {
+	return c.client.Repositories.Get(ctx, owner, repo)
+}
+
+func (c *Client) GetContributorCount(ctx context.Context, owner, repo string) (int, error) {
+	const perPage = 100
+	opts := &gh.ListContributorsOptions{
+		ListOptions: gh.ListOptions{PerPage: perPage},
+	}
+	var total int
+	for {
+		contribs, resp, err := c.client.Repositories.ListContributors(ctx, owner, repo, opts)
+		if err != nil {
+			return 0, fmt.Errorf("listing contributors for %s/%s: %w", owner, repo, err)
+		}
+		total += len(contribs)
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	return total, nil
+}
+
+func (c *Client) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
+	fc, _, _, err := c.client.Repositories.GetContents(ctx, owner, repo, path, nil)
+	if err != nil {
+		return "", fmt.Errorf("getting file %s/%s/%s: %w", owner, repo, path, err)
+	}
+	if fc == nil {
+		return "", fmt.Errorf("file %s/%s/%s is a directory", owner, repo, path)
+	}
+	content, err := fc.GetContent()
+	if err != nil {
+		return "", fmt.Errorf("decoding %s/%s/%s: %w", owner, repo, path, err)
+	}
+	return content, nil
+}
+
+func (c *Client) CountOutreachPRs(ctx context.Context) (open, merged int, err error) {
+	for _, repo := range c.repos {
+		opts := &gh.PullRequestListOptions{
+			State:       "all",
+			ListOptions: gh.ListOptions{PerPage: perPage},
+		}
+		prs, _, err := c.client.PullRequests.List(ctx, c.org, repo, opts)
+		if err != nil {
+			continue
+		}
+		for _, pr := range prs {
+			labels := extractLabels(pr.Labels)
+			isOutreach := false
+			for _, l := range labels {
+				if strings.Contains(strings.ToLower(l), "outreach") {
+					isOutreach = true
+					break
+				}
+			}
+			if !isOutreach {
+				continue
+			}
+			if pr.GetState() == "open" {
+				open++
+			} else if pr.GetMerged() {
+				merged++
+			}
+		}
+	}
+	return open, merged, nil
+}
+
+const perPage = 100

@@ -35,7 +35,13 @@ func BuildFrontendStatus(
 	beadStores map[string]*beads.Store,
 	ghClient *github.Client,
 	ctx context.Context,
+	metricsCollector *MetricsCollector,
 ) *StatusPayload {
+	agentMetrics := map[string]any{}
+	if metricsCollector != nil {
+		agentMetrics = metricsCollector.Get()
+	}
+
 	payload := &StatusPayload{
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
 		Agents:       buildAgents(agentStatuses, cfg, govState),
@@ -47,7 +53,7 @@ func BuildFrontendStatus(
 		Budget:       buildBudget(gov, tokenCollector),
 		CadenceMatrix: buildCadenceMatrix(cfg, agentStatuses),
 		GHRateLimits: buildGHRateLimits(ghClient, ctx, cfg),
-		AgentMetrics: map[string]any{},
+		AgentMetrics: agentMetrics,
 		Hold:         buildHold(actionable),
 		IssueToMerge: map[string]any{},
 	}
