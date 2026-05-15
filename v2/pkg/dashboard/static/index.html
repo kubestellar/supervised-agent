@@ -2686,7 +2686,7 @@
         const indEl = agentIndicators(a.name);
         return `<div class="agent-card ${cls}" data-agent="${esc(a.name)}">
           <span class="working-indicator"></span>
-          <div class="agent-name"><span class="dot ${dotCls}"></span>${esc(a.displayName || a.name)} ${toggleBtn} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a> <button class="restart-btn" data-action="restartAgent" data-agent="${esc(a.name)}" title="Kill tmux session — supervisor will respawn with fresh context">↻ restart</button> <button class="config-gear" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Configure ${esc(a.name)}">⚙️</button></div>
+          <div class="agent-name"><span class="dot ${dotCls}"></span>${esc(a.displayName || a.name)} ${toggleBtn} <a href="${terminalUrl(a.name)}" target="_blank" class="terminal-link" title="Open tmux session">▶ terminal</a> <button class="restart-btn" data-action="restartAgent" data-agent="${esc(a.name)}" title="Kill tmux session — supervisor will respawn with fresh context">↻ restart</button> <button class="config-gear" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Configure ${esc(a.displayName || a.name)}">⚙️</button></div>
           <div class="agent-field"><span class="label" title="The CLI backend running this agent (e.g. claude, copilot). Pin to prevent governor from switching it.">cli</span><span class="value">${cliChip(a.cli, a.pinnedBoth || a.pinnedCli, a.name)}${(a.pinnedBoth || a.pinnedCli) ? '' : ` <button class="pin-toggle" data-action="togglePin" data-agent="${esc(a.name)}" data-pin-type="cli" data-unpin="false" title="Pin CLI — lock current backend so governor cannot change it">📌</button>`}</span></div>
           <div class="agent-field"><span class="label" title="The LLM model powering this agent. Governor may change it based on budget or mode. Pin to lock.">model</span><span class="value">${modelChip(a.model, a.govReason, a.pinnedBoth || a.pinnedModel, a.name)}${(a.pinnedBoth || a.pinnedModel) ? '' : ` <button class="pin-toggle" data-action="togglePin" data-agent="${esc(a.name)}" data-pin-type="model" data-unpin="false" title="Pin model — lock current model so governor cannot downgrade it">📌</button>`}</span></div>
           <div class="agent-field"><span class="label" title="Time between governor kicks for this agent in the current mode. Configured per governor mode (idle/quiet/busy/surge).">interval</span><span class="value">${isPaused ? 'paused' : isOff ? 'off' : a.cadence}</span></div>
@@ -5886,7 +5886,14 @@ function burnAreaChart() {
       tabsEl.innerHTML = tabs.map((t, i) =>
         `<div class="config-tab${i === 0 ? ' active' : ''}" data-tab="${t}" data-action="switchConfigTab">${t}</div>`
       ).join('');
+      const body = document.getElementById('config-body');
+      body.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px">Loading…</div>';
       loadConfigData(type, agentName).then(() => {
+        if (!_configModalOpen) return;
+        const dn = (_configState.data.general || {}).displayName;
+        if (dn && type !== 'governor') {
+          document.querySelector('.config-title').textContent = `${dn} Configuration`;
+        }
         switchConfigTab(tabs[0]);
       });
     }
