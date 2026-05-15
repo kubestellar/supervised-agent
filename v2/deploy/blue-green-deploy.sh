@@ -38,7 +38,7 @@ if [ -z "$GATEWAY_RUNNING" ]; then
     log "Waiting for hive to become healthy..."
     elapsed=0
     while [ "$elapsed" -lt "$HEALTH_TIMEOUT_S" ]; do
-        if wget -q --spider "$HEALTH_URL" 2>/dev/null; then
+        if curl -sf "$HEALTH_URL" >/dev/null 2>/dev/null; then
             log "Hive is healthy. Deploy complete."
             exit 0
         fi
@@ -80,7 +80,7 @@ docker run -d \
     -v "${DATA_VOL}:/data" \
     -v "${SECRETS_DIR}:/secrets:ro" \
     $ENV_ARGS \
-    --health-cmd "wget -q --spider http://localhost:3001/api/health" \
+    --health-cmd "curl -sf http://localhost:3001/api/health" \
     --health-interval 10s \
     --health-timeout 5s \
     --health-retries 3 \
