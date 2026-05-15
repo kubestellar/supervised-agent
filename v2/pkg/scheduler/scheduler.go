@@ -66,8 +66,14 @@ func (s *Scheduler) substituteTemplate(template string, actionable *github.Actio
 
 	agentList, agentRoles := s.buildAgentListAndRoles()
 
+	displayName := agentName
+	if ac, ok := s.cfg.Agents[agentName]; ok && ac.DisplayName != "" {
+		displayName = ac.DisplayName
+	}
+
 	replacer := strings.NewReplacer(
 		"${AGENT_NAME}", agentName,
+		"${AGENT_DISPLAY_NAME}", displayName,
 		"${TIMESTAMP}", now.Format("1/2 3:04 PM MST"),
 		"${QUEUE_ISSUES}", fmt.Sprintf("%d", actionable.Issues.Count),
 		"${QUEUE_PRS}", fmt.Sprintf("%d", actionable.PRs.Count),
