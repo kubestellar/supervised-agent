@@ -118,6 +118,15 @@ func main() {
 		}
 	}
 
+	// Restore token sparkline history from disk so token charts survive container restarts
+	const tokenSparklinePath = "/data/token-sparkline-history.json"
+	var pendingTokenSeed []dashboard.TokenSparklineEntry
+	if tokenSparkData, err := os.ReadFile(tokenSparklinePath); err == nil {
+		if err := json.Unmarshal(tokenSparkData, &pendingTokenSeed); err == nil && len(pendingTokenSeed) > 0 {
+			logger.Info("token sparkline history loaded", "entries", len(pendingTokenSeed))
+		}
+	}
+
 	if cfg.Knowledge.Enabled {
 		layers := convertKnowledgeLayers(cfg.Knowledge.Layers)
 		primerCfg := knowledge.PrimerConfig{
@@ -211,6 +220,12 @@ func main() {
 	// Go binary serves the internal API without auth — the Node.js proxy
 	// on port 3001 handles public-facing authentication.
 	dashSrv := dashboard.NewServer(cfg.Dashboard.Port, logger)
+
+	// Seed token sparkline history now that the dashboard server exists
+	if len(pendingTokenSeed) > 0 {
+		dashSrv.SeedTokenSparklineHistory(pendingTokenSeed)
+		logger.Info("token sparkline history restored", "entries", len(pendingTokenSeed))
+	}
 
 	beadStores := make(map[string]*beads.Store)
 	for name, agentCfg := range cfg.EnabledAgents() {
@@ -334,7 +349,7 @@ func main() {
 		Ctx:              ctx,
 		RefreshFunc:      refreshDashboard,
 		PersistFunc: func() {
-			persistState(agentMgr, gov, cfg, statePath, logger)
+			persistState(agentMgr, gov, cfg, statePath, logger, dashSrv)
 		},
 	})
 
@@ -398,17 +413,17 @@ func main() {
 	}
 
 	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, nousState, &lastActionable, logger)
-	persistState(agentMgr, gov, cfg, statePath, logger)
+	persistState(agentMgr, gov, cfg, statePath, logger, dashSrv)
 
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Info("shutting down, persisting state")
-			persistState(agentMgr, gov, cfg, statePath, logger)
+			persistState(agentMgr, gov, cfg, statePath, logger, dashSrv)
 			return
 		case <-ticker.C:
 			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, nousState, &lastActionable, logger)
-			persistState(agentMgr, gov, cfg, statePath, logger)
+			persistState(agentMgr, gov, cfg, statePath, logger, dashSrv)
 		}
 	}
 }
@@ -665,7 +680,7 @@ func randomName() string {
 	return adj + "-" + noun
 }
 
-func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.Config, path string, logger *slog.Logger) {
+func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.Config, path string, logger *slog.Logger, dashSrv *dashboard.Server) {
 	statuses := agentMgr.AllStatuses()
 	agents := make(map[string]snapshot.AgentState, len(statuses))
 	for name, proc := range statuses {
@@ -730,6 +745,17 @@ func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.C
 		modeData, err := json.Marshal(modeHistory)
 		if err == nil {
 			_ = os.WriteFile("/data/mode-history.json", modeData, 0o644)
+		}
+	}
+
+	// Persist token sparkline history so token charts survive container restarts
+	if dashSrv != nil {
+		tokenHistory := dashSrv.TokenSparklineHistory()
+		if len(tokenHistory) > 0 {
+			tokenData, err := json.Marshal(tokenHistory)
+			if err == nil {
+				_ = os.WriteFile("/data/token-sparkline-history.json", tokenData, 0o644)
+			}
 		}
 	}
 }

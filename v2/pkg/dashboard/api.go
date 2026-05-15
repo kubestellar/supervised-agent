@@ -276,7 +276,20 @@ func (s *Server) handleTrends(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	jsonResponse(w, filtered)
+	// Include token sparkline history within the requested time range
+	allTokenHistory := s.TokenSparklineHistory()
+	tokenFiltered := make([]TokenSparklineEntry, 0)
+	cutoffMs := cutoff.UnixMilli()
+	for _, entry := range allTokenHistory {
+		if entry.Timestamp > cutoffMs {
+			tokenFiltered = append(tokenFiltered, entry)
+		}
+	}
+
+	jsonResponse(w, map[string]interface{}{
+		"evals":        filtered,
+		"tokenHistory": tokenFiltered,
+	})
 }
 
 func (s *Server) handleTimeline(w http.ResponseWriter, r *http.Request) {

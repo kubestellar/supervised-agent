@@ -34,6 +34,9 @@ type Server struct {
 	pipelineMu     sync.RWMutex
 	hooksMu        sync.RWMutex
 	knowledgeMu    sync.Mutex
+
+	tokenHistoryMu sync.RWMutex
+	tokenHistory   []TokenSparklineEntry
 }
 
 // StatusPayload matches the JSON contract the dashboard frontend render() expects.
@@ -182,6 +185,22 @@ type FrontendHold struct {
 	Items  []any `json:"items"`
 }
 
+// TokenSparklineEntry is a single timestamped snapshot of token metrics,
+// persisted to disk so sparklines survive container restarts.
+type TokenSparklineEntry struct {
+	Timestamp    int64                       `json:"t"`
+	Input        int64                       `json:"tokenInput"`
+	Output       int64                       `json:"tokenOutput"`
+	CacheRead    int64                       `json:"tokenCacheRead"`
+	CacheCreate  int64                       `json:"tokenCacheCreate"`
+	Messages     int                         `json:"tokenMessages"`
+	ByAgent      map[string]int64            `json:"tokens,omitempty"`
+	ByModel      map[string]int64            `json:"tokenModels,omitempty"`
+}
+
+// tokenSparklineMaxEntries caps the on-disk history to ~24h at 5-min intervals.
+const tokenSparklineMaxEntries = 288
+
 const sseRetryMs = 3000
 
 func NewServer(port int, logger *slog.Logger) *Server {
@@ -265,6 +284,8 @@ func (s *Server) UpdateStatus(status *StatusPayload) {
 	status.Timestamp = time.Now().UTC().Format(time.RFC3339)
 	s.status = status
 	s.statusMu.Unlock()
+
+	s.AppendTokenSparkline(status)
 
 	data, err := json.Marshal(status)
 	if err != nil {
@@ -358,4 +379,56 @@ func (s *Server) broadcast(data []byte) {
 			// Client too slow — drop the event
 		}
 	}
+}
+
+// AppendTokenSparkline extracts token metrics from the current status and
+// appends a timestamped entry to the in-memory token sparkline history.
+func (s *Server) AppendTokenSparkline(status *StatusPayload) {
+	if status == nil {
+		return
+	}
+
+	entry := TokenSparklineEntry{
+		Timestamp:   time.Now().UnixMilli(),
+		Input:       status.Tokens.Totals.Input,
+		Output:      status.Tokens.Totals.Output,
+		CacheRead:   status.Tokens.Totals.CacheRead,
+		CacheCreate: status.Tokens.Totals.CacheCreate,
+		Messages:    status.Tokens.Totals.Messages,
+		ByAgent:     make(map[string]int64),
+		ByModel:     make(map[string]int64),
+	}
+
+	for name, bucket := range status.Tokens.ByAgent {
+		entry.ByAgent[name] = bucket.Input + bucket.Output + bucket.CacheRead
+	}
+	for name, bucket := range status.Tokens.ByModel {
+		entry.ByModel[name] = bucket.Input + bucket.Output + bucket.CacheRead
+	}
+
+	s.tokenHistoryMu.Lock()
+	s.tokenHistory = append(s.tokenHistory, entry)
+	if len(s.tokenHistory) > tokenSparklineMaxEntries {
+		s.tokenHistory = s.tokenHistory[len(s.tokenHistory)-tokenSparklineMaxEntries:]
+	}
+	s.tokenHistoryMu.Unlock()
+}
+
+// TokenSparklineHistory returns a copy of the current token sparkline history.
+func (s *Server) TokenSparklineHistory() []TokenSparklineEntry {
+	s.tokenHistoryMu.RLock()
+	defer s.tokenHistoryMu.RUnlock()
+	out := make([]TokenSparklineEntry, len(s.tokenHistory))
+	copy(out, s.tokenHistory)
+	return out
+}
+
+// SeedTokenSparklineHistory restores persisted token history on startup.
+func (s *Server) SeedTokenSparklineHistory(entries []TokenSparklineEntry) {
+	s.tokenHistoryMu.Lock()
+	defer s.tokenHistoryMu.Unlock()
+	if len(entries) > tokenSparklineMaxEntries {
+		entries = entries[len(entries)-tokenSparklineMaxEntries:]
+	}
+	s.tokenHistory = entries
 }
