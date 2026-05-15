@@ -51,6 +51,7 @@ func main() {
 
 	// Load or generate a unique Hive ID for this instance
 	cfg.HiveID = loadOrGenerateHiveID(logger)
+	os.Setenv("HIVE_ID", cfg.HiveID)
 
 	logger.Info("hive starting",
 		"org", cfg.Project.Org,
