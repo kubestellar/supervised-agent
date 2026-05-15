@@ -460,8 +460,11 @@ func (k *KnowledgeAPI) SearchAllWithVaults(ctx context.Context, query string, ty
 	results := k.SearchAll(ctx, query, typeFilter, limit)
 
 	for _, v := range k.vaults {
-		vaultResults := v.Search(query, limit)
-		results = append(results, vaultResults...)
+		if query == "" {
+			results = append(results, v.ListPages(typeFilter)...)
+		} else {
+			results = append(results, v.Search(query, limit)...)
+		}
 	}
 
 	return results
