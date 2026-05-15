@@ -240,6 +240,7 @@ func main() {
 		var cached github.ActionableResult
 		if err := json.Unmarshal(data, &cached); err == nil {
 			lastActionable.Store(&cached)
+			gov.SeedQueueState(cached.Issues.Count, cached.PRs.Count, cached.Hold.Total, cached.Issues.SLAViolations)
 			refreshDashboard()
 			logger.Info("restored cached actionable data", "issues", cached.Issues.Count, "prs", cached.PRs.Count, "age", time.Since(cached.GeneratedAt).Round(time.Second))
 		}
