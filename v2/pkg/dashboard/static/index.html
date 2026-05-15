@@ -496,6 +496,9 @@
       border-radius: 50%; margin-right: 6px;
     }
     .dot.running { background: var(--green); }
+    .dot.idle { background: var(--green); }
+    .dot.paused { background: #ca8a04; }
+    .dot.off { background: #9ca3af; }
     .dot.stopped { background: var(--red); }
     .agent-field { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 2px 0; }
     .agent-field .label { color: var(--muted); }
@@ -2753,7 +2756,7 @@
         else if (a.structuredStatus === 'NEEDS_CONTEXT') statusCls = 'status-needs-context';
         else if (isStale) statusCls = 'status-stale';
         const cls = needsLogin ? 'needs-login' : isPaused ? 'paused' : isOff ? 'off' : isStopped ? 'stopped' : `${a.busy} ${statusCls}`.trim();
-        const dotCls = a.state === 'stopped' ? 'stopped' : 'running';
+        const dotCls = isStopped ? 'stopped' : isPaused ? 'paused' : isOff ? 'off' : a.busy === 'working' ? 'running' : 'idle';
         const canToggle = a.name !== 'supervisor';
         const toggleBtn = canToggle ? (isOff
           ? `<button class="btn-toggle off" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Agent is off in this governor mode — click to configure per-mode cadences">⚙ off</button>`
