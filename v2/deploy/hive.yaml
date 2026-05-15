@@ -94,7 +94,7 @@ agents:
     stale_timeout: 2400
     restart_strategy: immediate
     launch_cmd: "agent-launch.sh --backend copilot --model claude-sonnet-4-6"
-    display_name: Tester
+    display_name: tester
   strategist:
     enabled: true
     backend: copilot
@@ -104,7 +104,7 @@ agents:
     stale_timeout: 3600
     restart_strategy: immediate
     launch_cmd: "agent-launch.sh --backend copilot --model claude-sonnet-4-6"
-    display_name: Strategist
+    display_name: strategist
 
 governor:
   eval_interval_s: 300

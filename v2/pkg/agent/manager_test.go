@@ -373,6 +373,7 @@ func TestPause_SetsPausedFlag(t *testing.T) {
 }
 
 func TestResume_ClearsPausedFlag(t *testing.T) {
+	t.Setenv("HIVE_WORK_DIR", t.TempDir())
 	cfgs := map[string]config.AgentConfig{
 		"worker": makeAgentConfig("claude", "sonnet"),
 	}
@@ -535,18 +536,20 @@ func TestStart_UnknownAgentReturnsError(t *testing.T) {
 	}
 }
 
-func TestStart_UnknownBackendReturnsError(t *testing.T) {
+func TestStart_UnknownBackendSetsFailed(t *testing.T) {
+	t.Setenv("HIVE_WORK_DIR", t.TempDir())
 	cfgs := map[string]config.AgentConfig{
 		"bad": makeAgentConfig("not-a-real-backend", ""),
 	}
 	m := NewManager(cfgs, discardLogger())
 
-	err := m.Start(context.Background(), "bad")
-	if err == nil {
-		t.Fatal("expected error for unknown backend, got nil")
+	_ = m.Start(context.Background(), "bad")
+	ap, err := m.GetStatus("bad")
+	if err != nil {
+		t.Fatalf("GetStatus error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "unknown backend") {
-		t.Errorf("error %q should say 'unknown backend'", err.Error())
+	if ap.State != StateFailed {
+		t.Errorf("expected state %q, got %q", StateFailed, ap.State)
 	}
 }
 

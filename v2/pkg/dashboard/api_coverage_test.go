@@ -1016,6 +1016,7 @@ func TestSecurityHeaders_TokenQueryParam(t *testing.T) {
 func TestSecurityHeaders_HealthNoAuth(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	s := NewServerWithAuth(0, "secret", logger)
+	s.UpdateStatus(&StatusPayload{Agents: []FrontendAgent{{Name: "scanner"}}})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
@@ -3646,7 +3647,7 @@ func TestHandleVaultsReindex_Success(t *testing.T) {
 
 func TestHandleChat_ValidMessage(t *testing.T) {
 	s, _ := apiServer(t)
-	body := map[string]string{"message": "hello"}
+	body := map[string]string{"query": "hello"}
 	rec := doPost(s, "/api/chat", body)
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)

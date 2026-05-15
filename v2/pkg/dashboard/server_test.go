@@ -82,6 +82,7 @@ func TestNewServer_DefaultFields(t *testing.T) {
 
 func TestHandleHealth_StatusCode(t *testing.T) {
 	s := newTestServer()
+	s.UpdateStatus(minimalPayload())
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	s.handleHealth(rec, req)
@@ -93,6 +94,7 @@ func TestHandleHealth_StatusCode(t *testing.T) {
 
 func TestHandleHealth_ContentType(t *testing.T) {
 	s := newTestServer()
+	s.UpdateStatus(minimalPayload())
 	rec := httptest.NewRecorder()
 	s.handleHealth(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 
@@ -104,6 +106,7 @@ func TestHandleHealth_ContentType(t *testing.T) {
 
 func TestHandleHealth_Body(t *testing.T) {
 	s := newTestServer()
+	s.UpdateStatus(minimalPayload())
 	rec := httptest.NewRecorder()
 	s.handleHealth(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 
@@ -696,6 +699,7 @@ func freePort(t *testing.T) int {
 func TestStart_ServesEndpoints(t *testing.T) {
 	port := freePort(t)
 	s := NewServer(port, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+	s.UpdateStatus(minimalPayload())
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -832,6 +836,7 @@ func TestAuthMiddleware_AcceptsQueryToken(t *testing.T) {
 func TestAuthMiddleware_HealthBypassesAuth(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	s := NewServerWithAuth(0, "secret-token-123", logger)
+	s.UpdateStatus(minimalPayload())
 	handler := s.Handler()
 	ts := httptest.NewServer(handler)
 	defer ts.Close()
