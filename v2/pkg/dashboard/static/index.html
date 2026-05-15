@@ -2450,12 +2450,43 @@
     async function fetchHistory() {
       try {
         const r = await fetch('/api/history');
-        historyData = await r.json();
+        const evalEntries = await r.json();
+        // Merge server-side token sparkline history into eval entries by timestamp.
+        // Eval entries have governor fields; token entries have token fields.
+        // Match by closest timestamp so sparklines show both on page load.
+        const tokenHist = window._serverTokenHistory || [];
+        if (tokenHist.length > 0) {
+          for (const entry of (evalEntries || [])) {
+            const entryT = entry.t || 0;
+            // Find the token snapshot closest in time to this eval entry
+            let best = null;
+            let bestDelta = Infinity;
+            const MAX_MERGE_DELTA_MS = 60000; // 60s — only merge if within 1 minute
+            for (const th of tokenHist) {
+              const delta = Math.abs((th.t || 0) - entryT);
+              if (delta < bestDelta) {
+                bestDelta = delta;
+                best = th;
+              }
+            }
+            if (best && bestDelta < MAX_MERGE_DELTA_MS) {
+              entry.tokenInput = best.tokenInput || 0;
+              entry.tokenOutput = best.tokenOutput || 0;
+              entry.tokenCacheRead = best.tokenCacheRead || 0;
+              entry.tokenCacheCreate = best.tokenCacheCreate || 0;
+              entry.tokenMessages = best.tokenMessages || 0;
+              if (best.tokens) entry.tokens = best.tokens;
+              if (best.tokenModels) entry.tokenModels = best.tokenModels;
+            }
+          }
+        }
+        historyData = evalEntries || [];
       } catch (e) { /* ignore */ }
     }
     // Fetch history on load, then every 30s
     fetchHistory();
-    setInterval(fetchHistory, 30000);
+    const HISTORY_REFRESH_MS = 30000;
+    setInterval(fetchHistory, HISTORY_REFRESH_MS);
 
     function formatAge(sec) {
       if (sec < 0) return '—';
@@ -5898,11 +5929,18 @@ function burnAreaChart() {
     fetch('/api/status').then(r => r.json()).then(render).catch(console.error);
     // Fetch persistent trends for sparklines (day/week)
     window._trendData = [];
-    fetch('/api/trends?range=week').then(r => r.json()).then(d => { window._trendData = d; }).catch(() => {});
+    function applyTrends(d) {
+      // Trends API returns {evals: [...], tokenHistory: [...]}
+      const evals = d && d.evals ? d.evals : (Array.isArray(d) ? d : []);
+      window._trendData = evals;
+      // Cache token history from server for merging into historyData
+      window._serverTokenHistory = d && d.tokenHistory ? d.tokenHistory : [];
+    }
+    fetch('/api/trends?range=week').then(r => r.json()).then(applyTrends).catch(() => {});
     // Refresh trends every 15 min
     const TREND_REFRESH_MS = 900000;
     setInterval(() => {
-      fetch('/api/trends?range=week').then(r => r.json()).then(d => { window._trendData = d; }).catch(() => {});
+      fetch('/api/trends?range=week').then(r => r.json()).then(applyTrends).catch(() => {});
     }, TREND_REFRESH_MS);
     // Fetch 24h timeline for governor mode strip
     window._timelineData = [];
@@ -5947,7 +5985,7 @@ function burnAreaChart() {
       ).join('');
       const body = document.getElementById('config-body');
       body.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px">Loading…</div>';
-      loadConfigData(type, agentName).then(() => {
+      loadConfigData(type, agentName).finally(() => {
         if (!_configModalOpen) return;
         const dn = (_configState.data.general || {}).displayName;
         if (dn && type !== 'governor') {
