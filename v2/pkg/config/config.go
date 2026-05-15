@@ -204,8 +204,7 @@ type SlackConfig struct {
 }
 
 type DiscordConfig struct {
-	Webhook  string `yaml:"webhook"`
-	BotToken string `yaml:"bot_token"`
+	Webhook string `yaml:"webhook"`
 }
 
 type DashboardConfig struct {

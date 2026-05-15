@@ -36,7 +36,7 @@ spec:
               containerPort: 7681
               protocol: TCP
           env:
-            - name: GITHUB_TOKEN
+            - name: HIVE_GITHUB_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: hive-secrets

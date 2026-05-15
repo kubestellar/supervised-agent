@@ -33,6 +33,7 @@ type Server struct {
 	agentHooks     map[string]map[string][]any
 	pipelineMu     sync.RWMutex
 	hooksMu        sync.RWMutex
+	knowledgeMu    sync.Mutex
 }
 
 // StatusPayload matches the JSON contract the dashboard frontend render() expects.

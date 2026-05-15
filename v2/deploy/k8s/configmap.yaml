@@ -62,5 +62,4 @@ data:
     dashboard:
       port: 3002
 
-    notifications:
-      enabled: false
+    notifications: {}

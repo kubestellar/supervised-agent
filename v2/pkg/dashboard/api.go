@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/kubestellar/hive/v2/pkg/config"
 	"github.com/kubestellar/hive/v2/pkg/knowledge"
 )
@@ -2042,6 +2041,8 @@ func (s *Server) ensureKnowledge() bool {
 	if s.deps == nil {
 		return false
 	}
+	s.knowledgeMu.Lock()
+	defer s.knowledgeMu.Unlock()
 	if s.deps.Knowledge == nil {
 		s.deps.Knowledge = knowledge.NewKnowledgeAPI(nil, knowledge.KnowledgeConfig{Enabled: true, Engine: "file"}, s.logger)
 		s.logger.Info("created file-based knowledge API for vault/obsidian access")
@@ -2072,16 +2073,13 @@ func (s *Server) handleObsidianSync(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "failed to read body", http.StatusBadRequest)
 		return
 	}
-	s.logger.Info("obsidian sync request", "bodyLen", len(bodyBytes), "body", string(bodyBytes[:min(len(bodyBytes), 500)]))
 
 	var req knowledge.ObsidianSyncRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		s.logger.Warn("obsidian sync: json decode failed", "error", err, "body", string(bodyBytes[:min(len(bodyBytes), 200)]))
+		s.logger.Warn("obsidian sync: json decode failed", "error", err)
 		jsonError(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	s.logger.Info("obsidian sync parsed", "filename", req.Filename, "contentLen", len(req.Content), "frontmatterKeys", fmt.Sprintf("%v", req.Frontmatter))
 
 	if req.Filename == "" {
 		jsonError(w, "filename is required", http.StatusBadRequest)
@@ -2151,16 +2149,17 @@ func (s *Server) handleHiveIDSet(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Message string `json:"message"`
+		Query   string `json:"query"`
+		History []any  `json:"history"`
 	}
-	if err := decodeBody(r, &body); err != nil || body.Message == "" {
+	if err := decodeBody(r, &body); err != nil || body.Query == "" {
 		jsonError(w, "message is required", http.StatusBadRequest)
 		return
 	}
 
 	jsonResponse(w, map[string]interface{}{
-		"response": fmt.Sprintf("Chat is not yet implemented in v2. Your message: %s", body.Message),
-		"status":   "stub",
+		"answer": fmt.Sprintf("Chat is not yet fully implemented. You asked: %s", body.Query),
+		"status": "stub",
 	})
 }
 
@@ -2409,24 +2408,6 @@ func (s *Server) getAgentHooks(name string) map[string][]any {
 	return map[string][]any{"preKick": {}, "postIdle": {}}
 }
 
-func (s *Server) handleConfigStub(w http.ResponseWriter, r *http.Request, section string) {
-	if r.Method == http.MethodGet {
-		jsonResponse(w, map[string]interface{}{
-			"section": section,
-			"status":  "stub",
-		})
-		return
-	}
-
-	var body interface{}
-	if err := decodeBody(r, &body); err != nil {
-		jsonError(w, "invalid body", http.StatusBadRequest)
-		return
-	}
-
-	okResponse(w, map[string]string{"status": "updated", "section": section})
-}
-
 // maskSecret replaces the interior of a secret string with bullet characters,
 // revealing only the last 4 characters (matching old hive behavior).
 func maskSecret(s string) string {
@@ -2452,6 +2433,3 @@ func (s *Server) handleAuthToken(w http.ResponseWriter, r *http.Request) {
 	okResponse(w, map[string]string{"token": token})
 }
 
-// suppress unused import warnings
-var _ = strings.Contains
-var _ = uuid.New

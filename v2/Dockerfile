@@ -23,27 +23,7 @@ RUN ARCH=$(uname -m) && \
       "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.${TTYD_ARCH}" && \
     chmod +x /usr/local/bin/ttyd
 
-# --- Layer 3: Goose CLI (Rust binary, moderate release cadence) ---
-ARG GOOSE_VERSION=latest
-RUN ARCH=$(uname -m) && \
-    if [ "$ARCH" = "x86_64" ]; then GOOSE_ARCH=x86_64; \
-    elif [ "$ARCH" = "aarch64" ]; then GOOSE_ARCH=aarch64; \
-    else GOOSE_ARCH=x86_64; fi && \
-    curl -sL -o /tmp/goose.tar.gz \
-      "https://github.com/block/goose/releases/latest/download/goose-${GOOSE_ARCH}-unknown-linux-gnu.tar.gz" && \
-    tar -xzf /tmp/goose.tar.gz -C /usr/local/bin/ && \
-    rm /tmp/goose.tar.gz && \
-    chmod +x /usr/local/bin/goose
-
-# --- Layer 4: IBM Bob Shell (moderate release cadence) ---
-ARG BOB_VERSION=latest
-RUN curl -fsSL --connect-timeout 10 https://bob.ibm.com/download/bobshell.sh | bash -s -- --pm npm || echo "WARN: bob shell install skipped (network unavailable)"
-
-# --- Layer 5: Gemini CLI (moderate release cadence) ---
-ARG GEMINI_CLI_VERSION=latest
-RUN npm install -g @google/gemini-cli@${GEMINI_CLI_VERSION} && npm cache clean --force
-
-# --- Layer 6: GitHub Copilot CLI (frequent updates) ---
+# --- Layer 3: GitHub Copilot CLI (frequent updates) ---
 ARG COPILOT_VERSION=latest
 RUN npm install -g @github/copilot@${COPILOT_VERSION} && npm cache clean --force || \
     echo "WARN: GitHub Copilot CLI install failed — skipping"

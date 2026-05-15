@@ -4259,17 +4259,23 @@ function burnAreaChart() {
     }
 
     let _kbInitialLoad = true;
+    let _kbRendered = false;
     async function fetchKnowledgeStats() {
       try {
         const r = await fetch('/api/knowledge/stats');
         if (!r.ok) return;
+        const prev = _kbCache;
         _kbCache = await r.json();
-        // On initial page load, skip vault setup wizard if knowledge is already enabled
         if (_kbInitialLoad && _kbCache && _kbCache.enabled) {
           _kbSetupView = 'none';
         }
         _kbInitialLoad = false;
-        renderKnowledge();
+        const enabledChanged = !prev || prev.enabled !== _kbCache.enabled;
+        const layersChanged = !prev || JSON.stringify((prev.layers||[]).map(l=>l.type)) !== JSON.stringify((_kbCache.layers||[]).map(l=>l.type));
+        if (!_kbRendered || enabledChanged || layersChanged) {
+          _kbRendered = true;
+          renderKnowledge();
+        }
       } catch (e) { /* knowledge unavailable */ }
     }
 
