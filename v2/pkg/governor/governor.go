@@ -386,6 +386,15 @@ func (g *Governor) SeedModeHistory(changes []ModeChange) {
 	copy(g.modeHistory, changes)
 }
 
+func (g *Governor) SeedQueueState(issues, prs, hold, slaViolations int) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.state.QueueIssues = issues
+	g.state.QueuePRs = prs
+	g.state.QueueHold = hold
+	g.state.SLAViolations = slaViolations
+}
+
 func (g *Governor) KickHistory() []KickRecord {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
