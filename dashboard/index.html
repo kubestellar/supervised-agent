@@ -1788,7 +1788,7 @@
     const AGENT_DESCRIPTIONS = {
       supervisor: 'Orchestrates all agents — runs periodic sweeps, enforces cadence, monitors health, and coordinates cross-agent handoffs',
       scanner: 'Triages GitHub issues and PRs — dispatches fix agents, enforces SLA, manages the beads work ledger',
-      ci-maintainer: 'Post-merge quality gate — monitors CI health, code coverage, GA4 errors, and produces adoption digests',
+      'ci-maintainer': 'Post-merge quality gate — monitors CI health, code coverage, GA4 errors, and produces adoption digests',
       architect: 'Designs RFCs for cross-cutting changes — produces phase plans that scanner implements',
       outreach: 'Drives CNCF ecosystem engagement — ADOPTERS outreach, ACMM badges, community PRs',
       strategist: 'Designs governor experiments — proposes cadence/model/threshold changes with falsifiable hypotheses',
@@ -2396,7 +2396,7 @@
     const AGENT_TMUX_SESSION = {
       supervisor: 'supervisor',
       scanner: 'scanner',
-      ci-maintainer: 'ci-maintainer',
+      'ci-maintainer': 'ci-maintainer',
       architect: 'architect',
       outreach: 'outreach',
       strategist: 'strategist',
@@ -3181,7 +3181,7 @@ function burnAreaChart() {
           if (act.length >= 2) {
             const mx = Math.max(...act, 1);
             const pts = act.map((v, i) => `${(i / (act.length - 1)) * MINI_W},${MINI_H - (v / mx) * (MINI_H - 2) - 1}`).join(' ');
-            const aClrs = { scanner: '#58a6ff', ci-maintainer: '#3fb950', architect: '#bc8cff', outreach: '#39d2c0', supervisor: '#d29922' };
+            const aClrs = { scanner: '#58a6ff', 'ci-maintainer': '#3fb950', architect: '#bc8cff', outreach: '#39d2c0', supervisor: '#d29922' };
             const clr = aClrs[s.agent] || '#8b949e';
             miniSpark = `<span class="sparkline" style="margin-left:4px"><svg width="${MINI_W}" height="${MINI_H}" viewBox="0 0 ${MINI_W} ${MINI_H}"><polyline points="${pts}" fill="none" stroke="${clr}" stroke-width="1.2" opacity="0.7"/></svg></span>`;
           }
@@ -3209,7 +3209,7 @@ function burnAreaChart() {
 
       const totalSpark = sparkSvg(getHistorySeries('tokenTotal'), '#39d2c0');
       const agentNames = ['supervisor', 'scanner', 'ci-maintainer', 'architect', 'outreach'];
-      const agentColors = { scanner: '#58a6ff', ci-maintainer: '#3fb950', architect: '#bc8cff', outreach: '#39d2c0', supervisor: '#d29922' };
+      const agentColors = { scanner: '#58a6ff', 'ci-maintainer': '#3fb950', architect: '#bc8cff', outreach: '#39d2c0', supervisor: '#d29922' };
       const agentSparkRows = agentNames.map(name => {
         const ba = tokens.byAgent || {};
         const aData = ba[name];
@@ -4612,18 +4612,20 @@ function burnAreaChart() {
     }
 
     function renderGovNotifications(n) {
+      const ntfyHint = n.hasNtfy ? '(configured — enter new value to change)' : '';
+      const discordHint = n.hasDiscord ? '(configured — enter new value to change)' : '';
       return `
         <div class="config-field">
-          <label>Ntfy Server</label>
-          <input type="text" value="${esc(n.ntfyServer || '')}" onchange="markDirty('notifications','ntfyServer',this.value)">
+          <label>Ntfy Server ${ntfyHint}</label>
+          <input type="text" value="" onchange="markDirty('notifications','ntfyServer',this.value)" placeholder="${esc(n.ntfyServer || 'https://ntfy.sh')}">
         </div>
         <div class="config-field">
           <label>Ntfy Topic</label>
-          <input type="text" value="${esc(n.ntfyTopic || '')}" onchange="markDirty('notifications','ntfyTopic',this.value)">
+          <input type="text" value="" onchange="markDirty('notifications','ntfyTopic',this.value)" placeholder="${esc(n.ntfyTopic || 'my-topic')}">
         </div>
         <div class="config-field">
-          <label>Discord Webhook</label>
-          <input type="text" value="${esc(n.discordWebhook || '')}" onchange="markDirty('notifications','discordWebhook',this.value)" placeholder="https://discord.com/api/webhooks/...">
+          <label>Discord Webhook ${discordHint}</label>
+          <input type="text" value="" onchange="markDirty('notifications','discordWebhook',this.value)" placeholder="${esc(n.discordWebhook || 'https://discord.com/api/webhooks/...')}">
         </div>`;
     }
 
@@ -4738,8 +4740,8 @@ function burnAreaChart() {
     function renderGovHealth(h) {
       return `
         <div class="config-field-row">
-          <div class="config-field"><label>Healthcheck Interval (sec)</label><input type="number" value="${h.healthcheckInterval || 300}" onchange="markDirty('health','healthcheckInterval',this.value)"></div>
-          <div class="config-field"><label>Restart Cooldown (sec)</label><input type="number" value="${h.restartCooldown || 60}" onchange="markDirty('health','restartCooldown',this.value)"></div>
+          <div class="config-field"><label>Healthcheck Interval (sec)</label><input type="number" value="${h.healthcheckInterval || 300}" onchange="markDirty('health','healthcheckInterval',Number(this.value))"></div>
+          <div class="config-field"><label>Restart Cooldown (sec)</label><input type="number" value="${h.restartCooldown || 60}" onchange="markDirty('health','restartCooldown',Number(this.value))"></div>
         </div>
         <div class="config-toggle">
           <div class="config-toggle-switch ${h.modelLock ? 'on' : ''}" onclick="toggleConfigSwitch(this,'health','modelLock')"></div>
