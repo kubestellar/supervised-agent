@@ -5930,7 +5930,7 @@ function burnAreaChart() {
       ).join('');
       const body = document.getElementById('config-body');
       body.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px">Loading…</div>';
-      loadConfigData(type, agentName).then(() => {
+      loadConfigData(type, agentName).finally(() => {
         if (!_configModalOpen) return;
         const dn = (_configState.data.general || {}).displayName;
         if (dn && type !== 'governor') {
