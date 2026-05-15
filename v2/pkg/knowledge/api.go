@@ -164,12 +164,11 @@ func (k *KnowledgeAPI) Health(ctx context.Context) []LayerStatus {
 // Stats returns aggregate stats across all layers.
 func (k *KnowledgeAPI) Stats(ctx context.Context) map[string]interface{} {
 	result := map[string]interface{}{
-		"enabled":      k.config.Enabled,
-		"engine":       k.config.Engine,
-		"layers_count": len(k.layers),
+		"enabled": k.config.Enabled,
+		"engine":  k.config.Engine,
 	}
 
-	layerStats := make([]map[string]interface{}, 0, len(k.layers))
+	layerStats := make([]map[string]interface{}, 0, len(k.layers)+len(k.vaults))
 	for _, lc := range k.layers {
 		ls := map[string]interface{}{
 			"type":    lc.layerType,
@@ -187,7 +186,18 @@ func (k *KnowledgeAPI) Stats(ctx context.Context) map[string]interface{} {
 		}
 		layerStats = append(layerStats, ls)
 	}
+
+	for _, v := range k.vaults {
+		vs := v.Stats()
+		layerStats = append(layerStats, map[string]interface{}{
+			"type":        v.Name(),
+			"healthy":     true,
+			"total_pages": vs.TotalPages,
+		})
+	}
+
 	result["layers"] = layerStats
+	result["layers_count"] = len(layerStats)
 
 	return result
 }
