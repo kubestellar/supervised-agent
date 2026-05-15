@@ -372,6 +372,7 @@ func main() {
 	}
 
 	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, nousState, &lastActionable, logger)
+	persistState(agentMgr, gov, cfg, statePath, logger)
 
 	for {
 		select {
@@ -381,6 +382,7 @@ func main() {
 			return
 		case <-ticker.C:
 			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, nousState, &lastActionable, logger)
+			persistState(agentMgr, gov, cfg, statePath, logger)
 		}
 	}
 }
