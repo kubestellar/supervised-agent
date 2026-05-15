@@ -2046,9 +2046,13 @@
       return `<a class="oc-nav-item${isActive}" data-agent-nav="${esc(a.name)}" draggable="true" data-action="ocSelectAgent" data-agent="${esc(a.name)}" title="${esc(agentDesc)}"><span class="oc-agent-dot ${dotCls}"></span> ${esc(label)}<span class="oc-nav-actions"><button data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Configure">⚙</button><button class="oc-nav-delete" data-action="deleteAgentFromConfig" data-agent="${esc(a.name)}" title="Delete">✕</button></span></a>`;
     }
 
+    const DEFAULT_SIDEBAR_ORDER = ['supervisor', 'sec-check', 'scanner', 'ci-maintainer', 'architect', 'tester', 'outreach'];
     function _sidebarBuildGroups(agents) {
       if (!_sidebarLayout || !_sidebarLayout.groups) {
-        return [{ name: null, agents: agents.map(a => a.name) }];
+        const knownSet = new Set(agents.map(a => a.name));
+        const ordered = DEFAULT_SIDEBAR_ORDER.filter(n => knownSet.has(n));
+        const rest = agents.map(a => a.name).filter(n => !ordered.includes(n));
+        return [{ name: null, agents: [...ordered, ...rest] }];
       }
       const groups = _sidebarLayout.groups.map(g => ({ ...g }));
       const assigned = new Set();
