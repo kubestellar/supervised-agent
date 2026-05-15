@@ -109,7 +109,7 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, go
 		}
 		nextKick := computeNextKick(proc.LastKick, cadence)
 
-		pinnedCli := proc.PinnedCLI != ""
+		pinnedCli := proc.PinnedCLI != "" || proc.Config.CLIPinned
 		pinnedModel := proc.PinnedModel != ""
 
 		const summaryLines = 20
