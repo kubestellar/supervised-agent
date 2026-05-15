@@ -113,6 +113,16 @@ type GovernorConfig struct {
 	Sensing       SensingConfig         `yaml:"sensing"`
 	Health        HealthConfig          `yaml:"health"`
 	Budget        BudgetConfig          `yaml:"budget"`
+	Logging       LoggingConfig         `yaml:"logging"`
+}
+
+type LoggingConfig struct {
+	Dir        string `yaml:"dir"`
+	MaxSizeMB  int    `yaml:"max_size_mb"`
+	MaxAgeDays int    `yaml:"max_age_days"`
+	MaxBackups int    `yaml:"max_backups"`
+	Compress   bool   `yaml:"compress"`
+	Level      string `yaml:"level"`
 }
 
 type LabelsConfig struct {
@@ -371,6 +381,10 @@ const (
 	defaultRestartCooldownS       = 60
 	defaultBudgetPeriodDays       = 7
 	defaultBudgetCriticalPct      = 90
+	defaultLogMaxSizeMB           = 50
+	defaultLogMaxAgeDays          = 7
+	defaultLogMaxBackups          = 10
+	defaultLogLevel               = "info"
 )
 
 func (c *Config) applyDefaults() {
@@ -465,6 +479,24 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Governor.Budget.CriticalPct == 0 {
 		c.Governor.Budget.CriticalPct = defaultBudgetCriticalPct
+	}
+	if c.Governor.Logging.Dir == "" {
+		c.Governor.Logging.Dir = c.Data.LogsDir
+	}
+	if c.Governor.Logging.MaxSizeMB == 0 {
+		c.Governor.Logging.MaxSizeMB = defaultLogMaxSizeMB
+	}
+	if c.Governor.Logging.MaxAgeDays == 0 {
+		c.Governor.Logging.MaxAgeDays = defaultLogMaxAgeDays
+	}
+	if c.Governor.Logging.MaxBackups == 0 {
+		c.Governor.Logging.MaxBackups = defaultLogMaxBackups
+	}
+	if !c.Governor.Logging.Compress {
+		c.Governor.Logging.Compress = true
+	}
+	if c.Governor.Logging.Level == "" {
+		c.Governor.Logging.Level = defaultLogLevel
 	}
 
 	if c.Knowledge.Enabled {

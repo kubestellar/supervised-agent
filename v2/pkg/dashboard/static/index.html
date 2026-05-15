@@ -5906,7 +5906,7 @@ function burnAreaChart() {
     let _configState = { type: null, agent: null, tab: null, data: {}, dirty: {} };
 
     const AGENT_CONFIG_TABS = ['General', 'Cadences', 'Pipeline', 'Hooks', 'Restrictions', 'Stats', 'Prompt Template', 'Last Prompt'];
-    const GOVERNOR_CONFIG_TABS = ['General', 'Agents', 'Thresholds', 'Labels', 'Repos', 'Budget', 'Notifications', 'Health', 'Sensing'];
+    const GOVERNOR_CONFIG_TABS = ['General', 'Agents', 'Thresholds', 'Labels', 'Repos', 'Budget', 'Notifications', 'Health', 'Sensing', 'Logging'];
     const PIPELINE_STAGES = ['resolve-beads', 'track-prs', 'stale-check', 'repo-scan', 'coverage-gate', 'prompt-compose', 'budget-check', 'api-collect', 'final-compose'];
     const PIPELINE_STAGE_TIPS = {
       'resolve-beads': 'Fetch and inject knowledge beads (facts, patterns, gotchas) relevant to the agent\'s current task context.',
@@ -6012,6 +6012,7 @@ function burnAreaChart() {
         case 'Notifications': return renderGovNotifications(d.notifications || {});
         case 'Health': return renderGovHealth(d.health || {});
         case 'Sensing': return renderGovSensing(d.sensing || {});
+        case 'Logging': return renderGovLogging(d.logging || {});
         default: return '';
       }
     }
@@ -6625,6 +6626,31 @@ function burnAreaChart() {
         <div class="config-field-row">
           <div class="config-field"><label>Alert TTL (sec) <span class="config-info">i<span class="config-tooltip">How long a rate-limit alert stays active before auto-clearing. Default is 900 seconds (15 minutes). After this time, the agent is considered safe to kick again.</span></span></label><input type="number" value="${s.ttlSeconds || 900}" onchange="markDirty('sensing','ttlSeconds',Number(this.value))"></div>
           <div class="config-field"><label>Pullback Duration (sec) <span class="config-info">i<span class="config-tooltip">How long to pause an agent after detecting a rate limit. During pullback, the governor skips kicks for this agent. Default is 900 seconds (15 minutes).</span></span></label><input type="number" value="${s.pullbackSeconds || 900}" onchange="markDirty('sensing','pullbackSeconds',Number(this.value))"></div>
+        </div>`;
+    }
+
+    function renderGovLogging(l) {
+      const levels = ['debug', 'info', 'warn', 'error'];
+      return `
+        <div class="config-field">
+          <label>Log Directory <span class="config-info">i<span class="config-tooltip">Directory where rolling log files are written. Stored on the persistent /data volume so logs survive container restarts. Read-only at runtime — change in hive.yaml and restart.</span></span></label>
+          <input type="text" value="${esc(l.dir || '/data/logs')}" disabled style="opacity:0.6">
+        </div>
+        <div class="config-field-row">
+          <div class="config-field"><label>Max File Size (MB) <span class="config-info">i<span class="config-tooltip">Maximum size of a single log file before rotation. When reached, the current file is rotated and a new one starts. Default 50 MB.</span></span></label><input type="number" value="${l.maxSizeMB || 50}" onchange="markDirty('logging','maxSizeMB',Number(this.value))"></div>
+          <div class="config-field"><label>Retention (days) <span class="config-info">i<span class="config-tooltip">How many days to keep rotated log files. Files older than this are automatically deleted by lumberjack. Default 7 days.</span></span></label><input type="number" value="${l.maxAgeDays || 7}" onchange="markDirty('logging','maxAgeDays',Number(this.value))"></div>
+        </div>
+        <div class="config-field-row">
+          <div class="config-field"><label>Max Backups <span class="config-info">i<span class="config-tooltip">Maximum number of rotated log files to keep. Works alongside retention days — whichever limit is hit first triggers cleanup. Default 10 files.</span></span></label><input type="number" value="${l.maxBackups || 10}" onchange="markDirty('logging','maxBackups',Number(this.value))"></div>
+          <div class="config-field"><label>Log Level <span class="config-info">i<span class="config-tooltip">Minimum severity level for log output. DEBUG includes all messages. INFO is the default operational level. WARN and ERROR reduce noise. Takes effect on next container restart.</span></span></label>
+            <select onchange="markDirty('logging','level',this.value)">
+              ${levels.map(lv => '<option value="' + lv + '" ' + ((l.level||'info')===lv?'selected':'') + '>' + lv.toUpperCase() + '</option>').join('')}
+            </select>
+          </div>
+        </div>
+        <div class="config-toggle">
+          <div class="config-toggle-switch ${l.compress !== false ? 'on' : ''}" data-action="toggleConfigSwitch" data-section="logging" data-key="compress"></div>
+          <span class="config-toggle-label">Compress Rotated Files <span class="config-info">i<span class="config-tooltip">Gzip-compress rotated log files to save disk space. Typically reduces log file size by ~90%. Enabled by default.</span></span></span>
         </div>`;
     }
 

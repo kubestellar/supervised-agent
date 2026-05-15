@@ -6,14 +6,18 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/kubestellar/hive/v2/pkg/agent"
 	"github.com/kubestellar/hive/v2/pkg/beads"
@@ -48,6 +52,12 @@ func main() {
 		logger.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
+
+	// Reconfigure logger with rolling file output
+	logger = setupLogger(cfg.Governor.Logging.Dir, cfg.Governor.Logging.MaxSizeMB,
+		cfg.Governor.Logging.MaxAgeDays, cfg.Governor.Logging.MaxBackups,
+		cfg.Governor.Logging.Compress, cfg.Governor.Logging.Level)
+	slog.SetDefault(logger)
 
 	// Load or generate a unique Hive ID for this instance
 	cfg.HiveID = loadOrGenerateHiveID(logger)
@@ -923,5 +933,38 @@ func confidenceToFloat(s string) float64 {
 		return 0.4
 	default:
 		return 0.5
+	}
+}
+
+const logFilename = "hive.log"
+
+func setupLogger(dir string, maxSizeMB, maxAgeDays, maxBackups int, compress bool, level string) *slog.Logger {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		slog.Warn("failed to create log directory, falling back to stdout only", "dir", dir, "error", err)
+		return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: parseLogLevel(level)}))
+	}
+
+	lj := &lumberjack.Logger{
+		Filename:   filepath.Join(dir, logFilename),
+		MaxSize:    maxSizeMB,
+		MaxAge:     maxAgeDays,
+		MaxBackups: maxBackups,
+		Compress:   compress,
+	}
+
+	tee := io.MultiWriter(os.Stdout, lj)
+	return slog.New(slog.NewJSONHandler(tee, &slog.HandlerOptions{Level: parseLogLevel(level)}))
+}
+
+func parseLogLevel(s string) slog.Level {
+	switch strings.ToLower(s) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
 	}
 }

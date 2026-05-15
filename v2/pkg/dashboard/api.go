@@ -65,6 +65,7 @@ func (s *Server) RegisterAPI(deps *Dependencies) {
 	s.mux.HandleFunc("PUT /api/config/governor/budget", s.handleGovernorBudget)
 	s.mux.HandleFunc("PUT /api/config/governor/notifications", s.handleGovernorNotifications)
 	s.mux.HandleFunc("PUT /api/config/governor/health", s.handleGovernorHealth)
+	s.mux.HandleFunc("PUT /api/config/governor/logging", s.handleGovernorLogging)
 	s.mux.HandleFunc("POST /api/config/governor/agents", s.handleGovernorAddAgent)
 	s.mux.HandleFunc("DELETE /api/config/governor/agents/{name}", s.handleGovernorRemoveAgent)
 	s.mux.HandleFunc("PUT /api/config/governor/repos", s.handleGovernorRepos)
@@ -1323,6 +1324,14 @@ func (s *Server) handleGovernorConfigGet(w http.ResponseWriter, r *http.Request)
 			"ttlSeconds":         cfg.Governor.Sensing.TTLSeconds,
 			"pullbackSeconds":    cfg.Governor.Sensing.PullbackSeconds,
 		},
+		"logging": map[string]interface{}{
+			"dir":        cfg.Governor.Logging.Dir,
+			"maxSizeMB":  cfg.Governor.Logging.MaxSizeMB,
+			"maxAgeDays": cfg.Governor.Logging.MaxAgeDays,
+			"maxBackups": cfg.Governor.Logging.MaxBackups,
+			"compress":   cfg.Governor.Logging.Compress,
+			"level":      cfg.Governor.Logging.Level,
+		},
 	})
 }
 
@@ -1469,6 +1478,37 @@ func (s *Server) handleGovernorHealth(w http.ResponseWriter, r *http.Request) {
 		s.deps.Config.Governor.Health.RestartCooldown = body.RestartCooldown
 	}
 	s.deps.Config.Governor.Health.ModelLock = body.ModelLock
+	s.refreshAndPersist()
+	okResponse(w, map[string]string{"status": "updated"})
+}
+
+func (s *Server) handleGovernorLogging(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		MaxSizeMB  int    `json:"maxSizeMB"`
+		MaxAgeDays int    `json:"maxAgeDays"`
+		MaxBackups int    `json:"maxBackups"`
+		Compress   *bool  `json:"compress"`
+		Level      string `json:"level"`
+	}
+	if err := decodeBody(r, &body); err != nil {
+		jsonError(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	if body.MaxSizeMB > 0 {
+		s.deps.Config.Governor.Logging.MaxSizeMB = body.MaxSizeMB
+	}
+	if body.MaxAgeDays > 0 {
+		s.deps.Config.Governor.Logging.MaxAgeDays = body.MaxAgeDays
+	}
+	if body.MaxBackups > 0 {
+		s.deps.Config.Governor.Logging.MaxBackups = body.MaxBackups
+	}
+	if body.Compress != nil {
+		s.deps.Config.Governor.Logging.Compress = *body.Compress
+	}
+	if body.Level != "" {
+		s.deps.Config.Governor.Logging.Level = body.Level
+	}
 	s.refreshAndPersist()
 	okResponse(w, map[string]string{"status": "updated"})
 }
