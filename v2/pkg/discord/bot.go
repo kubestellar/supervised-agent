@@ -601,6 +601,7 @@ func (b *Bot) pollLoop(ctx context.Context) {
 	defer ticker.Stop()
 
 	var lastMessageID string
+	firstPoll := true
 
 	for {
 		select {
@@ -616,8 +617,11 @@ func (b *Bot) pollLoop(ctx context.Context) {
 			for i := len(messages) - 1; i >= 0; i-- {
 				msg := messages[i]
 				lastMessageID = msg.ID
-				b.routeMessage(ctx, msg)
+				if !firstPoll {
+					b.routeMessage(ctx, msg)
+				}
 			}
+			firstPoll = false
 		}
 	}
 }
