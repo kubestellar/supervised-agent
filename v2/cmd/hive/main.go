@@ -453,6 +453,7 @@ func main() {
 
 	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, nousState, &lastActionable, logger)
 	persistState(agentMgr, gov, cfg, tokenCollector, statePath, logger, dashSrv)
+	dashSrv.MarkReady()
 
 	for {
 		select {

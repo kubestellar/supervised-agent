@@ -37,6 +37,8 @@ type Server struct {
 
 	tokenHistoryMu sync.RWMutex
 	tokenHistory   []TokenSparklineEntry
+
+	ready bool
 }
 
 // StatusPayload matches the JSON contract the dashboard frontend render() expects.
@@ -298,7 +300,7 @@ func (s *Server) UpdateStatus(status *StatusPayload) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	s.statusMu.RLock()
-	ready := s.status != nil
+	ready := s.status != nil && s.ready
 	s.statusMu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -308,6 +310,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (s *Server) MarkReady() {
+	s.statusMu.Lock()
+	s.ready = true
+	s.statusMu.Unlock()
+	s.logger.Info("dashboard marked ready")
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
