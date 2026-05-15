@@ -4612,18 +4612,20 @@ function burnAreaChart() {
     }
 
     function renderGovNotifications(n) {
+      const ntfyHint = n.hasNtfy ? '(configured — enter new value to change)' : '';
+      const discordHint = n.hasDiscord ? '(configured — enter new value to change)' : '';
       return `
         <div class="config-field">
-          <label>Ntfy Server</label>
-          <input type="text" value="${esc(n.ntfyServer || '')}" onchange="markDirty('notifications','ntfyServer',this.value)">
+          <label>Ntfy Server ${ntfyHint}</label>
+          <input type="text" value="" onchange="markDirty('notifications','ntfyServer',this.value)" placeholder="${esc(n.ntfyServer || 'https://ntfy.sh')}">
         </div>
         <div class="config-field">
           <label>Ntfy Topic</label>
-          <input type="text" value="${esc(n.ntfyTopic || '')}" onchange="markDirty('notifications','ntfyTopic',this.value)">
+          <input type="text" value="" onchange="markDirty('notifications','ntfyTopic',this.value)" placeholder="${esc(n.ntfyTopic || 'my-topic')}">
         </div>
         <div class="config-field">
-          <label>Discord Webhook</label>
-          <input type="text" value="${esc(n.discordWebhook || '')}" onchange="markDirty('notifications','discordWebhook',this.value)" placeholder="https://discord.com/api/webhooks/...">
+          <label>Discord Webhook ${discordHint}</label>
+          <input type="text" value="" onchange="markDirty('notifications','discordWebhook',this.value)" placeholder="${esc(n.discordWebhook || 'https://discord.com/api/webhooks/...')}">
         </div>`;
     }
 
@@ -4738,8 +4740,8 @@ function burnAreaChart() {
     function renderGovHealth(h) {
       return `
         <div class="config-field-row">
-          <div class="config-field"><label>Healthcheck Interval (sec)</label><input type="number" value="${h.healthcheckInterval || 300}" onchange="markDirty('health','healthcheckInterval',this.value)"></div>
-          <div class="config-field"><label>Restart Cooldown (sec)</label><input type="number" value="${h.restartCooldown || 60}" onchange="markDirty('health','restartCooldown',this.value)"></div>
+          <div class="config-field"><label>Healthcheck Interval (sec)</label><input type="number" value="${h.healthcheckInterval || 300}" onchange="markDirty('health','healthcheckInterval',Number(this.value))"></div>
+          <div class="config-field"><label>Restart Cooldown (sec)</label><input type="number" value="${h.restartCooldown || 60}" onchange="markDirty('health','restartCooldown',Number(this.value))"></div>
         </div>
         <div class="config-toggle">
           <div class="config-toggle-switch ${h.modelLock ? 'on' : ''}" onclick="toggleConfigSwitch(this,'health','modelLock')"></div>
