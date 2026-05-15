@@ -373,6 +373,7 @@ func TestPause_SetsPausedFlag(t *testing.T) {
 }
 
 func TestResume_ClearsPausedFlag(t *testing.T) {
+	t.Setenv("HIVE_WORK_DIR", t.TempDir())
 	cfgs := map[string]config.AgentConfig{
 		"worker": makeAgentConfig("claude", "sonnet"),
 	}
@@ -536,6 +537,7 @@ func TestStart_UnknownAgentReturnsError(t *testing.T) {
 }
 
 func TestStart_UnknownBackendReturnsError(t *testing.T) {
+	t.Setenv("HIVE_WORK_DIR", t.TempDir())
 	cfgs := map[string]config.AgentConfig{
 		"bad": makeAgentConfig("not-a-real-backend", ""),
 	}
