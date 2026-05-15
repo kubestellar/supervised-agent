@@ -438,6 +438,26 @@ const (
 	staleCheckDelay       = 1 * time.Second
 )
 
+func (m *Manager) SeedLastKick(name string, t time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if agent, ok := m.agents[name]; ok {
+		agent.LastKick = &t
+	}
+}
+
+func (m *Manager) SeedKickHistory(name string, records []KickRecord) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if agent, ok := m.agents[name]; ok {
+		if len(records) > kickHistoryCapacity {
+			records = records[len(records)-kickHistoryCapacity:]
+		}
+		agent.KickHistory = make([]KickRecord, len(records))
+		copy(agent.KickHistory, records)
+	}
+}
+
 func (m *Manager) GetStatus(name string) (*AgentProcess, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

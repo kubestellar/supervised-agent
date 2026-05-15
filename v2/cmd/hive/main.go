@@ -147,9 +147,11 @@ func main() {
 	agentMgr := agent.NewManager(cfg.EnabledAgents(), logger)
 
 	const statePath = "/data/hive-state.json"
+	var savedIssueCosts map[string]int64
 	if saved, err := snapshot.LoadState(statePath, logger); err != nil {
 		logger.Warn("failed to load persisted state", "error", err)
 	} else if saved != nil {
+		savedIssueCosts = saved.IssueCosts
 		for name, as := range saved.Agents {
 			if as.Paused {
 				_ = agentMgr.Pause(name)
@@ -165,6 +167,16 @@ func main() {
 			}
 			if as.BackendOverride != "" {
 				_ = agentMgr.SetBackendOverride(name, as.BackendOverride)
+			}
+			if as.LastKick != nil {
+				agentMgr.SeedLastKick(name, *as.LastKick)
+			}
+			if len(as.KickHistory) > 0 {
+				records := make([]agent.KickRecord, len(as.KickHistory))
+				for i, ke := range as.KickHistory {
+					records[i] = agent.KickRecord{Timestamp: ke.Timestamp, Agent: ke.Agent, Snippet: ke.Snippet}
+				}
+				agentMgr.SeedKickHistory(name, records)
 			}
 			if agentCfg, ok := cfg.Agents[name]; ok {
 				if as.DisplayName != "" {
@@ -211,6 +223,29 @@ func main() {
 			}
 			cfg.Governor.Modes[modeName] = mode
 		}
+		if saved.GovernorMode != "" {
+			gov.SetMode(governor.Mode(saved.GovernorMode))
+			logger.Info("governor mode restored", "mode", saved.GovernorMode)
+		}
+		if len(saved.LastKicks) > 0 {
+			gov.SeedLastKicks(saved.LastKicks)
+			logger.Info("governor last kicks restored", "agents", len(saved.LastKicks))
+		}
+		if saved.BudgetSpend > 0 || !saved.BudgetResetAt.IsZero() || len(saved.BudgetByAgent) > 0 {
+			gov.SeedBudget(saved.BudgetSpend, saved.BudgetByAgent, saved.BudgetByModel, saved.BudgetResetAt)
+			logger.Info("budget state restored", "spend", saved.BudgetSpend, "reset_at", saved.BudgetResetAt)
+		}
+		if len(saved.KickHistory) > 0 {
+			records := make([]governor.KickRecord, len(saved.KickHistory))
+			for i, ke := range saved.KickHistory {
+				records[i] = governor.KickRecord{Timestamp: ke.Timestamp, Agent: ke.Agent}
+			}
+			gov.SeedKickHistory(records)
+			logger.Info("kick history restored", "entries", len(records))
+		}
+		if !saved.LastEval.IsZero() {
+			gov.SeedLastEval(saved.LastEval)
+		}
 	}
 
 	if gov.GetBudget().WeeklyLimit == 0 && cfg.Governor.Budget.TotalTokens > 0 {
@@ -242,6 +277,10 @@ func main() {
 	tokenCollector := tokens.NewCollector(cfg.Data.MetricsDir, logger)
 	tokenCollector.SetClaudeSessionsDir(cfg.Data.ClaudeSessionsDir)
 	tokenCollector.SetCopilotSessionsDir(cfg.Data.CopilotSessionsDir)
+	if len(savedIssueCosts) > 0 {
+		tokenCollector.SeedIssueCosts(savedIssueCosts)
+		logger.Info("issue costs restored", "entries", len(savedIssueCosts))
+	}
 	tokenStop := make(chan struct{})
 	go tokenCollector.Start(tokenStop)
 	defer close(tokenStop)
@@ -349,7 +388,7 @@ func main() {
 		Ctx:              ctx,
 		RefreshFunc:      refreshDashboard,
 		PersistFunc: func() {
-			persistState(agentMgr, gov, cfg, statePath, logger, dashSrv)
+			persistState(agentMgr, gov, cfg, tokenCollector, statePath, logger, dashSrv)
 		},
 	})
 
@@ -413,17 +452,17 @@ func main() {
 	}
 
 	runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, nousState, &lastActionable, logger)
-	persistState(agentMgr, gov, cfg, statePath, logger, dashSrv)
+	persistState(agentMgr, gov, cfg, tokenCollector, statePath, logger, dashSrv)
 
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Info("shutting down, persisting state")
-			persistState(agentMgr, gov, cfg, statePath, logger, dashSrv)
+			persistState(agentMgr, gov, cfg, tokenCollector, statePath, logger, dashSrv)
 			return
 		case <-ticker.C:
 			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, nousState, &lastActionable, logger)
-			persistState(agentMgr, gov, cfg, statePath, logger, dashSrv)
+			persistState(agentMgr, gov, cfg, tokenCollector, statePath, logger, dashSrv)
 		}
 	}
 }
@@ -680,7 +719,7 @@ func randomName() string {
 	return adj + "-" + noun
 }
 
-func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.Config, path string, logger *slog.Logger, dashSrv *dashboard.Server) {
+func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.Config, tc *tokens.Collector, path string, logger *slog.Logger, dashSrv *dashboard.Server) {
 	statuses := agentMgr.AllStatuses()
 	agents := make(map[string]snapshot.AgentState, len(statuses))
 	for name, proc := range statuses {
@@ -691,6 +730,17 @@ func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.C
 			ModelOverride:   proc.ModelOverride,
 			BackendOverride: proc.BackendOverride,
 			RestartCount:    proc.RestartCount,
+			LastKick:        proc.LastKick,
+		}
+		if len(proc.KickHistory) > 0 {
+			as.KickHistory = make([]snapshot.AgentKickEntry, len(proc.KickHistory))
+			for i, kr := range proc.KickHistory {
+				as.KickHistory[i] = snapshot.AgentKickEntry{
+					Timestamp: kr.Timestamp,
+					Agent:     kr.Agent,
+					Snippet:   kr.Snippet,
+				}
+			}
 		}
 		if agentCfg, ok := cfg.Agents[name]; ok {
 			as.DisplayName = agentCfg.DisplayName
@@ -718,12 +768,33 @@ func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.C
 	}
 
 	budget := gov.GetBudget()
+	govState := gov.GetState()
+
+	govKickHistory := gov.KickHistory()
+	kickEntries := make([]snapshot.GovKickEntry, len(govKickHistory))
+	for i, kr := range govKickHistory {
+		kickEntries[i] = snapshot.GovKickEntry{Timestamp: kr.Timestamp, Agent: kr.Agent}
+	}
+
+	var issueCosts map[string]int64
+	if tc != nil {
+		issueCosts = tc.IssueCosts()
+	}
+
 	state := &snapshot.PersistedState{
 		Agents:           agents,
-		GovernorMode:     string(gov.GetState().Mode),
+		GovernorMode:     string(govState.Mode),
 		BudgetLimit:      budget.WeeklyLimit,
 		BudgetIgnored:    budget.IgnoredAgents,
 		CadenceOverrides: cadenceOverrides,
+		LastKicks:        govState.LastKick,
+		BudgetSpend:      budget.CurrentSpend,
+		BudgetResetAt:    budget.ResetAt,
+		BudgetByAgent:    budget.ByAgent,
+		BudgetByModel:    budget.ByModel,
+		KickHistory:      kickEntries,
+		IssueCosts:       issueCosts,
+		LastEval:         govState.LastEval,
 	}
 
 	if err := snapshot.SaveState(path, state, logger); err != nil {

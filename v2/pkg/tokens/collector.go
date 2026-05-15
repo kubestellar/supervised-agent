@@ -165,6 +165,14 @@ func (c *Collector) Summary() *AggregateSummary {
 	return c.latest
 }
 
+func (c *Collector) SeedIssueCosts(costs map[string]int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k, v := range costs {
+		c.issueCosts[k] = v
+	}
+}
+
 func (c *Collector) IssueCosts() map[string]int64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

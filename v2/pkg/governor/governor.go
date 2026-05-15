@@ -395,6 +395,49 @@ func (g *Governor) SeedQueueState(issues, prs, hold, slaViolations int) {
 	g.state.SLAViolations = slaViolations
 }
 
+func (g *Governor) SeedLastKicks(kicks map[string]time.Time) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for k, v := range kicks {
+		g.state.LastKick[k] = v
+	}
+}
+
+func (g *Governor) SeedKickHistory(records []KickRecord) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if len(records) > kickHistoryCapacity {
+		records = records[len(records)-kickHistoryCapacity:]
+	}
+	g.kickHistory = make([]KickRecord, len(records), kickHistoryCapacity)
+	copy(g.kickHistory, records)
+}
+
+func (g *Governor) SeedBudget(spend int64, byAgent map[string]int64, byModel map[string]int64, resetAt time.Time) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.budget.CurrentSpend = spend
+	for k, v := range byAgent {
+		g.budget.ByAgent[k] = v
+	}
+	for k, v := range byModel {
+		g.budget.ByModel[k] = v
+	}
+	g.budget.ResetAt = resetAt
+}
+
+func (g *Governor) SetMode(m Mode) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.state.Mode = m
+}
+
+func (g *Governor) SeedLastEval(t time.Time) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.state.LastEval = t
+}
+
 func (g *Governor) KickHistory() []KickRecord {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
