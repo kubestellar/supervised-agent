@@ -452,16 +452,9 @@ func runEvalCycle(
 		"agents_due", agentsDue,
 	)
 
-	for name, cadence := range govState.Cadences {
-		proc, err := agentMgr.GetStatus(name)
-		if err != nil {
-			continue
-		}
-		if cadence.Paused && !proc.Paused {
-			_ = agentMgr.Pause(name)
-			logger.Info("governor paused agent", "agent", name, "mode", govState.Mode)
-		}
-	}
+	// cadence.Paused (cadence: "pause" in config) means "don't kick this agent
+	// in this mode" — it does NOT force-pause the agent. Manual pause/resume
+	// via the dashboard is always respected; the governor only controls kicks.
 
 	if len(agentsDue) > 0 {
 		messages := sched.BuildKickMessages(actionable, agentsDue)

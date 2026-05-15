@@ -2634,18 +2634,10 @@
       return rows;
     }
 
-    const AGENT_TMUX_SESSION = {
-      supervisor: 'hive-supervisor',
-      scanner: 'hive-scanner',
-      'ci-maintainer': 'hive-ci-maintainer',
-      architect: 'hive-architect',
-      outreach: 'hive-outreach',
-      strategist: 'hive-strategist',
-      'sec-check': 'hive-sec-check',
-    };
+    const TMUX_SESSION_PREFIX = 'hive-';
     const TTYD_PORT = 7681;
     function terminalUrl(agentName) {
-      const session = AGENT_TMUX_SESSION[agentName] || agentName;
+      const session = TMUX_SESSION_PREFIX + agentName;
       const host = window.location.hostname;
       return `http://${host}:${TTYD_PORT}/?arg=${encodeURIComponent(session)}`;
     }
