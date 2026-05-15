@@ -203,6 +203,8 @@ notifications:
   ntfy:
     server: ${NTFY_SERVER}
     topic: ${NTFY_TOPIC}
+  discord:
+    webhook: ${DISCORD_WEBHOOK}
 
 knowledge:
   enabled: true

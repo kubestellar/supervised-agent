@@ -19,6 +19,7 @@ import (
 	"github.com/kubestellar/hive/v2/pkg/beads"
 	"github.com/kubestellar/hive/v2/pkg/config"
 	"github.com/kubestellar/hive/v2/pkg/dashboard"
+	"github.com/kubestellar/hive/v2/pkg/discord"
 	"github.com/kubestellar/hive/v2/pkg/github"
 	"github.com/kubestellar/hive/v2/pkg/governor"
 	"github.com/kubestellar/hive/v2/pkg/knowledge"
@@ -332,6 +333,24 @@ func main() {
 			logger.Error("dashboard server failed", "error", err)
 		}
 	}()
+
+	if cfg.Notifications.Discord != nil && cfg.Notifications.Discord.BotToken != "" && cfg.Notifications.Discord.ChannelID != "" {
+		discordBot := discord.NewBot(discord.Config{
+			Token:        cfg.Notifications.Discord.BotToken,
+			ChannelID:    cfg.Notifications.Discord.ChannelID,
+			DashboardURL: fmt.Sprintf("http://localhost:%d", cfg.Dashboard.Port),
+		}, logger)
+		var agentNameList []string
+		for name := range cfg.EnabledAgents() {
+			agentNameList = append(agentNameList, name)
+		}
+		discordBot.SetAgentNames(agentNameList)
+		if err := discordBot.Start(ctx); err != nil {
+			logger.Warn("discord bot failed to start", "error", err)
+		} else {
+			logger.Info("discord bot started", "channel", cfg.Notifications.Discord.ChannelID)
+		}
+	}
 
 	for name := range cfg.EnabledAgents() {
 		if err := agentMgr.Start(ctx, name); err != nil {
