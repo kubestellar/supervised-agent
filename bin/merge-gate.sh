@@ -23,7 +23,8 @@ TMP_FILE="${OUTPUT_FILE}.tmp"
 LOG="/var/log/kick-agents.log"
 
 # CI check names to ignore when evaluating merge readiness
-IGNORED_CHECKS="tide|Playwright|netlify|Deploy Preview|attribute|Storybook|Visual |Verify build after merge"
+# NOTE: netlify/Deploy Preview are NOT ignored — Netlify failures must block merges
+IGNORED_CHECKS="tide|Playwright|attribute|Storybook|Visual |Verify build after merge"
 
 log() { echo "[$(date -Is)] MERGE-GATE $*" >> "$LOG"; }
 
