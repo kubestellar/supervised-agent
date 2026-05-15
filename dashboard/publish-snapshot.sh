@@ -71,12 +71,61 @@ PR_URL=$(gh pr create \
 PR_NUM=$(echo "$PR_URL" | grep -o '[0-9]*$')
 echo "Created PR #${PR_NUM}: ${PR_URL}"
 
-if gh pr merge "$PR_NUM" --repo "$DOCS_REPO_SLUG" --admin --squash --delete-branch 2>/dev/null; then
-  echo "Snapshot published via PR #${PR_NUM} (admin merge)."
+# Wait for Netlify deploy-preview before merging
+NETLIFY_CHECK="netlify/kubestellar-docs/deploy-preview"
+NETLIFY_TIMEOUT_SECONDS=300
+NETLIFY_POLL_INTERVAL=15
+elapsed=0
+netlify_status="pending"
+
+echo "Waiting for Netlify deploy-preview (timeout: ${NETLIFY_TIMEOUT_SECONDS}s)..."
+while [ "$elapsed" -lt "$NETLIFY_TIMEOUT_SECONDS" ]; do
+  checks_output=$(gh pr checks "$PR_NUM" --repo "$DOCS_REPO_SLUG" 2>/dev/null || true)
+  netlify_line=$(echo "$checks_output" | grep -i "$NETLIFY_CHECK" || true)
+
+  if [ -n "$netlify_line" ]; then
+    if echo "$netlify_line" | grep -qi "pass"; then
+      netlify_status="pass"
+      break
+    elif echo "$netlify_line" | grep -qi "fail"; then
+      netlify_status="fail"
+      break
+    fi
+  fi
+
+  sleep "$NETLIFY_POLL_INTERVAL"
+  elapsed=$((elapsed + NETLIFY_POLL_INTERVAL))
+  echo "  ...waiting (${elapsed}s/${NETLIFY_TIMEOUT_SECONDS}s)"
+done
+
+if [ "$netlify_status" = "pass" ]; then
+  echo "Netlify deploy-preview passed."
+  if gh pr merge "$PR_NUM" --repo "$DOCS_REPO_SLUG" --admin --squash --delete-branch 2>/dev/null; then
+    echo "Snapshot published via PR #${PR_NUM} (admin merge)."
+  else
+    echo "Admin merge unavailable — enabling auto-merge on PR #${PR_NUM}."
+    gh pr merge "$PR_NUM" --repo "$DOCS_REPO_SLUG" --squash --auto --delete-branch
+    echo "Auto-merge enabled on PR #${PR_NUM} — will merge when checks pass."
+  fi
+elif [ "$netlify_status" = "fail" ]; then
+  echo "ERROR: Netlify deploy-preview FAILED for PR #${PR_NUM}. NOT merging."
+  echo "Check: https://github.com/${DOCS_REPO_SLUG}/pull/${PR_NUM}"
+  # Send ntfy alert if available
+  if [ -n "${NTFY_TOPIC:-}" ]; then
+    curl -s -d "Netlify deploy-preview failed for snapshot PR #${PR_NUM} — not merged" \
+      -H "Title: Hive snapshot blocked" -H "Priority: high" \
+      "${NTFY_SERVER:-https://ntfy.sh}/${NTFY_TOPIC}" >/dev/null 2>&1 || true
+  fi
+  exit 1
 else
-  echo "Admin merge unavailable — enabling auto-merge on PR #${PR_NUM}."
-  gh pr merge "$PR_NUM" --repo "$DOCS_REPO_SLUG" --squash --auto --delete-branch
-  echo "Auto-merge enabled on PR #${PR_NUM} — will merge when checks pass."
+  echo "WARNING: Netlify deploy-preview timed out after ${NETLIFY_TIMEOUT_SECONDS}s for PR #${PR_NUM}. NOT merging."
+  echo "Check: https://github.com/${DOCS_REPO_SLUG}/pull/${PR_NUM}"
+  if [ -n "${NTFY_TOPIC:-}" ]; then
+    curl -s -d "Netlify deploy-preview timed out for snapshot PR #${PR_NUM} — not merged" \
+      -H "Title: Hive snapshot timeout" -H "Priority: default" \
+      "${NTFY_SERVER:-https://ntfy.sh}/${NTFY_TOPIC}" >/dev/null 2>&1 || true
+  fi
+  exit 1
 fi
 
 # Reset back to main for next run
