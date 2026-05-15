@@ -179,6 +179,7 @@ func main() {
 					agentCfg.LaunchCmd = as.LaunchCmd
 				}
 				cfg.Agents[name] = agentCfg
+				_ = agentMgr.UpdateConfig(name, agentCfg)
 			}
 		}
 		if saved.BudgetLimit > 0 {
