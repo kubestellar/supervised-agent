@@ -84,6 +84,68 @@ if { [ "$subcmd" = "issue" ] || [ "$subcmd" = "pr" ]; } && [ "$action" = "list" 
   exit 1
 fi
 
+# Enforce merge gate — only PRs in merge-eligible.json can be merged
+MERGE_ELIGIBLE_FILE="/var/run/hive-metrics/merge-eligible.json"
+if [ "$subcmd" = "pr" ] && [ "$action" = "merge" ]; then
+  pr_num=""
+  pr_repo=""
+  skip_next=false
+  past_merge=false
+  for arg in "${args[@]}"; do
+    if $skip_next; then skip_next=false; continue; fi
+    case "$arg" in
+      pr|merge) past_merge=true; continue ;;
+      --repo) skip_next=true; continue ;;
+      --repo=*) pr_repo="${arg#--repo=}"; continue ;;
+      -*) continue ;;
+      *)
+        if $past_merge && [ -z "$pr_num" ]; then
+          pr_num="$arg"
+        fi
+        ;;
+    esac
+  done
+
+  if [ -z "$pr_repo" ]; then
+    for i in "${!args[@]}"; do
+      if [ "${args[$i]}" = "--repo" ] && [ -n "${args[$((i+1))]:-}" ]; then
+        pr_repo="${args[$((i+1))]}"
+        break
+      fi
+    done
+  fi
+
+  if [ -n "$pr_num" ] && [ -f "$MERGE_ELIGIBLE_FILE" ]; then
+    is_eligible=$(python3 -c "
+import json, sys
+try:
+    with open('${MERGE_ELIGIBLE_FILE}') as f:
+        data = json.load(f)
+    repo_filter = '${pr_repo}'
+    for pr in data.get('merge_eligible', []):
+        if str(pr.get('number')) == '${pr_num}':
+            if not repo_filter or pr.get('repo','') == repo_filter:
+                print('yes')
+                sys.exit(0)
+    print('no')
+except Exception as e:
+    print('error:' + str(e), file=sys.stderr)
+    print('no')
+" 2>/dev/null)
+
+    if [ "$is_eligible" != "yes" ]; then
+      echo "⛔ BLOCKED: PR #${pr_num} is NOT in merge-eligible.json." >&2
+      echo "The merge gate requires all CI checks to pass before merging." >&2
+      echo "Run 'cat ${MERGE_ELIGIBLE_FILE} | python3 -m json.tool' to see eligible PRs." >&2
+      exit 1
+    fi
+  elif [ -n "$pr_num" ] && [ ! -f "$MERGE_ELIGIBLE_FILE" ]; then
+    echo "⛔ BLOCKED: ${MERGE_ELIGIBLE_FILE} not found — cannot verify merge eligibility." >&2
+    echo "Run merge-gate.sh first, or wait for the next pipeline cycle." >&2
+    exit 1
+  fi
+fi
+
 # Block gh api calls that list issues or pulls (global)
 if [ "$subcmd" = "api" ]; then
   for arg in "${args[@]}"; do
