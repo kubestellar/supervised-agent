@@ -1452,9 +1452,7 @@
     <span class="chat-title">🐝 Hive Chat</span>
     <button class="hive-chat-close" id="hiveChatClose">✕</button>
   </div>
-  <div class="hive-chat-messages" id="hiveChatMessages">
-    <div class="chat-msg system">Ask me about agents, beads, PRs, issues, status, or anything in the hive. I search across all agent data to answer.</div>
-  </div>
+  <div class="hive-chat-messages" id="hiveChatMessages"></div>
   <div class="hive-chat-input-row">
     <textarea class="hive-chat-input" id="hiveChatInput" placeholder="Ask about agents, beads, PRs..." rows="1"></textarea>
     <button class="hive-chat-send" id="hiveChatSend">Send</button>
@@ -4278,6 +4276,29 @@ function burnAreaChart() {
       } catch (e) { /* knowledge unavailable */ }
     }
 
+    function kbSelectType(type) {
+      _kbSelectedType = type;
+      const row = document.getElementById('kb-type-pills');
+      if (row) {
+        for (const pill of row.children) {
+          pill.classList.toggle('active', pill.textContent === (type || 'All'));
+        }
+      }
+      kbSearch();
+    }
+
+    function kbSelectLayer(layer) {
+      _kbSelectedLayer = layer;
+      const list = document.getElementById('kb-layer-btns');
+      if (list) {
+        for (const btn of list.children) {
+          const isAll = btn.textContent.includes('All Layers');
+          btn.classList.toggle('active', layer === 'all' ? isAll : btn.getAttribute('onclick')?.includes("'" + layer + "'"));
+        }
+      }
+      kbSearch();
+    }
+
     async function kbSearch() {
       const query = _kbSearchQuery;
       const layer = _kbSelectedLayer;
@@ -4576,15 +4597,15 @@ function burnAreaChart() {
 
       // Left sidebar: layers + search + filters
       html += '<div class="kb-sidebar">';
-      html += '<div class="kb-layer-list">';
-      html += `<button class="kb-layer-btn${_kbSelectedLayer === 'all' ? ' active' : ''}" onclick="_kbSelectedLayer='all';kbSearch()">📋 All Layers</button>`;
+      html += '<div class="kb-layer-list" id="kb-layer-btns">';
+      html += `<button class="kb-layer-btn${_kbSelectedLayer === 'all' ? ' active' : ''}" onclick="kbSelectLayer('all')">📋 All Layers</button>`;
       for (const l of layers) {
         const icon = KB_LAYER_ICONS[l.type] || '📄';
         const label = KB_LAYER_LABELS[l.type] || l.type;
         const active = _kbSelectedLayer === l.type ? ' active' : '';
         const count = l.total_pages || 0;
         const dot = l.healthy ? '🟢' : '🔴';
-        html += `<button class="kb-layer-btn${active}" onclick="_kbSelectedLayer='${escapeHtml(l.type)}';kbSearch()">${icon} ${escapeHtml(label)} ${dot}<span class="kb-layer-count">${count}</span></button>`;
+        html += `<button class="kb-layer-btn${active}" onclick="kbSelectLayer('${escapeHtml(l.type)}')">${icon} ${escapeHtml(label)} ${dot}<span class="kb-layer-count">${count}</span></button>`;
       }
       html += '</div>';
 
@@ -4592,11 +4613,11 @@ function burnAreaChart() {
       html += `<input type="text" class="kb-search-box" placeholder="Search facts..." value="${escapeHtml(_kbSearchQuery)}" onkeyup="if(event.key==='Enter'){_kbSearchQuery=this.value;kbSearch()}" onchange="_kbSearchQuery=this.value" title="Search across all knowledge layers by keyword. Press Enter to search. Results are filtered by the selected layer and type.">`;
 
       // Type filter pills
-      html += '<div class="kb-filter-row">';
-      html += `<span class="kb-filter-pill${_kbSelectedType === '' ? ' active' : ''}" onclick="_kbSelectedType='';kbSearch()">All</span>`;
+      html += '<div class="kb-filter-row" id="kb-type-pills">';
+      html += `<span class="kb-filter-pill${_kbSelectedType === '' ? ' active' : ''}" onclick="kbSelectType('')">All</span>`;
       for (const t of KB_FACT_TYPES) {
         const active = _kbSelectedType === t ? ' active' : '';
-        html += `<span class="kb-filter-pill${active}" onclick="_kbSelectedType='${t}';kbSearch()">${escapeHtml(t)}</span>`;
+        html += `<span class="kb-filter-pill${active}" onclick="kbSelectType('${escapeHtml(t)}')">${escapeHtml(t)}</span>`;
       }
       html += '</div>';
 
@@ -6836,23 +6857,26 @@ function burnAreaChart() {
       localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(msgs.slice(-MAX_PERSIST)));
     }
 
+    const CHAT_WELCOME = 'Ask me about agents, beads, PRs, issues, status, or anything in the hive. I search across all agent data to answer.';
     function restoreChatHistory() {
       try {
         const saved = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) || '[]');
+        if (saved.length === 0) {
+          chatAddMsg(CHAT_WELCOME, 'system');
+          return;
+        }
         saved.forEach(m => {
           const el = document.createElement('div');
           el.className = 'chat-msg ' + m.cls;
-          // Restore as text to prevent persistent DOM-XSS from poisoned localStorage
           if (m.text != null) {
             el.textContent = m.text;
           } else if (m.html != null) {
-            // Legacy format — escape before rendering
             el.textContent = m.html.replace(/<[^>]*>/g, '');
           }
           chatMessages.appendChild(el);
         });
-        if (saved.length) chatMessages.scrollTop = chatMessages.scrollHeight;
-      } catch (_) {}
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      } catch (_) { chatAddMsg(CHAT_WELCOME, 'system'); }
     }
     restoreChatHistory();
 
