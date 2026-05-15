@@ -922,8 +922,14 @@ func (s *Server) substituteTemplateVars(template, agentName string) string {
 
 	reposList := strings.Join(cfg.Project.Repos, ", ")
 
+	displayName := agentName
+	if ac, ok := cfg.Agents[agentName]; ok && ac.DisplayName != "" {
+		displayName = ac.DisplayName
+	}
+
 	replacer := strings.NewReplacer(
 		"${AGENT_NAME}", agentName,
+		"${AGENT_DISPLAY_NAME}", displayName,
 		"${PROJECT_NAME}", cfg.Project.Name,
 		"${PROJECT_ORG}", org,
 		"${PROJECT_PRIMARY_REPO}", fullPrimaryRepo,
