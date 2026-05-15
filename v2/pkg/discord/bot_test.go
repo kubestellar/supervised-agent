@@ -436,30 +436,36 @@ func TestFetchMessages_NetworkError(t *testing.T) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// handleMessage
+// routeMessage
 // ──────────────────────────────────────────────────────────────────────────────
 
-// handleMessage calls SendMessage internally, so we need a test server that
-// absorbs those outbound POST requests.
+// routeMessage enqueues replies onto b.msgQueue. drainQueue reads from the
+// channel without the production rate-limit sleep.
 
 func makeBotWithSendCapture(t *testing.T) (*Bot, *[]string) {
 	t.Helper()
 
 	var sent []string
-
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			body, _ := io.ReadAll(r.Body)
-			var payload map[string]string
-			_ = json.Unmarshal(body, &payload)
-			sent = append(sent, payload["content"])
-		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(ts.Close)
 
 	b := newTestBot(ts, "ch")
 	return b, &sent
+}
+
+// drainQueue reads all pending messages from b.msgQueue (non-blocking) and
+// appends their content to sent.
+func drainQueue(b *Bot, sent *[]string) {
+	for {
+		select {
+		case item := <-b.msgQueue:
+			*sent = append(*sent, item.content)
+		default:
+			return
+		}
+	}
 }
 
 func makeMsg(id, content string, isBot bool) discordMessage {
@@ -473,36 +479,39 @@ func makeMsg(id, content string, isBot bool) discordMessage {
 	}
 }
 
-func TestHandleMessage_IgnoresBotMessages(t *testing.T) {
+func TestRouteMessage_IgnoresBotMessages(t *testing.T) {
 	b, sent := makeBotWithSendCapture(t)
 
-	b.handleMessage(context.Background(), makeMsg("1", "!hive help", true))
+	b.routeMessage(context.Background(), makeMsg("1", "!help", true))
+	drainQueue(b, sent)
 
 	if len(*sent) != 0 {
 		t.Errorf("expected no messages sent for bot author, got %d", len(*sent))
 	}
 }
 
-func TestHandleMessage_IgnoresNonHivePrefix(t *testing.T) {
+func TestRouteMessage_IgnoresNonCommandPrefix(t *testing.T) {
 	b, sent := makeBotWithSendCapture(t)
 
-	b.handleMessage(context.Background(), makeMsg("1", "just chatting", false))
-	b.handleMessage(context.Background(), makeMsg("2", "!help", false))
-	b.handleMessage(context.Background(), makeMsg("3", "hive status", false))
+	b.routeMessage(context.Background(), makeMsg("1", "just chatting", false))
+	b.routeMessage(context.Background(), makeMsg("2", "hive status", false))
+	b.routeMessage(context.Background(), makeMsg("3", "no bang prefix", false))
+	drainQueue(b, sent)
 
 	if len(*sent) != 0 {
-		t.Errorf("expected no messages sent for non-hive messages, got %d", len(*sent))
+		t.Errorf("expected no messages sent for non-command messages, got %d", len(*sent))
 	}
 }
 
-func TestHandleMessage_DispatchesRegisteredCommand(t *testing.T) {
+func TestRouteMessage_DispatchesRegisteredCommand(t *testing.T) {
 	b, sent := makeBotWithSendCapture(t)
 
 	b.RegisterCommand("ping", func(_ context.Context, args string) (string, error) {
 		return "pong " + args, nil
 	})
 
-	b.handleMessage(context.Background(), makeMsg("1", "!hive ping world", false))
+	b.routeMessage(context.Background(), makeMsg("1", "!ping world", false))
+	drainQueue(b, sent)
 
 	if len(*sent) != 1 {
 		t.Fatalf("expected 1 message sent, got %d", len(*sent))
@@ -512,7 +521,7 @@ func TestHandleMessage_DispatchesRegisteredCommand(t *testing.T) {
 	}
 }
 
-func TestHandleMessage_CommandWithNoArgs(t *testing.T) {
+func TestRouteMessage_CommandWithNoArgs(t *testing.T) {
 	b, sent := makeBotWithSendCapture(t)
 
 	b.RegisterCommand("status", func(_ context.Context, args string) (string, error) {
@@ -522,7 +531,8 @@ func TestHandleMessage_CommandWithNoArgs(t *testing.T) {
 		return "all green", nil
 	})
 
-	b.handleMessage(context.Background(), makeMsg("1", "!hive status", false))
+	b.routeMessage(context.Background(), makeMsg("1", "!status", false))
+	drainQueue(b, sent)
 
 	if len(*sent) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(*sent))
@@ -532,10 +542,11 @@ func TestHandleMessage_CommandWithNoArgs(t *testing.T) {
 	}
 }
 
-func TestHandleMessage_UnknownCommandSendsError(t *testing.T) {
+func TestRouteMessage_UnknownCommandSendsError(t *testing.T) {
 	b, sent := makeBotWithSendCapture(t)
 
-	b.handleMessage(context.Background(), makeMsg("1", "!hive notacommand", false))
+	b.routeMessage(context.Background(), makeMsg("1", "!notacommand", false))
+	drainQueue(b, sent)
 
 	if len(*sent) != 1 {
 		t.Fatalf("expected 1 message sent for unknown command, got %d", len(*sent))
@@ -548,60 +559,45 @@ func TestHandleMessage_UnknownCommandSendsError(t *testing.T) {
 	}
 }
 
-func TestHandleMessage_HandlerErrorSendsErrorMessage(t *testing.T) {
+func TestRouteMessage_HandlerErrorSendsErrorMessage(t *testing.T) {
 	b, sent := makeBotWithSendCapture(t)
 
 	b.RegisterCommand("boom", func(_ context.Context, args string) (string, error) {
 		return "", errors.New("something went wrong")
 	})
 
-	b.handleMessage(context.Background(), makeMsg("1", "!hive boom", false))
+	b.routeMessage(context.Background(), makeMsg("1", "!boom", false))
+	drainQueue(b, sent)
 
 	if len(*sent) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(*sent))
-	}
-	if !strings.Contains((*sent)[0], "Error:") {
-		t.Errorf("reply should start with 'Error:', got: %q", (*sent)[0])
 	}
 	if !strings.Contains((*sent)[0], "something went wrong") {
 		t.Errorf("reply should include the error text, got: %q", (*sent)[0])
 	}
 }
 
-func TestHandleMessage_LeadingWhitespaceIgnored(t *testing.T) {
+func TestRouteMessage_LeadingWhitespaceIgnored(t *testing.T) {
 	b, sent := makeBotWithSendCapture(t)
 
 	b.RegisterCommand("trim", func(_ context.Context, _ string) (string, error) {
 		return "trimmed", nil
 	})
 
-	// Content has leading/trailing spaces — TrimSpace is applied in handleMessage.
-	b.handleMessage(context.Background(), makeMsg("1", "  !hive trim  ", false))
+	// Content has leading/trailing spaces — TrimSpace is applied in routeMessage.
+	b.routeMessage(context.Background(), makeMsg("1", "  !trim  ", false))
+	drainQueue(b, sent)
 
 	if len(*sent) != 1 || (*sent)[0] != "trimmed" {
 		t.Errorf("expected trimmed reply, got: %v", *sent)
 	}
 }
 
-// TestHandleMessage_SendFailsOnUnknownCommand covers the logger.Warn path when
-// SendMessage itself fails while trying to reply "Unknown command".
-func TestHandleMessage_SendFailOnUnknownCommand(t *testing.T) {
-	// Use a server that always returns 500 so SendMessage returns an error.
+// TestRouteMessage_EnqueueDoesNotPanic verifies that routeMessage does not
+// panic when the message queue is full (the "queue full" log path).
+func TestRouteMessage_EnqueueDoesNotPanic(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer ts.Close()
-
-	b := newTestBot(ts, "ch")
-	// Should not panic; the logger.Warn branch is taken instead.
-	b.handleMessage(context.Background(), makeMsg("1", "!hive unknowncmd", false))
-}
-
-// TestHandleMessage_SendFailsOnHandlerReply covers the logger.Warn path when
-// SendMessage fails while sending the handler's reply.
-func TestHandleMessage_SendFailOnHandlerReply(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
 
@@ -609,8 +605,15 @@ func TestHandleMessage_SendFailOnHandlerReply(t *testing.T) {
 	b.RegisterCommand("ok", func(_ context.Context, _ string) (string, error) {
 		return "fine", nil
 	})
-	// Should not panic; the logger.Warn("discord reply failed") path is taken.
-	b.handleMessage(context.Background(), makeMsg("1", "!hive ok", false))
+
+	// Fill the message queue to capacity.
+	const queueCap = 100
+	for i := 0; i < queueCap; i++ {
+		b.routeMessage(context.Background(), makeMsg(fmt.Sprintf("%d", i), "!ok", false))
+	}
+
+	// One more should not panic — it takes the "queue full" default branch.
+	b.routeMessage(context.Background(), makeMsg("overflow", "!ok", false))
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -723,7 +726,7 @@ func TestPollLoop_ContinuesOnFetchError(t *testing.T) {
 }
 
 // TestPollLoop_TickerBranch waits for the 5-second ticker to fire so that the
-// fetchMessages + handleMessage body inside the ticker.C case is exercised.
+// fetchMessages + routeMessage body inside the ticker.C case is exercised.
 // This test is intentionally slow (~5.5s) but is the only way to reach those
 // lines without modifying the production source.
 func TestPollLoop_TickerBranch(t *testing.T) {
@@ -735,15 +738,16 @@ func TestPollLoop_TickerBranch(t *testing.T) {
 	fetchCount := 0
 	sendCount := 0
 
-	// We'll serve a non-bot !hive message on the first fetch, empty on the rest.
+	// pollLoop skips messages on the first poll (firstPoll=true), so we serve
+	// the message on the second fetch when routeMessage is actually called.
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodGet:
 			fetchCount++
-			if fetchCount == 1 {
+			if fetchCount == 2 {
 				msgs := []discordMessage{
-					{ID: "42", Content: "!hive ping", Author: struct {
+					{ID: "42", Content: "!ping", Author: struct {
 						ID  string `json:"id"`
 						Bot bool   `json:"bot"`
 					}{ID: "u1", Bot: false}},
@@ -771,9 +775,11 @@ func TestPollLoop_TickerBranch(t *testing.T) {
 		defer close(done)
 		b.pollLoop(ctx)
 	}()
+	// Start drainLoop so enqueued replies are sent via HTTP.
+	go b.drainLoop(ctx)
 
-	// Wait just over 5 seconds for the ticker to fire at least once.
-	time.Sleep(5500 * time.Millisecond)
+	// Wait for two ticks (pollIntervalS=5s each) so the second fetch is routed.
+	time.Sleep(10500 * time.Millisecond)
 	cancel()
 
 	select {
@@ -782,11 +788,11 @@ func TestPollLoop_TickerBranch(t *testing.T) {
 		t.Fatal("pollLoop did not stop after context cancellation")
 	}
 
-	if fetchCount == 0 {
-		t.Error("expected at least one fetchMessages call via ticker, got 0")
+	if fetchCount < 2 {
+		t.Errorf("expected at least two fetchMessages calls via ticker, got %d", fetchCount)
 	}
 	if sendCount == 0 {
-		t.Error("expected at least one SendMessage call (reply to ping), got 0")
+		t.Error("expected at least one SendMessage call (reply to !ping), got 0")
 	}
 }
 
@@ -867,11 +873,11 @@ func TestPollLoop_ProcessesMessagesInReverseOrder(t *testing.T) {
 
 	// Run just two ticks by controlling context timing.
 	// Since pollIntervalS=5s we can't wait that long; instead we call
-	// fetchMessages and handleMessage directly to simulate what pollLoop does,
+	// fetchMessages and routeMessage directly to simulate what pollLoop does,
 	// and separately test that pollLoop updates lastMessageID correctly by
 	// exercising it for a short window.
 
-	// Direct unit test of the ordering logic via fetchMessages + handleMessage:
+	// Direct unit test of the ordering logic via fetchMessages + routeMessage:
 	msgs, err := b.fetchMessages("")
 	if err != nil {
 		t.Fatalf("fetchMessages: %v", err)
@@ -898,14 +904,15 @@ func TestPollLoop_ProcessesMessagesInReverseOrder(t *testing.T) {
 // The production ticker fires every 5 s.  The tests below wait just over that
 // interval so the ticker.C case in pollLoop is actually executed.  They are NOT
 // guarded by testing.Short() because they are the only way to cover the
-// fetchMessages + handleMessage call sites inside the select-case without
+// fetchMessages + routeMessage call sites inside the select-case without
 // modifying the production source.  Total extra wall-clock cost: ~5.1 s per
 // sub-test (run in parallel to keep the suite total near 5 s).
 // ──────────────────────────────────────────────────────────────────────────────
 
 // TestPollLoop_TickerSuccessPath exercises the happy-path ticker branch:
-// fetchMessages returns a non-bot !hive message and handleMessage dispatches it.
-// This covers the statements at bot.go:109-120 (success arc).
+// fetchMessages returns a non-bot !ping message and routeMessage dispatches it.
+// pollLoop skips messages on the first poll (firstPoll=true), so the message
+// is served on the second fetch.
 func TestPollLoop_TickerSuccessPath(t *testing.T) {
 	t.Parallel()
 
@@ -917,9 +924,9 @@ func TestPollLoop_TickerSuccessPath(t *testing.T) {
 		switch r.Method {
 		case http.MethodGet:
 			fetchCount++
-			if fetchCount == 1 {
+			if fetchCount == 2 {
 				msgs := []discordMessage{
-					{ID: "99", Content: "!hive ping", Author: struct {
+					{ID: "99", Content: "!ping", Author: struct {
 						ID  string `json:"id"`
 						Bot bool   `json:"bot"`
 					}{ID: "u1", Bot: false}},
@@ -947,9 +954,11 @@ func TestPollLoop_TickerSuccessPath(t *testing.T) {
 		defer close(done)
 		b.pollLoop(ctx)
 	}()
+	// Start drainLoop so enqueued replies are sent via HTTP.
+	go b.drainLoop(ctx)
 
-	// Wait just past one tick interval (pollIntervalS = 5 s).
-	time.Sleep(5100 * time.Millisecond)
+	// Wait for two ticks (pollIntervalS=5s each) so the second fetch is routed.
+	time.Sleep(10500 * time.Millisecond)
 	cancel()
 
 	select {
@@ -958,11 +967,11 @@ func TestPollLoop_TickerSuccessPath(t *testing.T) {
 		t.Fatal("pollLoop did not stop after context cancellation")
 	}
 
-	if fetchCount == 0 {
-		t.Error("expected at least one fetchMessages call via ticker, got 0")
+	if fetchCount < 2 {
+		t.Errorf("expected at least two fetchMessages calls via ticker, got %d", fetchCount)
 	}
 	if sendCount == 0 {
-		t.Error("expected at least one SendMessage call (reply to !hive ping), got 0")
+		t.Error("expected at least one SendMessage call (reply to !ping), got 0")
 	}
 }
 

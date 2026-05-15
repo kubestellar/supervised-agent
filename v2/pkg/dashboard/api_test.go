@@ -581,33 +581,7 @@ func TestHandleAgentPrompt_NotFound(t *testing.T) {
 }
 
 // --- Config stubs ---
-func TestHandleConfigStub_GET(t *testing.T) {
-	s, _ := apiServer(t)
-	rec := doGet(s, "/api/config/agent/scanner/cadences") // routed via handleAgentConfigCadences -> handleConfigStub
-	// This goes through the stub which returns stub status
-	// The path routing means this won't match unless registered properly
-	// We test handleConfigStub directly
-	rec2 := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	s.handleConfigStub(rec2, req, "test-section")
-	result := decodeJSON(t, rec2)
-	if result["section"] != "test-section" {
-		t.Errorf("section = %v, want test-section", result["section"])
-	}
-	_ = rec
-}
-
-func TestHandleConfigStub_PUT(t *testing.T) {
-	s, _ := apiServer(t)
-	rec := httptest.NewRecorder()
-	body, _ := json.Marshal(map[string]interface{}{"key": "value"})
-	req := httptest.NewRequest(http.MethodPut, "/test", bytes.NewReader(body))
-	s.handleConfigStub(rec, req, "test-section")
-	result := decodeJSON(t, rec)
-	if result["status"] != "updated" {
-		t.Errorf("status = %v, want updated", result["status"])
-	}
-}
+// handleConfigStub tests removed — method was deleted as dead code in 95e94d3.
 
 // --- Chat ---
 func TestHandleChat(t *testing.T) {
