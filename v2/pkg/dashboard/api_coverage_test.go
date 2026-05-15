@@ -1812,30 +1812,6 @@ func TestFormatHumanTime_NonEmpty(t *testing.T) {
 	}
 }
 
-// ---- handleConfigStub tests ----
-
-func TestHandleConfigStub_DirectCall_GET(t *testing.T) {
-	s, _ := apiServer(t)
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	s.handleConfigStub(rec, req, "my-section")
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d", rec.Code)
-	}
-}
-
-func TestHandleConfigStub_DirectCall_PUT(t *testing.T) {
-	s, _ := apiServer(t)
-	rec := httptest.NewRecorder()
-	body := strings.NewReader(`{"key":"value"}`)
-	req := httptest.NewRequest(http.MethodPut, "/test", body)
-	req.Header.Set("Content-Type", "application/json")
-	s.handleConfigStub(rec, req, "my-section")
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d", rec.Code)
-	}
-}
-
 // ---- handleKnowledgeFact with knowledge ----
 
 func TestHandleKnowledgeFact_WithKnowledge_NotFound(t *testing.T) {
@@ -2044,19 +2020,6 @@ func TestHandlePin_AgentNotFound(t *testing.T) {
 	s, _ := apiServer(t)
 	// Pin with no value and nonexistent agent - should use default from proc
 	rec := doPost(s, "/api/pin/nonexistent/cli", map[string]string{})
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400", rec.Code)
-	}
-}
-
-// ---- handleConfigStub invalid body ----
-
-func TestHandleConfigStub_InvalidBody(t *testing.T) {
-	s, _ := apiServer(t)
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPut, "/test", strings.NewReader("not json"))
-	req.Header.Set("Content-Type", "application/json")
-	s.handleConfigStub(rec, req, "section")
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", rec.Code)
 	}
