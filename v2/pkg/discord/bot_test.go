@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -658,11 +659,11 @@ func TestFetchMessages_NewRequestError(t *testing.T) {
 // ──────────────────────────────────────────────────────────────────────────────
 
 func TestPollLoop_StopsOnContextCancel(t *testing.T) {
-	pollCount := 0
+	var pollCount atomic.Int64
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
-			pollCount++
+			pollCount.Add(1)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode([]discordMessage{})
@@ -693,12 +694,11 @@ func TestPollLoop_StopsOnContextCancel(t *testing.T) {
 }
 
 func TestPollLoop_ContinuesOnFetchError(t *testing.T) {
-	// First call returns 500; subsequent calls return empty list.
-	requestCount := 0
+	var requestCount atomic.Int64
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
-		if requestCount == 1 {
+		n := requestCount.Add(1)
+		if n == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -734,9 +734,8 @@ func TestPollLoop_TickerBranch(t *testing.T) {
 		t.Skip("skipping slow ticker test in -short mode")
 	}
 
-	// Count how many GET requests arrive (fetch) and POST requests (send reply).
-	fetchCount := 0
-	sendCount := 0
+	var fetchCount atomic.Int64
+	var sendCount atomic.Int64
 
 	// pollLoop skips messages on the first poll (firstPoll=true), so we serve
 	// the message on the second fetch when routeMessage is actually called.
@@ -744,8 +743,8 @@ func TestPollLoop_TickerBranch(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodGet:
-			fetchCount++
-			if fetchCount == 2 {
+			n := fetchCount.Add(1)
+			if n == 2 {
 				msgs := []discordMessage{
 					{ID: "42", Content: "!ping", Author: struct {
 						ID  string `json:"id"`
@@ -757,7 +756,7 @@ func TestPollLoop_TickerBranch(t *testing.T) {
 				_ = json.NewEncoder(w).Encode([]discordMessage{})
 			}
 		case http.MethodPost:
-			sendCount++
+			sendCount.Add(1)
 			w.WriteHeader(http.StatusOK)
 		}
 	}))
@@ -788,10 +787,10 @@ func TestPollLoop_TickerBranch(t *testing.T) {
 		t.Fatal("pollLoop did not stop after context cancellation")
 	}
 
-	if fetchCount < 2 {
-		t.Errorf("expected at least two fetchMessages calls via ticker, got %d", fetchCount)
+	if fc := fetchCount.Load(); fc < 2 {
+		t.Errorf("expected at least two fetchMessages calls via ticker, got %d", fc)
 	}
-	if sendCount == 0 {
+	if sc := sendCount.Load(); sc == 0 {
 		t.Error("expected at least one SendMessage call (reply to !ping), got 0")
 	}
 }
@@ -803,11 +802,10 @@ func TestPollLoop_TickerBranch_FetchError(t *testing.T) {
 		t.Skip("skipping slow ticker test in -short mode")
 	}
 
-	fetchCount := 0
+	var fetchCount atomic.Int64
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fetchCount++
-		// Always return 500 so the error-continue branch is taken.
+		fetchCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer ts.Close()
@@ -830,7 +828,7 @@ func TestPollLoop_TickerBranch_FetchError(t *testing.T) {
 		t.Fatal("pollLoop did not stop after context cancellation")
 	}
 
-	if fetchCount == 0 {
+	if fetchCount.Load() == 0 {
 		t.Error("expected at least one fetch attempt, got 0")
 	}
 }
@@ -840,14 +838,14 @@ func TestPollLoop_ProcessesMessagesInReverseOrder(t *testing.T) {
 	// We verify that lastMessageID is updated correctly by checking the "after"
 	// query parameter on the second poll.
 
-	callCount := 0
-	var secondAfter string
+	var callCount atomic.Int64
+	var secondAfter atomic.Value
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
+		n := callCount.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 
-		if callCount == 1 {
+		if n == 1 {
 			// Return two messages: Discord sends newest first (id=2, id=1).
 			msgs := []discordMessage{
 				{ID: "2", Content: "hello", Author: struct {
@@ -863,8 +861,7 @@ func TestPollLoop_ProcessesMessagesInReverseOrder(t *testing.T) {
 			return
 		}
 
-		// On the second poll, capture the "after" value.
-		secondAfter = r.URL.Query().Get("after")
+		secondAfter.Store(r.URL.Query().Get("after"))
 		_ = json.NewEncoder(w).Encode([]discordMessage{})
 	}))
 	defer ts.Close()
@@ -895,7 +892,7 @@ func TestPollLoop_ProcessesMessagesInReverseOrder(t *testing.T) {
 	if lastID != "2" {
 		t.Errorf("expected lastMessageID to be id of newest message (2), got %q", lastID)
 	}
-	_ = secondAfter // checked in integration path above
+	_ = secondAfter.Load() // checked in integration path above
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -916,15 +913,15 @@ func TestPollLoop_ProcessesMessagesInReverseOrder(t *testing.T) {
 func TestPollLoop_TickerSuccessPath(t *testing.T) {
 	t.Parallel()
 
-	fetchCount := 0
-	sendCount := 0
+	var fetchCount atomic.Int64
+	var sendCount atomic.Int64
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodGet:
-			fetchCount++
-			if fetchCount == 2 {
+			n := fetchCount.Add(1)
+			if n == 2 {
 				msgs := []discordMessage{
 					{ID: "99", Content: "!ping", Author: struct {
 						ID  string `json:"id"`
@@ -936,7 +933,7 @@ func TestPollLoop_TickerSuccessPath(t *testing.T) {
 				_ = json.NewEncoder(w).Encode([]discordMessage{})
 			}
 		case http.MethodPost:
-			sendCount++
+			sendCount.Add(1)
 			w.WriteHeader(http.StatusOK)
 		}
 	}))
@@ -967,10 +964,10 @@ func TestPollLoop_TickerSuccessPath(t *testing.T) {
 		t.Fatal("pollLoop did not stop after context cancellation")
 	}
 
-	if fetchCount < 2 {
-		t.Errorf("expected at least two fetchMessages calls via ticker, got %d", fetchCount)
+	if fc := fetchCount.Load(); fc < 2 {
+		t.Errorf("expected at least two fetchMessages calls via ticker, got %d", fc)
 	}
-	if sendCount == 0 {
+	if sc := sendCount.Load(); sc == 0 {
 		t.Error("expected at least one SendMessage call (reply to !ping), got 0")
 	}
 }
@@ -981,10 +978,10 @@ func TestPollLoop_TickerSuccessPath(t *testing.T) {
 func TestPollLoop_TickerFetchErrorPath(t *testing.T) {
 	t.Parallel()
 
-	fetchAttempts := 0
+	var fetchAttempts atomic.Int64
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fetchAttempts++
+		fetchAttempts.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer ts.Close()
@@ -1007,7 +1004,7 @@ func TestPollLoop_TickerFetchErrorPath(t *testing.T) {
 		t.Fatal("pollLoop did not stop after context cancellation")
 	}
 
-	if fetchAttempts == 0 {
+	if fetchAttempts.Load() == 0 {
 		t.Error("expected at least one fetch attempt through the ticker, got 0")
 	}
 }
