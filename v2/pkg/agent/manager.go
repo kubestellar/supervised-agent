@@ -537,11 +537,15 @@ func agentEnvVars(agent *AgentProcess) []string {
 	if agent.BackendOverride != "" {
 		backend = agent.BackendOverride
 	}
-	return []string{
+	vars := []string{
 		fmt.Sprintf("HIVE_AGENT=%s", agent.Name),
 		fmt.Sprintf("HIVE_BACKEND=%s", backend),
 		fmt.Sprintf("HIVE_MODEL=%s", model),
 	}
+	if hiveID := os.Getenv("HIVE_ID"); hiveID != "" {
+		vars = append(vars, fmt.Sprintf("HIVE_ID=%s", hiveID))
+	}
+	return vars
 }
 
 func (m *Manager) Pause(name string) error {
