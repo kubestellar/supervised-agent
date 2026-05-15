@@ -1435,36 +1435,6 @@
       body.has-info-sidebar #oc-topbar { right: 0; }
     }
 
-    /* ── Unified tooltip styling for native title attributes ── */
-    [data-tip] { position: relative; }
-    [data-tip]::after {
-      content: attr(data-tip);
-      display: none;
-      position: absolute;
-      bottom: calc(100% + 6px);
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 6px 10px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      font-size: 0.8125rem;
-      font-weight: 400;
-      color: var(--text);
-      white-space: normal;
-      max-width: 280px;
-      min-width: 120px;
-      width: max-content;
-      z-index: 10002;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-      line-height: 1.4;
-      pointer-events: none;
-      text-align: left;
-    }
-    [data-tip]:hover::after { display: block; }
-    /* Flip tooltip below when near top of viewport — JS adds this class */
-    [data-tip].tip-below::after { bottom: auto; top: calc(100% + 6px); }
   </style>
 </head>
 <body>
@@ -1478,27 +1448,6 @@
   document.body.style.transition='opacity 0.15s ease-in';
 })();
 
-/* ── Unified tooltip: swap title→data-tip on hover to suppress native tooltip ── */
-(function(){
-  var VIEWPORT_FLIP_PX = 80; /* flip tooltip below if element is within 80px of viewport top */
-  document.addEventListener('mouseover', function(e){
-    var el = e.target.closest('[title]');
-    if (!el || !el.getAttribute('title')) return;
-    el.setAttribute('data-tip', el.getAttribute('title'));
-    el.removeAttribute('title');
-    /* flip below if near top of viewport */
-    var r = el.getBoundingClientRect();
-    if (r.top < VIEWPORT_FLIP_PX) el.classList.add('tip-below');
-    else el.classList.remove('tip-below');
-  });
-  document.addEventListener('mouseout', function(e){
-    var el = e.target.closest('[data-tip]');
-    if (!el) return;
-    el.setAttribute('title', el.getAttribute('data-tip'));
-    el.removeAttribute('data-tip');
-    el.classList.remove('tip-below');
-  });
-})();
 </script>
 <div id="toast-container"></div>
 
@@ -5986,15 +5935,14 @@ function burnAreaChart() {
       tabsEl.innerHTML = tabs.map((t, i) =>
         `<div class="config-tab${i === 0 ? ' active' : ''}" data-tab="${t}" data-action="switchConfigTab">${t}</div>`
       ).join('');
-      const body = document.getElementById('config-body');
-      body.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px">Loading…</div>';
+      switchConfigTab(tabs[0]);
       loadConfigData(type, agentName).finally(() => {
         if (!_configModalOpen) return;
         const dn = (_configState.data.general || {}).displayName;
         if (dn && type !== 'governor') {
           document.querySelector('.config-title').textContent = `${dn} Configuration`;
         }
-        switchConfigTab(tabs[0]);
+        switchConfigTab(_configState.tab || tabs[0]);
       });
     }
 
