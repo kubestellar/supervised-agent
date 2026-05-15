@@ -586,7 +586,7 @@ func TestHandleAgentPrompt_NotFound(t *testing.T) {
 // --- Chat ---
 func TestHandleChat(t *testing.T) {
 	s, _ := apiServer(t)
-	rec := doPost(s, "/api/chat", map[string]interface{}{"message": "hello"})
+	rec := doPost(s, "/api/chat", map[string]interface{}{"query": "hello"})
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)
 	}
@@ -877,13 +877,10 @@ func TestHandleUnpin_InvalidDimension(t *testing.T) {
 }
 
 func TestHandleKnowledgeSearch_NoQuery(t *testing.T) {
-	s, deps := apiServer(t)
-	// Set knowledge to non-nil for this test
-	deps.Knowledge = nil // will hit the nil check
+	s, _ := apiServer(t)
 	rec := doGet(s, "/api/knowledge/search")
-	// nil knowledge returns empty results
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d", rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
 	}
 }
 
@@ -1088,23 +1085,21 @@ func TestHandleKnowledgeDelete_NilKnowledge(t *testing.T) {
 	}
 }
 
-func TestHandleKnowledgePromote_NilKnowledge(t *testing.T) {
-	s, deps := apiServer(t)
-	deps.Knowledge = nil
+func TestHandleKnowledgePromote_NonexistentFact(t *testing.T) {
+	s, _ := apiServer(t)
 	rec := doPost(s, "/api/knowledge/promote", map[string]string{
-		"slug": "test", "from_layer": "project", "to_layer": "org",
+		"slug": "nonexistent", "from_layer": "project", "to_layer": "org",
 	})
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("status = %d, want 503", rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
 	}
 }
 
 func TestHandleKnowledgePromote_MissingFields(t *testing.T) {
-	s, deps := apiServer(t)
-	deps.Knowledge = nil
+	s, _ := apiServer(t)
 	rec := doPost(s, "/api/knowledge/promote", map[string]string{})
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("status = %d", rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
 	}
 }
 
@@ -1144,17 +1139,16 @@ func TestHandleKnowledgeUpdate_NilKnowledge(t *testing.T) {
 	}
 }
 
-func TestHandleKnowledgeLayer_NilKnowledge(t *testing.T) {
+func TestHandleKnowledgeLayer_AutoCreated(t *testing.T) {
 	s, deps := apiServer(t)
 	deps.Knowledge = nil
 	rec := doGet(s, "/api/knowledge/project")
-	// nil knowledge returns 200 with enabled:false
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)
 	}
 	result := decodeJSON(t, rec)
-	if result["enabled"] != false {
-		t.Errorf("enabled = %v", result["enabled"])
+	if _, ok := result["facts"]; !ok {
+		t.Error("expected facts key in response")
 	}
 }
 
