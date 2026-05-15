@@ -1411,14 +1411,19 @@ func (s *Server) handleGovernorNotifications(w http.ResponseWriter, r *http.Requ
 		jsonError(w, "invalid body", http.StatusBadRequest)
 		return
 	}
-	if body.NtfyServer != "" || body.NtfyTopic != "" {
+	isMasked := func(v string) bool { return strings.HasPrefix(v, "•") }
+	if (body.NtfyServer != "" && !isMasked(body.NtfyServer)) || (body.NtfyTopic != "" && !isMasked(body.NtfyTopic)) {
 		if s.deps.Config.Notifications.Ntfy == nil {
 			s.deps.Config.Notifications.Ntfy = &config.NtfyConfig{}
 		}
-		s.deps.Config.Notifications.Ntfy.Server = body.NtfyServer
-		s.deps.Config.Notifications.Ntfy.Topic = body.NtfyTopic
+		if body.NtfyServer != "" && !isMasked(body.NtfyServer) {
+			s.deps.Config.Notifications.Ntfy.Server = body.NtfyServer
+		}
+		if body.NtfyTopic != "" && !isMasked(body.NtfyTopic) {
+			s.deps.Config.Notifications.Ntfy.Topic = body.NtfyTopic
+		}
 	}
-	if body.DiscordWebhook != "" {
+	if body.DiscordWebhook != "" && !isMasked(body.DiscordWebhook) {
 		if s.deps.Config.Notifications.Discord == nil {
 			s.deps.Config.Notifications.Discord = &config.DiscordConfig{}
 		}
