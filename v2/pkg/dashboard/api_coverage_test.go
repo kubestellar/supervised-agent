@@ -1017,6 +1017,7 @@ func TestSecurityHeaders_HealthNoAuth(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	s := NewServerWithAuth(0, "secret", logger)
 	s.UpdateStatus(&StatusPayload{Agents: []FrontendAgent{{Name: "scanner"}}})
+	s.MarkReady()
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
