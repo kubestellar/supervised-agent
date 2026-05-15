@@ -1890,9 +1890,10 @@ app.put('/api/config/governor/budget', (req, res) => {
 app.put('/api/config/governor/notifications', (req, res) => {
   try {
     const { ntfyServer, ntfyTopic, discordWebhook } = req.body;
-    if (ntfyServer !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'NTFY_SERVER', ntfyServer);
-    if (ntfyTopic !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'NTFY_TOPIC', ntfyTopic);
-    if (discordWebhook !== undefined) writeEnvVar(GOVERNOR_ENV_PATH, 'DISCORD_WEBHOOK', discordWebhook);
+    const isMasked = (v) => typeof v === 'string' && /^•+/.test(v);
+    if (ntfyServer !== undefined && !isMasked(ntfyServer)) writeEnvVar(GOVERNOR_ENV_PATH, 'NTFY_SERVER', ntfyServer);
+    if (ntfyTopic !== undefined && !isMasked(ntfyTopic)) writeEnvVar(GOVERNOR_ENV_PATH, 'NTFY_TOPIC', ntfyTopic);
+    if (discordWebhook !== undefined && !isMasked(discordWebhook)) writeEnvVar(GOVERNOR_ENV_PATH, 'DISCORD_WEBHOOK', discordWebhook);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
