@@ -1,4 +1,23 @@
 services:
+  gateway:
+    image: nginx:alpine
+    container_name: hive-gateway
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+      - "7681:7681"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - gateway-upstream:/etc/nginx/upstream
+    depends_on:
+      hive:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   hive:
     build:
       context: ..
@@ -8,9 +27,9 @@ services:
         GIT_SHORT: ${GIT_SHORT:-unknown}
     container_name: hive
     restart: unless-stopped
-    ports:
-      - "3001:3001"
-      - "7681:7681"
+    expose:
+      - "3001"
+      - "7681"
     volumes:
       - ./hive.yaml:/etc/hive/hive.yaml:ro
       - hive-data:/data
@@ -29,3 +48,4 @@ services:
 
 volumes:
   hive-data:
+  gateway-upstream:
