@@ -453,7 +453,7 @@ func runEvalCycle(
 			if issue.AgeMinutes > doubleSLAMinutes {
 				notifier.Send(
 					"SLA 2x breach",
-					fmt.Sprintf("%s#%d age %dm: %s", issue.Repo, issue.Number, issue.AgeMinutes, issue.Title),
+					fmt.Sprintf("%s#%d age %dm: %s\n%s", issue.Repo, issue.Number, issue.AgeMinutes, issue.Title, issue.URL),
 					notify.PriorityHigh,
 				)
 			}
