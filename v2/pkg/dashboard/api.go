@@ -1665,7 +1665,7 @@ func (s *Server) handleKnowledgeHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleKnowledgeStats(w http.ResponseWriter, r *http.Request) {
-	if s.deps.Knowledge == nil {
+	if !s.ensureKnowledge() {
 		jsonResponse(w, map[string]interface{}{"enabled": false})
 		return
 	}
@@ -1675,7 +1675,7 @@ func (s *Server) handleKnowledgeStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleKnowledgeLayer(w http.ResponseWriter, r *http.Request) {
-	if s.deps.Knowledge == nil {
+	if !s.ensureKnowledge() {
 		jsonResponse(w, map[string]interface{}{"enabled": false, "facts": []interface{}{}})
 		return
 	}
