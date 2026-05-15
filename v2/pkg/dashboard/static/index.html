@@ -6396,18 +6396,20 @@ function burnAreaChart() {
     }
 
     function renderGovNotifications(n) {
+      const ntfyHint = n.hasNtfy ? '(configured — enter new value to change)' : '';
+      const discordHint = n.hasDiscord ? '(configured — enter new value to change)' : '';
       return `
         <div class="config-field">
-          <label>Ntfy Server <span class="config-info">i<span class="config-tooltip">URL of the ntfy.sh server for push notifications. The governor sends alerts for mode changes, budget warnings, agent crashes, and rate limits. Leave empty to disable ntfy notifications. Default: https://ntfy.sh</span></span></label>
-          <input type="text" value="${esc(n.ntfyServer || '')}" onchange="markDirty('notifications','ntfyServer',this.value)">
+          <label>Ntfy Server ${ntfyHint} <span class="config-info">i<span class="config-tooltip">URL of the ntfy.sh server for push notifications. The governor sends alerts for mode changes, budget warnings, agent crashes, and rate limits. Leave empty to disable ntfy notifications. Default: https://ntfy.sh</span></span></label>
+          <input type="text" value="" onchange="markDirty('notifications','ntfyServer',this.value)" placeholder="${esc(n.ntfyServer || 'https://ntfy.sh')}">
         </div>
         <div class="config-field">
           <label>Ntfy Topic <span class="config-info">i<span class="config-tooltip">Topic name on the ntfy server. Subscribe to this topic in the ntfy app or web UI to receive governor notifications on your phone or desktop.</span></span></label>
-          <input type="text" value="${esc(n.ntfyTopic || '')}" onchange="markDirty('notifications','ntfyTopic',this.value)">
+          <input type="text" value="" onchange="markDirty('notifications','ntfyTopic',this.value)" placeholder="${esc(n.ntfyTopic || 'my-topic')}">
         </div>
         <div class="config-field">
-          <label>Discord Webhook <span class="config-info">i<span class="config-tooltip">Discord webhook URL for posting governor notifications to a channel. Create a webhook in your Discord server settings under Integrations. Leave empty to disable Discord notifications.</span></span></label>
-          <input type="text" value="${esc(n.discordWebhook || '')}" onchange="markDirty('notifications','discordWebhook',this.value)" placeholder="https://discord.com/api/webhooks/...">
+          <label>Discord Webhook ${discordHint} <span class="config-info">i<span class="config-tooltip">Discord webhook URL for posting governor notifications to a channel. Create a webhook in your Discord server settings under Integrations. Leave empty to disable Discord notifications.</span></span></label>
+          <input type="text" value="" onchange="markDirty('notifications','discordWebhook',this.value)" placeholder="${esc(n.discordWebhook || 'https://discord.com/api/webhooks/...')}">
         </div>`;
     }
 
