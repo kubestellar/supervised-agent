@@ -2045,6 +2045,17 @@ func (s *Server) ensureKnowledge() bool {
 	if s.deps.Knowledge == nil {
 		s.deps.Knowledge = knowledge.NewKnowledgeAPI(nil, knowledge.KnowledgeConfig{Enabled: true, Engine: "file"}, s.logger)
 		s.logger.Info("created file-based knowledge API for vault/obsidian access")
+		entries, err := os.ReadDir("/data/knowledge")
+		if err == nil {
+			for _, e := range entries {
+				if e.IsDir() {
+					dir := filepath.Join("/data/knowledge", e.Name())
+					if connErr := s.deps.Knowledge.ConnectVault(dir, e.Name()); connErr == nil {
+						s.logger.Info("auto-connected knowledge vault", "name", e.Name(), "dir", dir)
+					}
+				}
+			}
+		}
 	}
 	return true
 }

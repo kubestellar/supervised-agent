@@ -2353,12 +2353,12 @@
 
     function sparkSvg(rawValues, color) {
       if (!rawValues || rawValues.length < 2) return '';
-      // Fill zero gaps: if a value is 0 but neighbors are non-zero, carry forward
+      // Fill zero gaps: carry forward last non-zero value through consecutive zeros
       const values = [...rawValues];
-      for (let i = 1; i < values.length; i++) {
-        if (values[i] === 0 && values[i - 1] > 0) {
-          values[i] = values[i - 1];
-        }
+      let lastNonZero = 0;
+      for (let i = 0; i < values.length; i++) {
+        if (values[i] > 0) { lastNonZero = values[i]; }
+        else if (lastNonZero > 0) { values[i] = lastNonZero; }
       }
       const min = Math.min(...values);
       const max = Math.max(...values);
