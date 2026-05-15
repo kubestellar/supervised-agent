@@ -26,6 +26,13 @@ type AgentState struct {
 	ModelOverride   string `json:"model_override,omitempty"`
 	BackendOverride string `json:"backend_override,omitempty"`
 	RestartCount    int    `json:"restart_count"`
+	DisplayName     string `json:"display_name,omitempty"`
+	Description     string `json:"description,omitempty"`
+	Enabled         *bool  `json:"enabled,omitempty"`
+	ClearOnKick     *bool  `json:"clear_on_kick,omitempty"`
+	StaleTimeout    *int   `json:"stale_timeout,omitempty"`
+	RestartStrategy string `json:"restart_strategy,omitempty"`
+	LaunchCmd       string `json:"launch_cmd,omitempty"`
 }
 
 func SaveState(path string, state *PersistedState, logger *slog.Logger) error {
