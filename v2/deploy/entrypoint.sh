@@ -46,6 +46,24 @@ if [ -n "${HIVE_WIKI_GIT_URL:-}" ] && [ ! -d /data/vaults/hive-wiki/.git ]; then
 fi
 mkdir -p /data/vaults/hive-wiki
 
+# Configure git identity and credential helper for GitHub App token
+git config --global user.name "kubestellar-hive"
+git config --global user.email "hive-bot@kubestellar.io"
+git config --global credential.helper ""
+git config --global "credential.https://github.com.helper" "/usr/local/bin/git-credential-hive.sh"
+
+# Generate initial GitHub App token if credentials are available
+if [ -x /usr/local/bin/hive-config.sh ]; then
+  . /usr/local/bin/hive-config.sh 2>/dev/null || true
+fi
+if [ -n "${GH_APP_ID:-}" ] && [ -n "${GH_APP_INSTALLATION_ID:-}" ]; then
+  echo "[entrypoint] Generating GitHub App token..."
+  /usr/local/bin/gh-app-token.sh >/dev/null 2>&1 && \
+    echo "[entrypoint] Token cached at /var/run/hive-metrics/gh-app-token.cache" || \
+    echo "[entrypoint] WARN: GitHub App token generation failed"
+  export HIVE_GITHUB_TOKEN="$(cat /var/run/hive-metrics/gh-app-token.cache 2>/dev/null || true)"
+fi
+
 echo "[entrypoint] Starting Go binary on :${HIVE_API_PORT}"
 hive "$@" &
 HIVE_PID=$!
