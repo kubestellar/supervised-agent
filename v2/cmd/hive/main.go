@@ -156,6 +156,30 @@ func main() {
 			if as.BackendOverride != "" {
 				_ = agentMgr.SetBackendOverride(name, as.BackendOverride)
 			}
+			if agentCfg, ok := cfg.Agents[name]; ok {
+				if as.DisplayName != "" {
+					agentCfg.DisplayName = as.DisplayName
+				}
+				if as.Description != "" {
+					agentCfg.Description = as.Description
+				}
+				if as.Enabled != nil {
+					agentCfg.Enabled = *as.Enabled
+				}
+				if as.ClearOnKick != nil {
+					agentCfg.ClearOnKick = *as.ClearOnKick
+				}
+				if as.StaleTimeout != nil {
+					agentCfg.StaleTimeout = *as.StaleTimeout
+				}
+				if as.RestartStrategy != "" {
+					agentCfg.RestartStrategy = as.RestartStrategy
+				}
+				if as.LaunchCmd != "" {
+					agentCfg.LaunchCmd = as.LaunchCmd
+				}
+				cfg.Agents[name] = agentCfg
+			}
 		}
 		if saved.BudgetLimit > 0 {
 			gov.SetBudgetLimit(saved.BudgetLimit)
@@ -650,7 +674,7 @@ func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.C
 	statuses := agentMgr.AllStatuses()
 	agents := make(map[string]snapshot.AgentState, len(statuses))
 	for name, proc := range statuses {
-		agents[name] = snapshot.AgentState{
+		as := snapshot.AgentState{
 			Paused:          proc.Paused,
 			PinnedCLI:       proc.PinnedCLI,
 			PinnedModel:     proc.PinnedModel,
@@ -658,6 +682,19 @@ func persistState(agentMgr *agent.Manager, gov *governor.Governor, cfg *config.C
 			BackendOverride: proc.BackendOverride,
 			RestartCount:    proc.RestartCount,
 		}
+		if agentCfg, ok := cfg.Agents[name]; ok {
+			as.DisplayName = agentCfg.DisplayName
+			as.Description = agentCfg.Description
+			enabled := agentCfg.Enabled
+			as.Enabled = &enabled
+			clearOnKick := agentCfg.ClearOnKick
+			as.ClearOnKick = &clearOnKick
+			staleTimeout := agentCfg.StaleTimeout
+			as.StaleTimeout = &staleTimeout
+			as.RestartStrategy = agentCfg.RestartStrategy
+			as.LaunchCmd = agentCfg.LaunchCmd
+		}
+		agents[name] = as
 	}
 
 	cadenceOverrides := make(map[string]map[string]string)
