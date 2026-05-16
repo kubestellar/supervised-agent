@@ -149,22 +149,64 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, go
 }
 
 // loadStatsConfig reads the per-agent stats configuration from /data/agents/{name}/stats.json.
-// This is the same data source used by the agent config API endpoint (loadAgentStats on *Server).
+// Falls back to built-in defaults when the file is missing or empty.
 func loadStatsConfig(name string) []any {
 	statsFile := fmt.Sprintf("/data/agents/%s/stats.json", name)
 	data, err := os.ReadFile(statsFile)
-	if err != nil {
-		return []any{}
+	if err == nil {
+		var wrapper struct {
+			Stats []any `json:"stats"`
+		}
+		if json.Unmarshal(data, &wrapper) == nil && len(wrapper.Stats) > 0 {
+			return wrapper.Stats
+		}
+		var stats []any
+		if json.Unmarshal(data, &stats) == nil && len(stats) > 0 {
+			return stats
+		}
 	}
-	var wrapper struct {
-		Stats []any `json:"stats"`
+	return defaultStatsConfig(name)
+}
+
+func defaultStatsConfig(name string) []any {
+	defaults := map[string][]any{
+		"scanner": {
+			map[string]any{"key": "actionable", "label": "Actionable", "source": "status", "field": "actionableCount", "style": "spark", "trendField": "actionable"},
+			map[string]any{"key": "openPrs", "label": "Open PRs", "source": "status", "field": "openPrCount", "style": "spark", "trendField": "openPrs"},
+			map[string]any{"key": "mergeable", "label": "Mergeable", "source": "status", "field": "mergeableCount", "style": "spark", "trendField": "mergeable"},
+		},
+		"ci-maintainer": {
+			map[string]any{"key": "coverage", "label": "Coverage", "source": "agentMetrics", "field": "coverage", "style": "pct-bar", "target": 91},
+			map[string]any{"key": "brew", "label": "Brew", "source": "health", "field": "brew", "style": "dot"},
+			map[string]any{"key": "helm", "label": "Helm", "source": "health", "field": "helm", "style": "dot"},
+			map[string]any{"key": "ci", "label": "CI", "source": "health", "field": "ci", "style": "pct"},
+			map[string]any{"key": "weekly", "label": "Weekly", "source": "health", "field": "weekly", "style": "dot"},
+			map[string]any{"key": "nightly", "label": "Nightly Tests", "source": "health", "field": "nightly", "style": "dot"},
+			map[string]any{"key": "nightlyCompliance", "label": "Compliance", "source": "health", "field": "nightlyCompliance", "style": "dot"},
+			map[string]any{"key": "nightlyDashboard", "label": "Dashboard", "source": "health", "field": "nightlyDashboard", "style": "dot"},
+			map[string]any{"key": "nightlyGhaw", "label": "gh-aw", "source": "health", "field": "nightlyGhaw", "style": "dot"},
+			map[string]any{"key": "nightlyPlaywright", "label": "Playwright", "source": "health", "field": "nightlyPlaywright", "style": "dot"},
+			map[string]any{"key": "nightlyRel", "label": "Nightly Rel", "source": "health", "field": "nightlyRel", "style": "dot"},
+			map[string]any{"key": "weeklyRel", "label": "Weekly Rel", "source": "health", "field": "weeklyRel", "style": "dot"},
+			map[string]any{"key": "deploy_vllm_d", "label": "vLLM-d", "source": "health", "field": "deploy_vllm_d", "style": "dot"},
+			map[string]any{"key": "deploy_pok_prod", "label": "PokProd", "source": "health", "field": "deploy_pok_prod", "style": "dot"},
+		},
+		"outreach": {
+			map[string]any{"key": "stars", "label": "Stars", "source": "agentMetrics", "field": "stars", "style": "spark", "trendField": "stars"},
+			map[string]any{"key": "forks", "label": "Forks", "source": "agentMetrics", "field": "forks", "style": "number"},
+			map[string]any{"key": "contributors", "label": "Contributors", "source": "agentMetrics", "field": "contributors", "style": "number"},
+			map[string]any{"key": "adopters", "label": "Adopters", "source": "agentMetrics", "field": "adopters", "style": "number"},
+			map[string]any{"key": "acmm", "label": "ACMM", "source": "agentMetrics", "field": "acmm", "style": "number"},
+			map[string]any{"key": "outreachOpen", "label": "Open PRs", "source": "agentMetrics", "field": "outreachOpen", "style": "spark", "trendField": "outreachOpen"},
+			map[string]any{"key": "outreachMerged", "label": "Merged PRs", "source": "agentMetrics", "field": "outreachMerged", "style": "spark", "trendField": "outreachMerged"},
+		},
+		"architect": {
+			map[string]any{"key": "prs", "label": "PRs", "source": "agentMetrics", "field": "prs", "style": "number"},
+			map[string]any{"key": "closed", "label": "Closed", "source": "agentMetrics", "field": "closed", "style": "number"},
+		},
 	}
-	if json.Unmarshal(data, &wrapper) == nil && len(wrapper.Stats) > 0 {
-		return wrapper.Stats
-	}
-	var stats []any
-	if json.Unmarshal(data, &stats) == nil {
-		return stats
+	if d, ok := defaults[name]; ok {
+		return d
 	}
 	return []any{}
 }

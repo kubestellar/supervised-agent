@@ -945,20 +945,19 @@ func (s *Server) substituteTemplateVars(template, agentName string) string {
 func (s *Server) loadAgentStats(name string) []any {
 	statsFile := fmt.Sprintf("/data/agents/%s/stats.json", name)
 	data, err := os.ReadFile(statsFile)
-	if err != nil {
-		return []any{}
+	if err == nil {
+		var wrapper struct {
+			Stats []any `json:"stats"`
+		}
+		if json.Unmarshal(data, &wrapper) == nil && len(wrapper.Stats) > 0 {
+			return wrapper.Stats
+		}
+		var stats []any
+		if json.Unmarshal(data, &stats) == nil && len(stats) > 0 {
+			return stats
+		}
 	}
-	var wrapper struct {
-		Stats []any `json:"stats"`
-	}
-	if json.Unmarshal(data, &wrapper) == nil && len(wrapper.Stats) > 0 {
-		return wrapper.Stats
-	}
-	var stats []any
-	if json.Unmarshal(data, &stats) == nil {
-		return stats
-	}
-	return []any{}
+	return defaultStatsConfig(name)
 }
 
 func (s *Server) handleAgentConfigGeneral(w http.ResponseWriter, r *http.Request) {
