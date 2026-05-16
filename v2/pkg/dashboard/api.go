@@ -1249,7 +1249,34 @@ func (s *Server) handleAgentPrompt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStatSources(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, []string{"ga4", "github", "sentry", "custom"})
+	sources := map[string]any{
+		"status": map[string]any{
+			"label":  "Repo Status",
+			"fields": []string{"actionableCount", "openPrCount", "mergeableCount"},
+		},
+		"health": map[string]any{
+			"label": "Health Checks",
+			"fields": []string{
+				"brew", "helm", "ci", "weekly", "nightly",
+				"nightlyCompliance", "nightlyDashboard", "nightlyGhaw",
+				"nightlyPlaywright", "nightlyRel", "weeklyRel",
+				"deploy_vllm_d", "deploy_pok_prod",
+			},
+		},
+		"agentMetrics": map[string]any{
+			"label": "Agent Metrics",
+			"fields": []string{
+				"stars", "forks", "contributors", "adopters", "acmm",
+				"outreachOpen", "outreachMerged", "coverage", "prs", "closed",
+			},
+		},
+		"tokens": map[string]any{
+			"label":  "Token Usage",
+			"fields": []string{"input", "output", "cacheRead", "cacheCreate", "sessions", "messages"},
+		},
+	}
+	styles := []string{"number", "dot", "pct", "pct-bar", "spark"}
+	jsonResponse(w, map[string]any{"sources": sources, "styles": styles})
 }
 
 // --- Governor config endpoints ---
