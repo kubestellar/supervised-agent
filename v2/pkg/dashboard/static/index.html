@@ -2404,22 +2404,21 @@
       try {
         const r = await fetch('/api/history');
         const evalEntries = await r.json();
-        // Merge server-side token sparkline history into eval entries by timestamp.
-        // Eval entries have governor fields; token entries have token fields.
-        // Match by closest timestamp so sparklines show both on page load.
         const tokenHist = window._serverTokenHistory || [];
+        const MAX_MERGE_DELTA_MS = 60000;
+        const matchedTokenIndices = new Set();
         if (tokenHist.length > 0) {
           for (const entry of (evalEntries || [])) {
             const entryT = entry.t || 0;
-            // Find the token snapshot closest in time to this eval entry
             let best = null;
             let bestDelta = Infinity;
-            const MAX_MERGE_DELTA_MS = 60000; // 60s — only merge if within 1 minute
-            for (const th of tokenHist) {
-              const delta = Math.abs((th.t || 0) - entryT);
+            let bestIdx = -1;
+            for (let i = 0; i < tokenHist.length; i++) {
+              const delta = Math.abs((tokenHist[i].t || 0) - entryT);
               if (delta < bestDelta) {
                 bestDelta = delta;
-                best = th;
+                best = tokenHist[i];
+                bestIdx = i;
               }
             }
             if (best && bestDelta < MAX_MERGE_DELTA_MS) {
@@ -2430,8 +2429,27 @@
               entry.tokenMessages = best.tokenMessages || 0;
               if (best.tokens) entry.tokens = best.tokens;
               if (best.tokenModels) entry.tokenModels = best.tokenModels;
+              matchedTokenIndices.add(bestIdx);
             }
           }
+          // Inject unmatched token entries so sparklines survive refresh
+          for (let i = 0; i < tokenHist.length; i++) {
+            if (!matchedTokenIndices.has(i)) {
+              const th = tokenHist[i];
+              evalEntries.push({
+                t: th.t,
+                tokenInput: th.tokenInput || 0,
+                tokenOutput: th.tokenOutput || 0,
+                tokenCacheRead: th.tokenCacheRead || 0,
+                tokenCacheCreate: th.tokenCacheCreate || 0,
+                tokenMessages: th.tokenMessages || 0,
+                tokens: th.tokens || {},
+                tokenModels: th.tokenModels || {},
+                tokenTotal: Object.values(th.tokens || {}).reduce((a, b) => a + b, 0),
+              });
+            }
+          }
+          evalEntries.sort((a, b) => (a.t || 0) - (b.t || 0));
         }
         historyData = evalEntries || [];
       } catch (e) { /* ignore */ }
