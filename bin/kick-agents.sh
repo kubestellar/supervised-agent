@@ -744,6 +744,7 @@ done
 /tmp/hive/bin/enumerate-actionable.sh 2>/dev/null || log "WARN: enumerate-actionable.sh failed (non-fatal)"
 /tmp/hive/bin/merge-gate.sh 2>/dev/null || log "WARN: merge-gate.sh failed (non-fatal)"
 /tmp/hive/bin/copilot-comment-checker.sh 2>/dev/null || log "WARN: copilot-comment-checker.sh failed (non-fatal)"
+/tmp/hive/bin/fetch-coverage.sh 2>/dev/null || log "WARN: fetch-coverage.sh failed (non-fatal)"
 
 # Build inline work list for scanner kick message (agents must NOT list issues/PRs themselves)
 _ENUM_FILE="/var/run/hive-metrics/actionable.json"
@@ -1125,6 +1126,78 @@ apply_model_if_changed() {
 }
 
 _now_et=$(TZ=America/New_York date '+%Y-%m-%d %I:%M %p %Z')
+
+# ── Tester coverage data ──────────────────────────────────────────────
+# Reads /var/run/hive-metrics/coverage.json (written by fetch-coverage.sh)
+# and builds a structured preamble for the tester kick message.
+_COVERAGE_FILE="/var/run/hive-metrics/coverage.json"
+_TESTER_COVERAGE_PREAMBLE=""
+if [ -f "$_COVERAGE_FILE" ]; then
+  _TESTER_COVERAGE_PREAMBLE=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('$_COVERAGE_FILE'))
+except Exception:
+    sys.exit(0)
+
+if d.get('error'):
+    print(f'COVERAGE: unavailable ({d[\"error\"]})')
+    sys.exit(0)
+
+lines = d.get('lines', 0)
+stmts = d.get('statements', 0)
+branches = d.get('branches', 0)
+funcs = d.get('functions', 0)
+threshold = d.get('threshold', 91)
+run_ts = d.get('run_ts', 'unknown')
+failing = d.get('failing_shards', 0)
+
+out = []
+out.append(f'COVERAGE STATUS (from {run_ts}):')
+out.append(f'  Lines: {lines}% | Statements: {stmts}% | Branches: {branches}% | Functions: {funcs}%')
+out.append(f'  Threshold: {threshold}%')
+
+gaps = []
+if lines < threshold:
+    gaps.append(f'Lines ({threshold - lines:.1f}% gap)')
+if stmts < threshold:
+    gaps.append(f'Statements ({threshold - stmts:.1f}% gap)')
+if branches < threshold:
+    gaps.append(f'Branches ({threshold - branches:.1f}% gap)')
+if funcs < threshold:
+    gaps.append(f'Functions ({threshold - funcs:.1f}% gap)')
+
+if gaps:
+    out.append(f'  ⚠ BELOW THRESHOLD: {', '.join(gaps)}')
+else:
+    out.append(f'  ✅ All metrics at or above {threshold}%')
+
+if failing > 0:
+    out.append(f'  ⚠ {failing} test shard(s) failing in latest run — investigate and fix')
+
+low = d.get('low_coverage_files', [])
+if low:
+    out.append(f'LOWEST COVERAGE FILES (below {threshold}%):')
+    for f in low[:15]:
+        out.append(f'  {f[\"file\"]}: L={f[\"lines\"]}% S={f[\"statements\"]}% B={f[\"branches\"]}% F={f[\"functions\"]}%')
+    if len(low) > 15:
+        out.append(f'  ... and {len(low) - 15} more')
+
+print('\n'.join(out))
+" 2>/dev/null || echo "COVERAGE: data unavailable (parse error)")
+fi
+
+if policy_changed "tester"; then
+  _TESTER_POLICY_INSTR="Read your CLAUDE.md."
+else
+  _TESTER_POLICY_INSTR="Policy unchanged since last kick — skip CLAUDE.md re-read, continue with standing instructions."
+fi
+TESTER_MSG="[agent:tester] [KICK] git pull /tmp/hive. ${_TESTER_POLICY_INSTR}
+${_GH_AUTH_INSTR}
+${_REPOS_SECTION}
+${_TESTER_COVERAGE_PREAMBLE}
+PRIORITIES: 1) Fix any failing test shards first (these block coverage reporting). 2) Write tests for the lowest-coverage files listed above — target files furthest below threshold. 3) Focus on branches coverage (typically the weakest metric). Max 3 PRs per kick. Each PR must include coverage delta estimate. NEVER run vitest, npm test, npm run build, tsc, or any test/build locally — CI validates. Beads: ~/tester-beads"
+
 if policy_changed "supervisor"; then
   _SUPERVISOR_POLICY_INSTR="Read your CLAUDE.md."
 else
@@ -1150,6 +1223,9 @@ case "$TARGET" in
     ;;
   supervisor)
     apply_model_if_changed "supervisor" "supervisor" && kick "supervisor" "$SUPERVISOR_MSG" "supervisor"
+    ;;
+  tester)
+    apply_model_if_changed "tester" "tester" && kick "tester" "$TESTER_MSG" "tester"
     ;;
   sec-check)
     SEC_CHECK_MSG="[agent:sec-check] [KICK] git pull /tmp/hive. Read your CLAUDE.md. Time: ${_now_et}.
