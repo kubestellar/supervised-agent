@@ -1,0 +1,50 @@
+name: Coverage Hourly
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v2
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: v2/go.sum
+
+      - name: Test with coverage
+        run: go test ./pkg/... -short -race -coverprofile=coverage.out -count=1
+
+      - name: Check coverage threshold
+        id: coverage
+        run: |
+          TOTAL=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $3}' | tr -d '%')
+          echo "Total coverage: ${TOTAL}%"
+          echo "coverage=$TOTAL" >> "$GITHUB_OUTPUT"
+
+          THRESHOLD=91.0
+          if [ "$(echo "$TOTAL < $THRESHOLD" | bc -l)" -eq 1 ]; then
+            echo "::warning::Coverage ${TOTAL}% is below ${THRESHOLD}% threshold"
+            echo "below_threshold=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "below_threshold=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Per-package coverage
+        if: steps.coverage.outputs.below_threshold == 'true'
+        run: |
+          echo "## Per-package coverage"
+          go tool cover -func=coverage.out | sort -t: -k3 -n | head -20
