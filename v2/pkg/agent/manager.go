@@ -138,6 +138,20 @@ func (m *Manager) tmuxSessionExists(session string) bool {
 	return cmd.Run() == nil
 }
 
+func (m *Manager) tmuxPaneHasProcess(session string) bool {
+	cmd := exec.Command("tmux", "list-panes", "-t", session, "-F", "#{pane_pid}")
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	panePID := strings.TrimSpace(string(out))
+	if panePID == "" {
+		return false
+	}
+	children, err := exec.Command("pgrep", "-P", panePID).Output()
+	return err == nil && len(strings.TrimSpace(string(children))) > 0
+}
+
 func (m *Manager) launchInTmux(ctx context.Context, agent *AgentProcess) error {
 	backend := agent.Config.Backend
 	if agent.BackendOverride != "" {
@@ -193,6 +207,22 @@ func (m *Manager) launchInTmux(ctx context.Context, agent *AgentProcess) error {
 				launchCmd += fmt.Sprintf(" --prompt \"$(cat %s)\"", promptFile)
 			}
 		}
+	}
+
+	if m.tmuxPaneHasProcess(agent.tmuxSession) {
+		m.logger.Info("tmux pane already has a running process, skipping launch", "name", agent.Name, "session", agent.tmuxSession)
+		now := time.Now()
+		agent.State = StateRunning
+		agent.StartedAt = &now
+
+		agentCtx, cancel := context.WithCancel(ctx)
+		agent.cancel = cancel
+		go m.pollTmuxOutput(agent.Name, agent.tmuxSession, agent.OutputBuffer, agentCtx)
+
+		if backend == "copilot" {
+			go m.watchForTrustPrompt(agent.tmuxSession, agentCtx)
+		}
+		return nil
 	}
 
 	envCmd := m.buildEnvPrefix(agent)
