@@ -217,6 +217,16 @@ if [[ -n "$AGENT_NAME" ]]; then
       _ensure_labels
       exec "$REAL_GH" "$@" --add-label "$LABELS_CSV"
       ;;
+    pr/merge)
+      _ensure_labels
+      _extract_item
+      if [[ -n "$item_num" ]]; then
+        local_repo=""
+        [[ -n "$item_repo" ]] && local_repo="--repo $item_repo"
+        "$REAL_GH" pr edit "$item_num" $local_repo --add-label "$LABELS_CSV" 2>/dev/null || true
+      fi
+      exec "$REAL_GH" "$@"
+      ;;
     issue/comment|pr/comment|pr/review)
       _ensure_labels
       _extract_item

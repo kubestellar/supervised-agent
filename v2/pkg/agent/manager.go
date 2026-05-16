@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -253,12 +254,52 @@ func (m *Manager) buildBootstrapPrompt(agent *AgentProcess) string {
 		fmt.Sprintf("/data/policies/examples/kubestellar/agents/%s-CLAUDE.md", agent.Name),
 		fmt.Sprintf("/data/agents/%s/CLAUDE.md", agent.Name),
 	}
+	var policyPath string
 	for _, p := range paths {
 		if _, err := os.Stat(p); err == nil {
-			return fmt.Sprintf("[agent:%s] [BOOT] Read %s for your instructions and begin your first pass.", agent.Name, p)
+			policyPath = p
+			break
 		}
 	}
-	return fmt.Sprintf("[agent:%s] [BOOT] Read your CLAUDE.md for instructions and begin your first pass.", agent.Name)
+
+	base := fmt.Sprintf("[agent:%s] [BOOT] Read your CLAUDE.md for instructions and begin your first pass.", agent.Name)
+	if policyPath != "" {
+		base = fmt.Sprintf("[agent:%s] [BOOT] Read %s for your instructions and begin your first pass.", agent.Name, policyPath)
+	}
+
+	if agent.Name == "tester" {
+		if preamble := m.readCoveragePreamble(); preamble != "" {
+			base = preamble + " " + base
+		}
+	}
+
+	return base
+}
+
+const metricsCachePath = "/data/metrics/agent-metrics-cache.json"
+
+func (m *Manager) readCoveragePreamble() string {
+	data, err := os.ReadFile(metricsCachePath)
+	if err != nil {
+		return ""
+	}
+	var metrics map[string]map[string]json.Number
+	if err := json.Unmarshal(data, &metrics); err != nil {
+		return ""
+	}
+	ci, ok := metrics["ci-maintainer"]
+	if !ok {
+		return ""
+	}
+	cov, err := ci["coverage"].Int64()
+	if err != nil {
+		return ""
+	}
+	target, err := ci["coverageTarget"].Int64()
+	if err != nil {
+		target = 91
+	}
+	return fmt.Sprintf("[COVERAGE] Current: %d%% | Target: %d%%.", cov, target)
 }
 
 func (m *Manager) buildEnvPrefix(agent *AgentProcess) string {
