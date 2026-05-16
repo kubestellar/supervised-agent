@@ -157,7 +157,7 @@ func okResponse(w http.ResponseWriter, extra map[string]string) {
 
 func (s *Server) refreshAfterMutation() {
 	if s.deps != nil && s.deps.RefreshFunc != nil {
-		s.deps.RefreshFunc()
+		go s.deps.RefreshFunc()
 	}
 }
 
