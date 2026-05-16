@@ -648,6 +648,14 @@ func (m *Manager) ResetRestartCount(name string) error {
 	return nil
 }
 
+func (m *Manager) SeedRestartCount(name string, count int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if agent, ok := m.agents[name]; ok {
+		agent.RestartCount = count
+	}
+}
+
 func (m *Manager) PinCLI(name, version string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
