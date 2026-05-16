@@ -2404,6 +2404,15 @@
       try {
         const r = await fetch('/api/history');
         const evalEntries = await r.json();
+        // Ensure token history is loaded before merging (fixes race on initial page load)
+        if (!window._serverTokenHistory) {
+          try {
+            const tr = await fetch('/api/trends?range=week');
+            const td = await tr.json();
+            window._serverTokenHistory = td && td.tokenHistory ? td.tokenHistory : [];
+            window._trendData = td && td.evals ? td.evals : (Array.isArray(td) ? td : []);
+          } catch { window._serverTokenHistory = []; }
+        }
         const tokenHist = window._serverTokenHistory || [];
         const MAX_MERGE_DELTA_MS = 60000;
         const matchedTokenIndices = new Set();
