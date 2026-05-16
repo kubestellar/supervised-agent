@@ -178,6 +178,9 @@ func main() {
 			if as.BackendOverride != "" {
 				_ = agentMgr.SetBackendOverride(name, as.BackendOverride)
 			}
+			if as.RestartCount > 0 {
+				agentMgr.SeedRestartCount(name, as.RestartCount)
+			}
 			if as.LastKick != nil {
 				agentMgr.SeedLastKick(name, *as.LastKick)
 			}
