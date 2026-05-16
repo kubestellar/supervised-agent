@@ -1595,7 +1595,7 @@
 
   <aside id="hive-info-sidebar">
     <h3>What is Hive?</h3>
-    <p>Hive is an open source system where AI agents autonomously maintain software repos. It&rsquo;s configurable for any GitHub repository. A governor controls agent pace based on queue depth. This dashboard shows it running live on KubeStellar.</p>
+    <p>Hive is an open source AI Agent Orchestration system where AI agents autonomously maintain software repos. It&rsquo;s configurable for any GitHub repository. A governor controls agent pace based on queue depth. This dashboard shows it running live on KubeStellar.</p>
     <h4 style="font-size:0.82rem;color:#f0f6fc;margin:14px 0 6px 0;">Agents</h4>
     <ul style="list-style:none;padding:0;margin:0 0 14px 0;font-size:0.78rem;color:#8b949e;line-height:1.6;">
       <li><strong style="color:#c9d1d9;">Scanner</strong> &mdash; triages issues, dispatches fixes, merges PRs</li>
@@ -1687,10 +1687,39 @@
     }
     const OC_TOPBAR_HEIGHT = 64;
     let _ocSelectedAgent = localStorage.getItem('hive-oc-agent') || null;
+    let _ocPaneTimer = null;
+    const OC_PANE_POLL_MS = 3000;
+    const OC_PANE_LINES = 200;
+
+    function ocStartPanePoll() {
+      ocStopPanePoll();
+      if (!_ocSelectedAgent) return;
+      ocFetchPane();
+      _ocPaneTimer = setInterval(ocFetchPane, OC_PANE_POLL_MS);
+    }
+    function ocStopPanePoll() {
+      if (_ocPaneTimer) { clearInterval(_ocPaneTimer); _ocPaneTimer = null; }
+    }
+    async function ocFetchPane() {
+      if (!_ocSelectedAgent) return;
+      try {
+        const r = await fetch('/api/pane/' + encodeURIComponent(_ocSelectedAgent) + '?lines=' + OC_PANE_LINES);
+        if (!r.ok) return;
+        const d = await r.json();
+        const el = document.getElementById('oc-summary-scroll');
+        if (!el || !d.lines) return;
+        const txt = d.lines.join('\n');
+        if (el.textContent === txt) return;
+        const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+        el.textContent = txt;
+        if (_ocSummaryTailing || wasAtBottom) el.scrollTop = el.scrollHeight;
+      } catch {}
+    }
 
     function ocNavigate(section) {
       _ocSelectedAgent = null;
       localStorage.setItem('hive-oc-agent', '');
+      ocStopPanePoll();
       const detail = document.getElementById('oc-agent-detail');
       if (detail) { detail.classList.remove('active'); detail.innerHTML = ''; }
       ocUpdateFocusedState();
@@ -1735,6 +1764,7 @@
       if (active) active.classList.add('active');
       ocRenderAgentDetail();
       ocUpdateFocusedState();
+      if (name) { ocStartPanePoll(); } else { ocStopPanePoll(); }
       const detail = document.getElementById('oc-agent-detail');
       if (detail) {
         const y = detail.getBoundingClientRect().top + window.scrollY - OC_TOPBAR_HEIGHT;
@@ -5405,7 +5435,7 @@ function burnAreaChart() {
       renderRepos(data.repos || []);
       renderBeads(data.beads || {});
       ocUpdateSidebarAgents();
-      if (_ocSelectedAgent) { ocRenderAgentDetail(); ocUpdateFocusedState(); }
+      if (_ocSelectedAgent) { ocRenderAgentDetail(); ocUpdateFocusedState(); ocStartPanePoll(); }
       renderDebugSection();
       window.scrollTo(0, scrollY);
     }

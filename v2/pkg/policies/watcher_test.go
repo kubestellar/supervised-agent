@@ -75,7 +75,7 @@ func writeTempFile(t *testing.T, dir, name, content string) {
 // This is useful for loadPolicies tests where we control the directory directly.
 func newWatcherWithDir(t *testing.T, localDir, subPath string) *Watcher {
 	t.Helper()
-	return NewWatcher("https://example.com/repo.git", subPath, localDir, 10*time.Minute, testLogger())
+	return NewWatcher("https://example.com/repo.git", "", subPath, localDir, 10*time.Minute, testLogger())
 }
 
 func TestLoadPolicies_BasicMapping(t *testing.T) {
@@ -298,13 +298,16 @@ func TestNewWatcher_FieldsSetCorrectly(t *testing.T) {
 	)
 
 	logger := testLogger()
-	w := NewWatcher(repoURL, subPath, localDir, pollInterval, logger)
+	w := NewWatcher(repoURL, "", subPath, localDir, pollInterval, logger)
 
 	if w == nil {
 		t.Fatal("NewWatcher returned nil")
 	}
 	if w.repoURL != repoURL {
 		t.Errorf("repoURL = %q; want %q", w.repoURL, repoURL)
+	}
+	if w.branch != defaultPolicyBranch {
+		t.Errorf("branch = %q; want %q (default)", w.branch, defaultPolicyBranch)
 	}
 	if w.subPath != subPath {
 		t.Errorf("subPath = %q; want %q", w.subPath, subPath)
@@ -520,7 +523,7 @@ func TestStart_FreshClone(t *testing.T) {
 	bareURL, _ := setupBareRepo(t)
 
 	localDir := filepath.Join(t.TempDir(), "clone")
-	w := NewWatcher(bareURL, "policies", localDir, 24*time.Hour, testLogger())
+	w := NewWatcher(bareURL, "", "policies", localDir, 24*time.Hour, testLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -555,7 +558,7 @@ func TestStart_PollPicksUpNewCommit(t *testing.T) {
 
 	// Use a short poll interval so the test completes quickly.
 	const pollInterval = 200 * time.Millisecond
-	w := NewWatcher(bareURL, "policies", localDir, pollInterval, testLogger())
+	w := NewWatcher(bareURL, "", "policies", localDir, pollInterval, testLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -605,7 +608,7 @@ func TestInitialClone_ExistingValidRepo(t *testing.T) {
 	// Push a new commit so that git pull has something to fetch.
 	addCommit(t, workDir, "architect_policy.md", "architect policy v1")
 
-	w := NewWatcher(bareURL, "policies", localDir, 24*time.Hour, testLogger())
+	w := NewWatcher(bareURL, "", "policies", localDir, 24*time.Hour, testLogger())
 	if err := w.initialClone(); err != nil {
 		t.Fatalf("initialClone on existing repo: %v", err)
 	}
@@ -643,7 +646,7 @@ func TestInitialClone_CorruptDotGitTriggersReclone(t *testing.T) {
 		t.Fatalf("write corrupt HEAD: %v", err)
 	}
 
-	w := NewWatcher(bareURL, "policies", localDir, 24*time.Hour, testLogger())
+	w := NewWatcher(bareURL, "", "policies", localDir, 24*time.Hour, testLogger())
 	if err := w.initialClone(); err != nil {
 		t.Fatalf("initialClone with corrupt .git: %v", err)
 	}
@@ -670,7 +673,7 @@ func TestPull_UpdatesPoliciesToLatest(t *testing.T) {
 	runGit(t, localDir, "config", "user.email", "test@example.com")
 	runGit(t, localDir, "config", "user.name", "Test")
 
-	w := NewWatcher(bareURL, "policies", localDir, 24*time.Hour, testLogger())
+	w := NewWatcher(bareURL, "", "policies", localDir, 24*time.Hour, testLogger())
 
 	// Load the initial state.
 	if err := w.loadPolicies(); err != nil {
@@ -707,7 +710,7 @@ func TestPull_AlreadyUpToDate(t *testing.T) {
 	runGit(t, localDir, "config", "user.email", "test@example.com")
 	runGit(t, localDir, "config", "user.name", "Test")
 
-	w := NewWatcher(bareURL, "policies", localDir, 24*time.Hour, testLogger())
+	w := NewWatcher(bareURL, "", "policies", localDir, 24*time.Hour, testLogger())
 	if err := w.loadPolicies(); err != nil {
 		t.Fatalf("loadPolicies: %v", err)
 	}
