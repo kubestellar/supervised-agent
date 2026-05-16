@@ -7,7 +7,7 @@
 #   - All required CI checks pass (ignoring: tide, Playwright, netlify)
 #   - It is not a draft
 #   - It is not excluded by the enumerator (hold, ADOPTERS, etc.)
-#   - Author is the project's AI author or a known bot (AI-authored)
+#   - Author is AI-authored, OR community-authored with APPROVED review
 #
 # Agents should ONLY merge PRs that appear in this file.
 
@@ -100,13 +100,14 @@ else:
         print('unknown')
 " 2>/dev/null || echo "unknown")
 
-      # Get PR metadata
-      pr_info=$(gh pr view "$num" --repo "$repo" --json title,author,isDraft,mergeable 2>/dev/null || echo '{}')
+      # Get PR metadata (including reviewDecision for community PR approval)
+      pr_info=$(gh pr view "$num" --repo "$repo" --json title,author,isDraft,mergeable,reviewDecision 2>/dev/null || echo '{}')
       author=$(echo "$pr_info" | python3 -c "import json,sys; print(json.load(sys.stdin).get('author',{}).get('login','unknown'))" 2>/dev/null || echo "unknown")
       title=$(echo "$pr_info" | python3 -c "import json,sys; print(json.load(sys.stdin).get('title',''))" 2>/dev/null || echo "")
       mergeable=$(echo "$pr_info" | python3 -c "import json,sys; print(json.load(sys.stdin).get('mergeable','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+      review=$(echo "$pr_info" | python3 -c "import json,sys; print(json.load(sys.stdin).get('reviewDecision',''))" 2>/dev/null || echo "")
 
-      echo "{\"repo\":\"$repo\",\"number\":$num,\"status\":\"$status\",\"author\":\"$author\",\"title\":$(python3 -c "import json; print(json.dumps('$title'[:100]))" 2>/dev/null || echo '""'),\"mergeable\":\"$mergeable\"}" > "$checks_tmp/${repo//\//_}_${num}.json"
+      echo "{\"repo\":\"$repo\",\"number\":$num,\"status\":\"$status\",\"author\":\"$author\",\"title\":$(python3 -c "import json; print(json.dumps('$title'[:100]))" 2>/dev/null || echo '""'),\"mergeable\":\"$mergeable\",\"reviewDecision\":\"$review\"}" > "$checks_tmp/${repo//\//_}_${num}.json"
     fi
   ) &
 done
@@ -133,11 +134,14 @@ for f in sorted(glob.glob(os.path.join(checks_dir, '*.json'))):
     is_ai = pr.get('author', '') in AI_AUTHORS
     ci_pass = pr.get('status') == 'pass'
     mergeable = pr.get('mergeable', 'UNKNOWN') in ('MERGEABLE', 'UNKNOWN')
+    approved = pr.get('reviewDecision', '') == 'APPROVED'
 
     pr['ai_authored'] = is_ai
     pr['ci_pass'] = ci_pass
+    pr['approved'] = approved
 
-    if ci_pass and mergeable and is_ai:
+    # Eligible: CI green + mergeable + (AI-authored OR community-approved)
+    if ci_pass and mergeable and (is_ai or approved):
         eligible.append(pr)
     else:
         reasons = []
@@ -145,8 +149,8 @@ for f in sorted(glob.glob(os.path.join(checks_dir, '*.json'))):
             reasons.append(f\"ci={pr.get('status','?')}\")
         if not mergeable:
             reasons.append(f\"mergeable={pr.get('mergeable','?')}\")
-        if not is_ai:
-            reasons.append(f\"author={pr.get('author','?')} (not AI)\")
+        if not is_ai and not approved:
+            reasons.append(f\"author={pr.get('author','?')} (not AI, not approved)\")
         pr['block_reasons'] = reasons
         not_ready.append(pr)
 
