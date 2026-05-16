@@ -157,6 +157,8 @@ func (m *Manager) launchInTmux(ctx context.Context, agent *AgentProcess) error {
 	}
 	model = normalizeModelName(model)
 
+	bootstrapPrompt := m.buildBootstrapPrompt(agent)
+
 	switch backend {
 	case "claude":
 		launchCmd = fmt.Sprintf("%s --model %s --dangerously-skip-permissions", binary, model)
@@ -172,6 +174,24 @@ func (m *Manager) launchInTmux(ctx context.Context, agent *AgentProcess) error {
 		launchCmd = binary
 	default:
 		launchCmd = binary
+	}
+
+	if bootstrapPrompt != "" {
+		promptFile := fmt.Sprintf("/tmp/.hive-bootstrap-%s.txt", agent.Name)
+		if err := os.WriteFile(promptFile, []byte(bootstrapPrompt), 0o644); err != nil {
+			m.logger.Warn("failed to write bootstrap prompt", "name", agent.Name, "error", err)
+		} else {
+			switch backend {
+			case "copilot":
+				launchCmd += fmt.Sprintf(" -i \"$(cat %s)\"", promptFile)
+			case "claude":
+				launchCmd += fmt.Sprintf(" \"$(cat %s)\"", promptFile)
+			case "gemini":
+				launchCmd += fmt.Sprintf(" -i \"$(cat %s)\"", promptFile)
+			case "goose":
+				launchCmd += fmt.Sprintf(" --prompt \"$(cat %s)\"", promptFile)
+			}
+		}
 	}
 
 	envCmd := m.buildEnvPrefix(agent)
@@ -226,6 +246,19 @@ func (m *Manager) watchForTrustPrompt(session string, ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (m *Manager) buildBootstrapPrompt(agent *AgentProcess) string {
+	paths := []string{
+		fmt.Sprintf("/data/policies/examples/kubestellar/agents/%s-CLAUDE.md", agent.Name),
+		fmt.Sprintf("/data/agents/%s/CLAUDE.md", agent.Name),
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return fmt.Sprintf("[agent:%s] [BOOT] Read %s for your instructions and begin your first pass.", agent.Name, p)
+		}
+	}
+	return fmt.Sprintf("[agent:%s] [BOOT] Read your CLAUDE.md for instructions and begin your first pass.", agent.Name)
 }
 
 func (m *Manager) buildEnvPrefix(agent *AgentProcess) string {
