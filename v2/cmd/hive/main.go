@@ -573,6 +573,10 @@ func runEvalCycle(
 		gov.AttachAgentStats(agentStats)
 	}
 
+	if repoSnaps := dashboard.CollectRepoSnapshots(statusPayload); len(repoSnaps) > 0 {
+		gov.AttachRepoSnapshots(repoSnaps)
+	}
+
 	if nousState != nil {
 		var tokenSummary *tokens.AggregateSummary
 		if tokenCollector != nil {
