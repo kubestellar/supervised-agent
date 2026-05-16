@@ -47,6 +47,7 @@ type EvalSnapshot struct {
 	BeadsWorkers  int               `json:"beadsWorkers"`
 	BeadsSupervisor int             `json:"beadsSupervisor"`
 	Repos         map[string]RepoSnapshot `json:"repos,omitempty"`
+	AgentStats    map[string]map[string]any `json:"agentStats,omitempty"`
 }
 
 type RepoSnapshot struct {
@@ -360,6 +361,16 @@ func (g *Governor) EvalHistory() []EvalSnapshot {
 	result := make([]EvalSnapshot, len(g.evalHistory))
 	copy(result, g.evalHistory)
 	return result
+}
+
+// AttachAgentStats attaches resolved stat values to the most recent eval snapshot.
+func (g *Governor) AttachAgentStats(stats map[string]map[string]any) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if len(g.evalHistory) == 0 {
+		return
+	}
+	g.evalHistory[len(g.evalHistory)-1].AgentStats = stats
 }
 
 // SeedEvalHistory loads previously persisted eval snapshots so sparkline
