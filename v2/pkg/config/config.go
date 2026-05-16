@@ -221,9 +221,10 @@ type DiscordConfig struct {
 }
 
 type DashboardConfig struct {
-	Port        int    `yaml:"port"`
-	SnapshotDir string `yaml:"snapshot_dir"`
-	AuthToken   string `yaml:"auth_token"`
+	Port               int    `yaml:"port"`
+	SnapshotDir        string `yaml:"snapshot_dir"`
+	AuthToken          string `yaml:"auth_token"`
+	AgentPollIntervalS int    `yaml:"agent_poll_interval_s"`
 }
 
 type DataConfig struct {
@@ -370,6 +371,7 @@ func expandEnvVars(s string) string {
 
 const (
 	defaultDashboardPort          = 3002
+	defaultAgentPollIntervalS     = 10
 	defaultEvalIntervalS          = 300
 	defaultPollIntervalMins       = 5
 	defaultKnowledgeMaxFacts      = 25
@@ -391,6 +393,9 @@ const (
 func (c *Config) applyDefaults() {
 	if c.Dashboard.Port == 0 {
 		c.Dashboard.Port = defaultDashboardPort
+	}
+	if c.Dashboard.AgentPollIntervalS == 0 {
+		c.Dashboard.AgentPollIntervalS = defaultAgentPollIntervalS
 	}
 	if c.Governor.EvalIntervalS == 0 {
 		c.Governor.EvalIntervalS = defaultEvalIntervalS

@@ -16,6 +16,8 @@ import (
 //go:embed static
 var staticFS embed.FS
 
+const agentSkipAfterFullBroadcastS = 5 * time.Second
+
 type Server struct {
 	port       int
 	authToken  string
@@ -35,8 +37,9 @@ type Server struct {
 	hooksMu        sync.RWMutex
 	knowledgeMu    sync.Mutex
 
-	tokenHistoryMu sync.RWMutex
-	tokenHistory   []TokenSparklineEntry
+	tokenHistoryMu    sync.RWMutex
+	tokenHistory      []TokenSparklineEntry
+	lastFullBroadcast time.Time
 
 	ready bool
 }
@@ -285,6 +288,7 @@ func (s *Server) UpdateStatus(status *StatusPayload) {
 	s.statusMu.Lock()
 	status.Timestamp = time.Now().UTC().Format(time.RFC3339)
 	s.status = status
+	s.lastFullBroadcast = time.Now()
 	s.statusMu.Unlock()
 
 	s.AppendTokenSparkline(status)
@@ -295,7 +299,27 @@ func (s *Server) UpdateStatus(status *StatusPayload) {
 		return
 	}
 
-	s.broadcast(data)
+	s.broadcastFrame(fmt.Sprintf("data: %s\n\n", data))
+}
+
+// BroadcastAgentStatus sends a lightweight agent-only SSE event on a fast
+// cadence. Skipped if a full status was broadcast within the last 5 seconds
+// to avoid redundant renders on the frontend.
+func (s *Server) BroadcastAgentStatus(payload *AgentStatusPayload) {
+	s.statusMu.RLock()
+	recentFull := time.Since(s.lastFullBroadcast) < agentSkipAfterFullBroadcastS
+	s.statusMu.RUnlock()
+	if recentFull {
+		return
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		s.logger.Warn("failed to marshal agent status for SSE", "error", err)
+		return
+	}
+
+	s.broadcastFrame(fmt.Sprintf("event: agent-status\ndata: %s\n\n", data))
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -368,8 +392,8 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		select {
-		case data := <-ch:
-			fmt.Fprintf(w, "data: %s\n\n", data)
+		case frame := <-ch:
+			_, _ = w.Write(frame)
 			flusher.Flush()
 		case <-r.Context().Done():
 			return
@@ -377,13 +401,14 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) broadcast(data []byte) {
+func (s *Server) broadcastFrame(frame string) {
+	raw := []byte(frame)
 	s.sseMu.Lock()
 	defer s.sseMu.Unlock()
 
 	for ch := range s.sseClients {
 		select {
-		case ch <- data:
+		case ch <- raw:
 		default:
 			// Client too slow — drop the event
 		}

@@ -5921,6 +5921,27 @@ function burnAreaChart() {
         }
       };
 
+      source.addEventListener('agent-status', (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          window._lastAgents = payload.agents || [];
+          if (window._lastStatus) {
+            window._lastStatus.agents = payload.agents || [];
+          }
+          ocUpdateSidebarAgents();
+          if (_ocSelectedAgent) {
+            ocRenderAgentDetail();
+          }
+          const lastData = window._lastStatus || {};
+          if (lastData.agents) {
+            applyPinOverrides(lastData.agents);
+            renderAgents(lastData.agents);
+          }
+        } catch (err) {
+          console.error('SSE agent-status parse error:', err);
+        }
+      });
+
       source.onerror = () => {
         conn.className = 'connection';
         conn.innerHTML = '<span class="dot-dead">●</span> reconnecting...';

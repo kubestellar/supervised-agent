@@ -457,6 +457,13 @@ func main() {
 	ticker := time.NewTicker(time.Duration(cfg.Governor.EvalIntervalS) * time.Second)
 	defer ticker.Stop()
 
+	var agentTicker *time.Ticker
+	if cfg.Dashboard.AgentPollIntervalS > 0 {
+		agentTicker = time.NewTicker(time.Duration(cfg.Dashboard.AgentPollIntervalS) * time.Second)
+		defer agentTicker.Stop()
+		logger.Info("fast agent status enabled", "interval_seconds", cfg.Dashboard.AgentPollIntervalS)
+	}
+
 	const cliStartupDelay = 10 * time.Second
 	logger.Info("waiting for CLI startup before first eval", "delay", cliStartupDelay)
 	select {
@@ -469,6 +476,13 @@ func main() {
 	persistState(agentMgr, gov, cfg, tokenCollector, statePath, logger, dashSrv)
 	dashSrv.MarkReady()
 
+	agentTickCh := func() <-chan time.Time {
+		if agentTicker != nil {
+			return agentTicker.C
+		}
+		return nil
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -478,6 +492,11 @@ func main() {
 		case <-ticker.C:
 			runEvalCycle(ctx, cfg, ghClient, gov, sched, agentMgr, dashSrv, notifier, beadStores, tokenCollector, metricsCollector, nousState, &lastActionable, logger)
 			persistState(agentMgr, gov, cfg, tokenCollector, statePath, logger, dashSrv)
+		case <-agentTickCh:
+			govState := gov.GetState()
+			agentStatuses := agentMgr.AllStatuses()
+			payload := dashboard.BuildAgentOnlyStatus(govState, agentStatuses, cfg)
+			dashSrv.BroadcastAgentStatus(payload)
 		}
 	}
 }
