@@ -22,6 +22,22 @@ fi
 
 log() { echo "[deploy] $(date '+%H:%M:%S') $*"; }
 
+MIN_DISK_MB=500
+
+# ── 0. Pre-flight checks ──────────────────────────────────────────
+avail_mb=$(df -m "$COMPOSE_DIR" | awk 'NR==2 {print $4}')
+if [ "$avail_mb" -lt "$MIN_DISK_MB" ]; then
+    log "WARN: Only ${avail_mb}MB free (minimum ${MIN_DISK_MB}MB). Pruning unused images..."
+    docker image prune -a -f --filter "until=24h" >/dev/null 2>&1 || true
+    docker builder prune -a -f >/dev/null 2>&1 || true
+    avail_mb=$(df -m "$COMPOSE_DIR" | awk 'NR==2 {print $4}')
+    if [ "$avail_mb" -lt "$MIN_DISK_MB" ]; then
+        log "ERROR: Still only ${avail_mb}MB free after prune. Aborting."
+        exit 1
+    fi
+    log "Freed space, now ${avail_mb}MB available."
+fi
+
 # ── 1. Build new image ──────────────────────────────────────────────
 if [ "$SKIP_BUILD" = false ]; then
     log "Pruning build cache to ensure fresh Go compilation..."
@@ -72,6 +88,7 @@ NETWORK=$(docker inspect hive-gateway --format '{{range $k,$v := .NetworkSetting
 
 docker run -d \
     --name hive-next \
+    --init \
     --network "$NETWORK" \
     -v "${HIVE_YAML}:/etc/hive/hive.yaml:ro" \
     -v "${DATA_VOL}:/data" \
@@ -136,3 +153,7 @@ while [ "$elapsed" -lt 60 ]; do
 done
 
 log "WARN: Gateway health check didn't pass within 60s, but swap completed."
+
+# ── 6. Post-deploy cleanup ─────────────────────────────────────────
+log "Pruning dangling images..."
+docker image prune -f >/dev/null 2>&1 || true
