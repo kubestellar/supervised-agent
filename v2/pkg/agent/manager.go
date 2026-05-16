@@ -148,7 +148,9 @@ func (m *Manager) tmuxPaneHasProcess(session string) bool {
 	if panePID == "" {
 		return false
 	}
-	children, err := exec.Command("pgrep", "-P", panePID).Output()
+	// Use procfs instead of pgrep (not available in minimal containers)
+	childrenPath := fmt.Sprintf("/proc/%s/task/%s/children", panePID, panePID)
+	children, err := os.ReadFile(childrenPath)
 	return err == nil && len(strings.TrimSpace(string(children))) > 0
 }
 
