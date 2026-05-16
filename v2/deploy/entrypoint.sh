@@ -49,8 +49,8 @@ mkdir -p /data/vaults/hive-wiki
 # Configure git identity and credential helper for GitHub App token
 git config --global user.name "kubestellar-hive"
 git config --global user.email "hive-bot@kubestellar.io"
-git config --global credential.helper ""
-git config --global "credential.https://github.com.helper" "/usr/local/bin/git-credential-hive.sh"
+git config --global --replace-all credential.helper ""
+git config --global --replace-all "credential.https://github.com.helper" "/usr/local/bin/git-credential-hive.sh"
 
 # Generate initial GitHub App token if credentials are available
 if [ -x /usr/local/bin/hive-config.sh ]; then
