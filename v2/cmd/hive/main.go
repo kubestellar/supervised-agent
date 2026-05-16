@@ -412,6 +412,7 @@ func main() {
 		}
 		watcher := policies.NewWatcher(
 			cfg.Policies.Repo,
+			cfg.Policies.Branch,
 			cfg.Policies.Path,
 			localDir,
 			cfg.Policies.PollInterval,

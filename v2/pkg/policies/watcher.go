@@ -11,8 +11,11 @@ import (
 	"time"
 )
 
+const defaultPolicyBranch = "main"
+
 type Watcher struct {
 	repoURL      string
+	branch       string
 	subPath      string
 	localDir     string
 	pollInterval time.Duration
@@ -21,9 +24,13 @@ type Watcher struct {
 	logger       *slog.Logger
 }
 
-func NewWatcher(repoURL, subPath, localDir string, pollInterval time.Duration, logger *slog.Logger) *Watcher {
+func NewWatcher(repoURL, branch, subPath, localDir string, pollInterval time.Duration, logger *slog.Logger) *Watcher {
+	if branch == "" {
+		branch = defaultPolicyBranch
+	}
 	return &Watcher{
 		repoURL:      repoURL,
+		branch:       branch,
 		subPath:      subPath,
 		localDir:     localDir,
 		pollInterval: pollInterval,
@@ -67,7 +74,7 @@ func (w *Watcher) AllPolicies() map[string][]byte {
 
 func (w *Watcher) initialClone() error {
 	if _, err := os.Stat(filepath.Join(w.localDir, ".git")); err == nil {
-		cmd := exec.Command("git", "-C", w.localDir, "pull", "--rebase", "origin", "main")
+		cmd := exec.Command("git", "-C", w.localDir, "pull", "--rebase", "origin", w.branch)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			w.logger.Warn("git pull failed, re-cloning", "error", err, "output", string(out))
 			os.RemoveAll(w.localDir)
@@ -84,7 +91,7 @@ func (w *Watcher) initialClone() error {
 		os.RemoveAll(w.localDir)
 	}
 
-	cmd := exec.Command("git", "clone", "--depth", "1", w.repoURL, w.localDir)
+	cmd := exec.Command("git", "clone", "--depth", "1", "--branch", w.branch, w.repoURL, w.localDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git clone %s: %w\n%s", w.repoURL, err, string(out))
 	}
@@ -142,7 +149,7 @@ func (w *Watcher) pollLoop(ctx context.Context) {
 }
 
 func (w *Watcher) pull() {
-	cmd := exec.Command("git", "-C", w.localDir, "pull", "--rebase", "origin", "main")
+	cmd := exec.Command("git", "-C", w.localDir, "pull", "--rebase", "origin", w.branch)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		w.logger.Warn("policy repo pull failed", "error", err, "output", string(out))
