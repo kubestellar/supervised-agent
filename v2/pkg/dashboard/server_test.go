@@ -263,10 +263,12 @@ func TestUpdateStatus_BroadcastsToClients(t *testing.T) {
 	s.UpdateStatus(minimalPayload())
 
 	select {
-	case data := <-ch:
+	case frame := <-ch:
+		raw := strings.TrimPrefix(string(frame), "data: ")
+		raw = strings.TrimSpace(raw)
 		var payload StatusPayload
-		if err := json.Unmarshal(data, &payload); err != nil {
-			t.Fatalf("unmarshal error: %v", err)
+		if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+			t.Fatalf("unmarshal error: %v (frame=%q)", err, string(frame))
 		}
 		if payload.Governor.Mode != "IDLE" {
 			t.Errorf("unexpected mode in broadcast: %q", payload.Governor.Mode)
@@ -519,12 +521,13 @@ func TestBroadcast_MultipleClients(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.broadcast(data)
+	frame := fmt.Sprintf("data: %s\n\n", data)
+	s.broadcastFrame(frame)
 
 	for i, ch := range channels {
 		select {
 		case got := <-ch:
-			if string(got) != string(data) {
+			if string(got) != frame {
 				t.Errorf("client %d: unexpected payload", i)
 			}
 		case <-time.After(time.Second):
@@ -547,11 +550,12 @@ func TestBroadcast_DropsEventForSlowClient(t *testing.T) {
 	s.sseMu.Unlock()
 
 	data, _ := json.Marshal(minimalPayload())
-	s.broadcast(data)
+	frame := fmt.Sprintf("data: %s\n\n", data)
+	s.broadcastFrame(frame)
 
 	select {
 	case got := <-fast:
-		if string(got) != string(data) {
+		if string(got) != frame {
 			t.Error("fast client: unexpected payload")
 		}
 	case <-time.After(time.Second):
@@ -570,7 +574,7 @@ func TestBroadcast_DropsEventForSlowClient(t *testing.T) {
 func TestBroadcast_NoClients(t *testing.T) {
 	s := newTestServer()
 	data, _ := json.Marshal(minimalPayload())
-	s.broadcast(data)
+	s.broadcastFrame(fmt.Sprintf("data: %s\n\n", data))
 }
 
 func TestConcurrency_UpdateAndReadStatus(t *testing.T) {
@@ -613,7 +617,7 @@ func TestConcurrency_BroadcastWithClientChurn(t *testing.T) {
 			s.sseClients[ch] = struct{}{}
 			s.sseMu.Unlock()
 
-			s.broadcast(data)
+			s.broadcastFrame(fmt.Sprintf("data: %s\n\n", data))
 
 			s.sseMu.Lock()
 			delete(s.sseClients, ch)

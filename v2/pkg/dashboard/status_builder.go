@@ -25,6 +25,28 @@ var (
 	cachedHealthMu sync.RWMutex
 )
 
+// AgentStatusPayload is a lightweight payload containing only agent metadata,
+// broadcast on a fast cadence (every ~10s) independent of the full eval cycle.
+type AgentStatusPayload struct {
+	Timestamp string          `json:"timestamp"`
+	Agents    []FrontendAgent `json:"agents"`
+	GovMode   string          `json:"govMode"`
+}
+
+// BuildAgentOnlyStatus builds a lightweight agent-only status from in-memory
+// data. No GitHub API calls, no metrics collection — just agent state.
+func BuildAgentOnlyStatus(
+	govState governor.State,
+	agentStatuses map[string]*agent.AgentProcess,
+	cfg *config.Config,
+) *AgentStatusPayload {
+	return &AgentStatusPayload{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Agents:    buildAgents(agentStatuses, cfg, govState),
+		GovMode:   strings.ToLower(string(govState.Mode)),
+	}
+}
+
 func BuildFrontendStatus(
 	govState governor.State,
 	actionable *github.ActionableResult,

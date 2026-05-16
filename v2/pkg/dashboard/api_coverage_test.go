@@ -1176,11 +1176,11 @@ func TestBroadcast(t *testing.T) {
 	s.sseClients[ch] = struct{}{}
 	s.sseMu.Unlock()
 
-	s.broadcast([]byte(`{"test":true}`))
+	s.broadcastFrame("data: {\"test\":true}\n\n")
 
 	data := <-ch
-	if string(data) != `{"test":true}` {
-		t.Errorf("broadcast data = %q", string(data))
+	if string(data) != "data: {\"test\":true}\n\n" {
+		t.Errorf("broadcastFrame data = %q", string(data))
 	}
 
 	s.sseMu.Lock()
