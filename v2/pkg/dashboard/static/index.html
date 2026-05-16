@@ -2560,8 +2560,12 @@
 
       if (style === 'spark') {
         const trendField = stat.trendField || stat.field;
+        const statKey = stat.key || stat.field;
         const color = SPARK_COLORS[trendField] || DEFAULT_SPARK_COLOR;
-        const trendSeries = (window._trendData || []).map(s => s[trendField] || 0);
+        // Try eval history agentStats first (persisted), fall back to trend data
+        const histSeries = historyData.map(s => s.agentStats?.[name]?.[statKey] ?? 0);
+        const hasHistData = histSeries.some(v => v > 0);
+        const trendSeries = hasHistData ? histSeries : (window._trendData || []).map(s => s[trendField] || 0);
         const spark = sparkSvg(trendSeries, color);
         return `<span class="ind-dot-item"><span class="ind-num">${icon}${v || 0}</span><span class="ind-dlabel">${label} ${spark}</span></span>`;
       }

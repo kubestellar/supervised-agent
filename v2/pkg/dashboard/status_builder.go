@@ -211,6 +211,94 @@ func defaultStatsConfig(name string) []any {
 	return []any{}
 }
 
+// CollectAgentStats resolves current stat values for all agents, keyed by agent name then stat key.
+func CollectAgentStats(payload *StatusPayload) map[string]map[string]any {
+	result := make(map[string]map[string]any)
+	for _, a := range payload.Agents {
+		statsConfig := a.StatsConfig
+		if len(statsConfig) == 0 {
+			continue
+		}
+		vals := make(map[string]any)
+		for _, raw := range statsConfig {
+			stat, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			key, _ := stat["key"].(string)
+			if key == "" {
+				continue
+			}
+			source, _ := stat["source"].(string)
+			field, _ := stat["field"].(string)
+			var v any
+			switch source {
+			case "status":
+				switch field {
+				case "actionableCount":
+					total := 0
+					for _, r := range payload.Repos {
+						total += len(r.ActionableIssues)
+					}
+					v = total
+				case "openPrCount":
+					total := 0
+					for _, r := range payload.Repos {
+						total += len(r.OpenPrs)
+					}
+					v = total
+				case "mergeableCount":
+					total := 0
+					for _, r := range payload.Repos {
+						for _, pr := range r.OpenPrs {
+							if m, ok := pr.(map[string]any); ok {
+								if mb, ok := m["mergeable"].(bool); ok && mb {
+									total++
+								}
+							}
+						}
+					}
+					v = total
+				}
+			case "health":
+				if payload.Health != nil {
+					v = payload.Health[field]
+				}
+			case "agentMetrics":
+				if am, ok := payload.AgentMetrics[a.Name]; ok {
+					if m, ok := am.(map[string]any); ok {
+						v = m[field]
+					}
+				}
+			case "tokens":
+				if bucket, ok := payload.Tokens.ByAgent[a.Name]; ok {
+					switch field {
+					case "input":
+						v = bucket.Input
+					case "output":
+						v = bucket.Output
+					case "cacheRead":
+						v = bucket.CacheRead
+					case "cacheCreate":
+						v = bucket.CacheCreate
+					case "sessions":
+						v = bucket.Sessions
+					case "messages":
+						v = bucket.Messages
+					}
+				}
+			}
+			if v != nil {
+				vals[key] = v
+			}
+		}
+		if len(vals) > 0 {
+			result[a.Name] = vals
+		}
+	}
+	return result
+}
+
 func formatHumanTime(t time.Time) string {
 	local := t.Local()
 	return local.Format("1/2 3:04 PM MST")

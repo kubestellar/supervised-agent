@@ -555,7 +555,7 @@ func runEvalCycle(
 
 	agentStatuses := agentMgr.AllStatuses()
 
-	dashSrv.UpdateStatus(dashboard.BuildFrontendStatus(
+	statusPayload := dashboard.BuildFrontendStatus(
 		govState,
 		actionable,
 		agentStatuses,
@@ -566,7 +566,12 @@ func runEvalCycle(
 		ghClient,
 		ctx,
 		metricsCollector,
-	))
+	)
+	dashSrv.UpdateStatus(statusPayload)
+
+	if agentStats := dashboard.CollectAgentStats(statusPayload); len(agentStats) > 0 {
+		gov.AttachAgentStats(agentStats)
+	}
 
 	if nousState != nil {
 		var tokenSummary *tokens.AggregateSummary
