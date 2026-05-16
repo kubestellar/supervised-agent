@@ -24,8 +24,10 @@ log() { echo "[deploy] $(date '+%H:%M:%S') $*"; }
 
 # ── 1. Build new image ──────────────────────────────────────────────
 if [ "$SKIP_BUILD" = false ]; then
-    log "Building new image..."
-    docker compose build hive
+    log "Pruning build cache to ensure fresh Go compilation..."
+    docker builder prune -f >/dev/null 2>&1 || true
+    log "Building new image (no cache)..."
+    docker compose build --no-cache hive
 fi
 
 # ── 2. Determine active slot ────────────────────────────────────────
