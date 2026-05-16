@@ -373,6 +373,16 @@ func (g *Governor) AttachAgentStats(stats map[string]map[string]any) {
 	g.evalHistory[len(g.evalHistory)-1].AgentStats = stats
 }
 
+// AttachRepoSnapshots attaches per-repo issue/PR counts to the most recent eval snapshot.
+func (g *Governor) AttachRepoSnapshots(repos map[string]RepoSnapshot) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if len(g.evalHistory) == 0 {
+		return
+	}
+	g.evalHistory[len(g.evalHistory)-1].Repos = repos
+}
+
 // SeedEvalHistory loads previously persisted eval snapshots so sparkline
 // history survives container restarts.
 func (g *Governor) SeedEvalHistory(snapshots []EvalSnapshot) {

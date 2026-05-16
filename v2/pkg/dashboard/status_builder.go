@@ -212,6 +212,20 @@ func defaultStatsConfig(name string) []any {
 }
 
 // CollectAgentStats resolves current stat values for all agents, keyed by agent name then stat key.
+func CollectRepoSnapshots(payload *StatusPayload) map[string]governor.RepoSnapshot {
+	if payload == nil || len(payload.Repos) == 0 {
+		return nil
+	}
+	result := make(map[string]governor.RepoSnapshot, len(payload.Repos))
+	for _, r := range payload.Repos {
+		result[r.Name] = governor.RepoSnapshot{
+			Issues: r.Issues,
+			PRs:    r.PRs,
+		}
+	}
+	return result
+}
+
 func CollectAgentStats(payload *StatusPayload) map[string]map[string]any {
 	result := make(map[string]map[string]any)
 	for _, a := range payload.Agents {
