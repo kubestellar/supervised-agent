@@ -852,11 +852,7 @@
     .token-session-row { display: flex; gap: 8px; padding: 2px 0; align-items: baseline; }
     .token-session-row .sid { color: var(--cyan); font-family: monospace; min-width: 90px; }
     .token-session-row .sagent { font-weight: 600; min-width: 70px; font-size: 0.65rem; }
-    .token-session-row .sagent.a-scanner { color: #58a6ff; }
-    .token-session-row .sagent.a-ci-maintainer { color: #3fb950; }
-    .token-session-row .sagent.a-architect { color: #bc8cff; }
-    .token-session-row .sagent.a-outreach { color: #39d2c0; }
-    .token-session-row .sagent.a-supervisor { color: #d29922; }
+    /* Agent colors injected dynamically from status payload via injectAgentStyles() */
     .token-session-row .sagent.a-unknown { color: var(--muted); font-style: italic; }
     .token-session-row .smodel { color: var(--purple); min-width: 120px; }
     .token-session-row .stokens { color: var(--text); font-weight: 600; min-width: 80px; text-align: right; }
@@ -2024,16 +2020,35 @@
       } catch (e) { showToast('Kick failed: ' + e.message, 'error'); }
     }
 
-    const AGENT_DESCRIPTIONS = {
-      supervisor: 'Orchestrates all agents — runs periodic sweeps, enforces cadence, monitors health, and coordinates cross-agent handoffs',
-      scanner: 'Triages GitHub issues and PRs — dispatches fix agents, enforces SLA, manages the beads work ledger',
-      'ci-maintainer': 'Post-merge quality gate — monitors CI health, code coverage, GA4 errors, and produces adoption digests',
-      architect: 'Designs RFCs for cross-cutting changes — produces phase plans that scanner implements',
-      outreach: 'Drives CNCF ecosystem engagement — ADOPTERS outreach, ACMM badges, community PRs',
-      strategist: 'Nous agent — 3-stage protocol: (1) guardian fast-fail check, (2) experiment design via run_campaign.py, (3) principle sync and recommendations',
-      'sec-check': 'Security scanner — audits dependencies, container images, secrets exposure, and SBOM/SLSA compliance',
-      tester: 'Runs automated test suites — Playwright e2e, unit tests, coverage gates, and nightly regression checks',
-    };
+    // Agent descriptions now come from the JSON status payload (agent.description field).
+    // This empty map serves as a fallback for agents without a description in config.
+    const AGENT_DESCRIPTIONS = {};
+
+    // ── Config-driven agent color/sort helpers ──────────────────────────────
+    const _DEFAULT_AGENT_COLOR = '#8b949e';
+    function _getAgentColor(name) {
+      const agents = window._lastStatus?.agents || [];
+      const agent = agents.find(a => a.name === name);
+      return agent?.color || _DEFAULT_AGENT_COLOR;
+    }
+    function _getAgentSortOrder(name) {
+      const agents = window._lastStatus?.agents || [];
+      const agent = agents.find(a => a.name === name);
+      return agent?.sortOrder ?? 100;
+    }
+    let _injectedAgentStyleEl = null;
+    function injectAgentStyles(agents) {
+      if (!_injectedAgentStyleEl) {
+        _injectedAgentStyleEl = document.createElement('style');
+        _injectedAgentStyleEl.id = 'agent-dynamic-styles';
+        document.head.appendChild(_injectedAgentStyleEl);
+      }
+      const rules = agents
+        .filter(a => a.color)
+        .map(a => `.token-session-row .sagent.a-${CSS.escape(a.name)} { color: ${a.color}; }`)
+        .join('\n');
+      _injectedAgentStyleEl.textContent = rules;
+    }
 
     // ── Sidebar layout: drag-and-drop + groups ──────────────────────────────
     let _sidebarLayout = null;
@@ -2080,13 +2095,10 @@
       return `<a class="oc-nav-item${isActive}" data-agent-nav="${esc(a.name)}" draggable="true" data-action="ocSelectAgent" data-agent="${esc(a.name)}" title="${esc(agentDesc)}"><span class="oc-agent-dot ${dotCls}"></span> ${esc(label)}<span class="oc-nav-actions"><button data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Configure">⚙</button><button class="oc-nav-delete" data-action="deleteAgentFromConfig" data-agent="${esc(a.name)}" title="Delete">✕</button></span></a>`;
     }
 
-    const DEFAULT_SIDEBAR_ORDER = ['supervisor', 'sec-check', 'scanner', 'ci-maintainer', 'architect', 'tester', 'outreach'];
     function _sidebarBuildGroups(agents) {
       if (!_sidebarLayout || !_sidebarLayout.groups) {
-        const knownSet = new Set(agents.map(a => a.name));
-        const ordered = DEFAULT_SIDEBAR_ORDER.filter(n => knownSet.has(n));
-        const rest = agents.map(a => a.name).filter(n => !ordered.includes(n));
-        return [{ name: null, agents: [...ordered, ...rest] }];
+        const sorted = [...agents].sort((a, b) => (a.sortOrder || 100) - (b.sortOrder || 100));
+        return [{ name: null, agents: sorted.map(a => a.name) }];
       }
       const groups = _sidebarLayout.groups.map(g => ({ ...g }));
       const assigned = new Set();
@@ -2623,8 +2635,8 @@
 
       if (!m) return '';
 
-      // Scanner always gets its special pair rendering
-      if (name === 'scanner') {
+      // Agents with issue/PR pair tracking get special pair rendering
+      if (m.pairs || m.inProgress) {
         const pairs = m.pairs || [];
         const inProgress = m.inProgress || [];
         const openPairs = pairs.filter(p => p.state !== 'merged');
@@ -2765,7 +2777,7 @@
         else if (isStale) statusCls = 'status-stale';
         const cls = needsLogin ? 'needs-login' : isPaused ? 'paused' : isOff ? 'off' : isStopped ? 'stopped' : `${a.busy} ${statusCls}`.trim();
         const dotCls = isStopped ? 'stopped' : isPaused ? 'paused' : isOff ? 'off' : a.busy === 'working' ? 'running' : 'idle';
-        const canToggle = a.name !== 'supervisor';
+        const canToggle = a.beadRole !== 'supervisor';
         const toggleBtn = canToggle ? (isOff
           ? `<button class="btn-toggle off" data-action="openConfigDialog" data-config-type="agent" data-agent="${esc(a.name)}" title="Agent is off in this governor mode — click to configure per-mode cadences">⚙ off</button>`
           : `<button class="btn-toggle ${isPaused ? 'paused' : 'running'}" data-action="toggleAgent" data-agent="${esc(a.name)}" data-paused="${isPaused}" title="${isPaused ? 'Resume this agent — it will start running on its configured cadence' : 'Pause this agent — stops governor from kicking it until resumed'}">${isPaused ? '▶ resume' : '⏸ pause'}</button>`) : '';
@@ -3171,11 +3183,11 @@
 
       const MINUTES_PER_HOUR = 60;
       const HOURS_PER_WEEK = 168;
-      const AGENT_ORDER = ['scanner', 'ci-maintainer', 'architect', 'outreach', 'supervisor'];
+      const sortedNames = agents.map(a => a.name).sort((a, b) => _getAgentSortOrder(a) - _getAgentSortOrder(b));
       const rows = [];
       let totalWeeklyBurn = 0;
 
-      for (const name of AGENT_ORDER) {
+      for (const name of sortedNames) {
         const agentData = agents.find(a => a.name === name);
         const tokenData = byAgent[name];
         if (!agentData || !tokenData) continue;
@@ -3258,7 +3270,7 @@
 
       const barRows = rows.filter(r => r.weeklyBurn > 0 || (!r.isPaused && !r.isOff)).map(r => {
         const pct = totalWeeklyBurn > 0 ? Math.round((r.weeklyBurn / totalWeeklyBurn) * 100) : 0;
-        const barColor = r.name === 'scanner' ? 'var(--blue)' : r.name === 'ci-maintainer' ? 'var(--green)' : r.name === 'architect' ? 'var(--purple)' : r.name === 'outreach' ? 'var(--cyan)' : 'var(--yellow)';
+        const barColor = _getAgentColor(r.name);
         const label = r.isPaused ? 'paused' : r.isOff ? 'off' : `${fmtTokens(r.weeklyBurn)}/wk`;
         return `<div class="advisor-bar-row">
           <span class="advisor-agent">${r.name}</span>
@@ -3502,15 +3514,17 @@ function burnAreaChart() {
         </div>`;
       }).join('');
 
-      const HIVE_AGENTS = new Set(['scanner', 'ci-maintainer', 'architect', 'outreach', 'supervisor', 'strategist', 'sec-check', 'tester']);
-      const agentSessions = sessions.filter(s => HIVE_AGENTS.has(s.agent));
+      const knownAgents = new Set((window._lastStatus?.agents || []).map(a => a.name));
+      const agentSessions = sessions.filter(s => knownAgents.has(s.agent));
       const grouped = {};
       for (const s of agentSessions) {
         if (!grouped[s.agent]) grouped[s.agent] = [];
         grouped[s.agent].push(s);
       }
-      const AGENT_ORDER = ['supervisor', 'scanner', 'ci-maintainer', 'architect', 'outreach', 'strategist', 'sec-check', 'tester'];
-      const sortedGroups = AGENT_ORDER.filter(a => grouped[a]).map(a => [a, grouped[a]]);
+      const sortedAgentNames = (window._lastStatus?.agents || [])
+        .sort((a, b) => (a.sortOrder || 100) - (b.sortOrder || 100))
+        .map(a => a.name);
+      const sortedGroups = sortedAgentNames.filter(a => grouped[a]).map(a => [a, grouped[a]]);
       const sessionRows = sortedGroups.map(([agent, grp]) => {
         const agentCls = `a-${agent}`;
         const rows = grp.map(s => {
@@ -3523,8 +3537,7 @@ function burnAreaChart() {
             const mn = Math.min(...act);
             const rng = (mx - mn) || mx || 1;
             const pts = act.map((v, i) => `${(i / (act.length - 1)) * MINI_W},${MINI_H - ((v - mn) / rng) * (MINI_H - 2) - 1}`).join(' ');
-            const aClrs = { scanner: '#58a6ff', 'ci-maintainer': '#3fb950', architect: '#bc8cff', outreach: '#39d2c0', supervisor: '#d29922' };
-            const clr = aClrs[s.agent] || '#8b949e';
+            const clr = _getAgentColor(s.agent);
             miniSpark = `<span class="sparkline" style="margin-left:4px"><svg width="${MINI_W}" height="${MINI_H}" viewBox="0 0 ${MINI_W} ${MINI_H}"><polyline points="${pts}" fill="none" stroke="${clr}" stroke-width="1.2" opacity="0.7"/></svg></span>`;
           }
           return `<div class="token-session-row" style="padding-left:12px">
@@ -3550,17 +3563,18 @@ function burnAreaChart() {
       const advisorHtml = buildCadenceAdvisor(tokens.byAgent || {});
 
       const totalSpark = sparkSvg(getHistorySeries('tokenTotal'), '#39d2c0');
-      const agentColors = { supervisor: '#d29922', 'sec-check': '#f85149', scanner: '#58a6ff', 'ci-maintainer': '#3fb950', architect: '#bc8cff', tester: '#d29922', quality: '#39d2c0', outreach: '#39d2c0', strategist: '#bc8cff' };
       const ba = tokens.byAgent || {};
       const agentNames = Object.keys(ba).sort((a, b) => {
-        const order = ['supervisor', 'sec-check', 'scanner', 'ci-maintainer', 'architect', 'tester', 'quality', 'outreach', 'strategist'];
-        return (order.indexOf(a) === -1 ? 99 : order.indexOf(a)) - (order.indexOf(b) === -1 ? 99 : order.indexOf(b));
+        const aOrder = _getAgentSortOrder(a);
+        const bOrder = _getAgentSortOrder(b);
+        return aOrder - bOrder;
       });
       const agentSparkRows = agentNames.map(name => {
         const aData = ba[name];
         const aTotal = aData ? (aData.input || 0) + (aData.output || 0) + (aData.cacheRead || 0) : 0;
-        const aSpark = sparkSvg(historyData.map(s => s.tokens?.[name] ?? 0), agentColors[name] || '#8b949e');
-        return `<div class="token-stat"><div class="spark-row"><span class="tval" style="color:${agentColors[name] || '#8b949e'}">${fmtTokens(aTotal)}</span>${aSpark}</div><div class="tlabel">${name}</div></div>`;
+        const clr = _getAgentColor(name);
+        const aSpark = sparkSvg(historyData.map(s => s.tokens?.[name] ?? 0), clr);
+        return `<div class="token-stat"><div class="spark-row"><span class="tval" style="color:${clr}">${fmtTokens(aTotal)}</span>${aSpark}</div><div class="tlabel">${name}</div></div>`;
       }).join('');
 
       el.innerHTML = `<div class="token-panel">
@@ -5382,6 +5396,7 @@ function burnAreaChart() {
       window._lastAgents = data.agents || [];
       window._lastStatus = data;
       window._lastBudget = data.budget || {};
+      if (data.agents) injectAgentStyles(data.agents);
       // Display the Hive ID in header badges
       const hiveId = data.hiveId || '';
       const hiveIdBadge = document.getElementById('hive-id-badge');
