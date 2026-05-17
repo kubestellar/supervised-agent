@@ -76,6 +76,17 @@ type PoliciesConfig struct {
 	LocalDir     string        `yaml:"local_dir"`
 }
 
+// StatsDisplayEntry defines a single metric to show in the agent's sidebar/detail view.
+type StatsDisplayEntry struct {
+	Key        string `yaml:"key" json:"key"`
+	Label      string `yaml:"label" json:"label"`
+	Source     string `yaml:"source" json:"source"`
+	Field      string `yaml:"field" json:"field"`
+	Style      string `yaml:"style" json:"style"`
+	TrendField string `yaml:"trend_field,omitempty" json:"trendField,omitempty"`
+	Target     int    `yaml:"target,omitempty" json:"target,omitempty"`
+}
+
 type AgentConfig struct {
 	ID              string `yaml:"id"`
 	Backend         string `yaml:"backend"`
@@ -89,6 +100,22 @@ type AgentConfig struct {
 	LaunchCmd       string `yaml:"launch_cmd"`
 	DisplayName     string `yaml:"display_name"`
 	Description     string `yaml:"description"`
+
+	// Phase 2: config-driven agent behavior fields
+	Role             string            `yaml:"role"`
+	SortOrder        int               `yaml:"sort_order"`
+	Emoji            string            `yaml:"emoji"`
+	Color            string            `yaml:"color"`
+	Aliases          []string          `yaml:"aliases"`
+	LaneKeywords     []string          `yaml:"lane_keywords"`
+	DetectKeywords   []string          `yaml:"detect_keywords"`
+	KickTemplate     string            `yaml:"kick_template"`
+	IncludeRepos     *bool             `yaml:"include_repos"`
+	MetricsCollector string            `yaml:"metrics_collector"`
+	BeadRole         string            `yaml:"bead_role"`
+	StatsDisplay     []StatsDisplayEntry `yaml:"stats_display"`
+	ACMMLevels       []int             `yaml:"acmm_levels"`
+
 	// clearOnKickSet tracks whether YAML explicitly set clear_on_kick to false
 	clearOnKickSet bool
 	// name is the YAML map key, set during config load
@@ -98,6 +125,34 @@ type AgentConfig struct {
 // Name returns the human-readable YAML key for this agent.
 func (a *AgentConfig) Name() string {
 	return a.name
+}
+
+// ShouldIncludeRepos returns whether the repos section should be appended to kicks.
+// Defaults to true for all agents except those with IncludeRepos explicitly set to false.
+func (a *AgentConfig) ShouldIncludeRepos() bool {
+	if a.IncludeRepos != nil {
+		return *a.IncludeRepos
+	}
+	return true
+}
+
+// GetBeadRole returns the bead role, defaulting to "worker".
+func (a *AgentConfig) GetBeadRole() string {
+	if a.BeadRole != "" {
+		return a.BeadRole
+	}
+	return "worker"
+}
+
+// GetSortOrder returns the sort order. Supervisor-role agents default to 0 (first).
+func (a *AgentConfig) GetSortOrder() int {
+	if a.SortOrder != 0 {
+		return a.SortOrder
+	}
+	if a.BeadRole == "supervisor" {
+		return 0
+	}
+	return 100
 }
 
 func (a *AgentConfig) UnmarshalYAML(value *yaml.Node) error {
@@ -437,6 +492,10 @@ func (c *Config) applyDefaults() {
 		if !agent.clearOnKickSet {
 			agent.ClearOnKick = true
 		}
+		if agent.Role == "" {
+			agent.Role = name
+		}
+		applyKnownAgentDefaults(name, &agent)
 		c.Agents[name] = agent
 	}
 
@@ -536,6 +595,100 @@ func (c *Config) applyDefaults() {
 		if c.Knowledge.Curator.AutoPromoteThreshold == 0 {
 			c.Knowledge.Curator.AutoPromoteThreshold = defaultPromoteThreshold
 		}
+	}
+}
+
+// applyKnownAgentDefaults populates metadata fields for well-known agent names
+// when those fields are not explicitly set in YAML. This bridges existing configs.
+func applyKnownAgentDefaults(name string, agent *AgentConfig) {
+	type knownAgent struct {
+		Emoji          string
+		Color          string
+		Aliases        []string
+		LaneKeywords   []string
+		DetectKeywords []string
+		BeadRole       string
+		SortOrder      int
+		IncludeRepos   bool
+	}
+
+	known := map[string]knownAgent{
+		"scanner": {
+			Emoji: "🔍", Color: "#3498db", Aliases: []string{"sc"},
+			LaneKeywords:   []string{"bug", "triage", "typo", "fix"},
+			DetectKeywords: []string{"scanner", "triage", "issue", "bug"},
+			BeadRole: "worker", SortOrder: 20, IncludeRepos: true,
+		},
+		"ci-maintainer": {
+			Emoji: "🔧", Color: "#2ecc71", Aliases: []string{"ci"},
+			LaneKeywords:   []string{"workflow-failure", "ci-failure", "nightly", "coverage", "regression", "ga4", "analytics"},
+			DetectKeywords: []string{"ci-maintainer", "review", "ci", "coverage", "ga4"},
+			BeadRole: "worker", SortOrder: 30, IncludeRepos: true,
+		},
+		"architect": {
+			Emoji: "🏗", Color: "#9b59b6", Aliases: []string{"ar"},
+			LaneKeywords:   []string{"rfc", "architecture", "refactor", "redesign", "migration", "breaking change", "protocol", "api design"},
+			DetectKeywords: []string{"architect", "rfc", "refactor"},
+			BeadRole: "worker", SortOrder: 40, IncludeRepos: true,
+		},
+		"outreach": {
+			Emoji: "🌐", Color: "#e67e22", Aliases: []string{"ou"},
+			LaneKeywords:   []string{"adopters", "outreach", "community", "engagement"},
+			DetectKeywords: []string{"outreach", "adopters", "community"},
+			BeadRole: "worker", SortOrder: 50, IncludeRepos: false,
+		},
+		"supervisor": {
+			Emoji: "👑", Color: "#e74c3c", Aliases: []string{"su"},
+			DetectKeywords: []string{"supervisor", "sweep", "monitor"},
+			BeadRole: "supervisor", SortOrder: 10, IncludeRepos: true,
+		},
+		"sec-check": {
+			Emoji: "🛡", Color: "#1abc9c", Aliases: []string{"se"},
+			DetectKeywords: []string{"security", "sec-check", "vulnerability"},
+			BeadRole: "worker", SortOrder: 60, IncludeRepos: true,
+		},
+		"tester": {
+			Emoji: "🧪", Color: "#3498db", Aliases: []string{"te"},
+			LaneKeywords:   []string{"test-gap", "test-strategy", "test-coverage", "test-scaffold", "untested", "missing-tests"},
+			DetectKeywords: []string{"tester", "test", "coverage"},
+			BeadRole: "worker", SortOrder: 35, IncludeRepos: true,
+		},
+		"strategist": {
+			Emoji: "🧠", Color: "#f39c12", Aliases: []string{"sg"},
+			DetectKeywords: []string{"strategist", "strategy"},
+			BeadRole: "worker", SortOrder: 70, IncludeRepos: true,
+		},
+	}
+
+	k, ok := known[name]
+	if !ok {
+		return
+	}
+
+	if agent.Emoji == "" {
+		agent.Emoji = k.Emoji
+	}
+	if agent.Color == "" {
+		agent.Color = k.Color
+	}
+	if len(agent.Aliases) == 0 && len(k.Aliases) > 0 {
+		agent.Aliases = k.Aliases
+	}
+	if len(agent.LaneKeywords) == 0 && len(k.LaneKeywords) > 0 {
+		agent.LaneKeywords = k.LaneKeywords
+	}
+	if len(agent.DetectKeywords) == 0 && len(k.DetectKeywords) > 0 {
+		agent.DetectKeywords = k.DetectKeywords
+	}
+	if agent.BeadRole == "" {
+		agent.BeadRole = k.BeadRole
+	}
+	if agent.SortOrder == 0 {
+		agent.SortOrder = k.SortOrder
+	}
+	if agent.IncludeRepos == nil {
+		v := k.IncludeRepos
+		agent.IncludeRepos = &v
 	}
 }
 

@@ -349,15 +349,47 @@ func (c *Collector) saveSnapshot(agg *AggregateSummary) {
 	}
 }
 
+// configuredDetectKeywords holds config-driven agent detection keywords.
+// Set via SetDetectKeywords at startup; DefaultAgentDetector falls back to built-in if empty.
+var configuredDetectKeywords map[string][]string
+
+// SetDetectKeywords sets the agent detection keyword map from config.
+func SetDetectKeywords(keywords map[string][]string) {
+	configuredDetectKeywords = keywords
+}
+
+// configuredAgentNames holds the list of known agent names for session path detection.
+var configuredAgentNames []string
+
+// SetAgentNames sets the list of known agent names from config.
+func SetAgentNames(names []string) {
+	configuredAgentNames = names
+}
+
+// ConfiguredAgentNames returns the list of configured agent names.
+// Falls back to a default list if not configured.
+func ConfiguredAgentNames() []string {
+	if len(configuredAgentNames) > 0 {
+		return configuredAgentNames
+	}
+	return []string{"scanner", "ci-maintainer", "architect", "outreach", "supervisor", "sec-check", "tester", "analyst"}
+}
+
+var defaultDetectKeywords = map[string][]string{
+	"scanner":       {"scanner", "triage", "issue", "bug"},
+	"ci-maintainer": {"ci-maintainer", "review", "ci", "coverage", "ga4"},
+	"architect":     {"architect", "rfc", "refactor"},
+	"outreach":      {"outreach", "adopters", "community"},
+	"supervisor":    {"supervisor", "sweep", "monitor"},
+	"sec-check":     {"security", "sec-check", "vulnerability"},
+}
+
 func DefaultAgentDetector(firstMsg string) string {
 	lower := strings.ToLower(firstMsg)
-	agents := map[string][]string{
-		"scanner":    {"scanner", "triage", "issue", "bug"},
-		"ci-maintainer":   {"ci-maintainer", "review", "ci", "coverage", "ga4"},
-		"architect":  {"architect", "rfc", "refactor"},
-		"outreach":   {"outreach", "adopters", "community"},
-		"supervisor": {"supervisor", "sweep", "monitor"},
-		"sec-check":  {"security", "sec-check", "vulnerability"},
+
+	agents := configuredDetectKeywords
+	if len(agents) == 0 {
+		agents = defaultDetectKeywords
 	}
 
 	for agent, keywords := range agents {

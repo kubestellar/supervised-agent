@@ -21,6 +21,7 @@ import (
 
 	"github.com/kubestellar/hive/v2/pkg/agent"
 	"github.com/kubestellar/hive/v2/pkg/beads"
+	"github.com/kubestellar/hive/v2/pkg/classify"
 	"github.com/kubestellar/hive/v2/pkg/config"
 	"github.com/kubestellar/hive/v2/pkg/dashboard"
 	"github.com/kubestellar/hive/v2/pkg/discord"
@@ -286,6 +287,8 @@ func main() {
 		beadStores[name] = store
 		logger.Info("beads store initialized", "agent", name, "count", store.Count())
 	}
+
+	initAgentConfigDrivenSystems(cfg)
 
 	tokenCollector := tokens.NewCollector(cfg.Data.MetricsDir, logger)
 	tokenCollector.SetClaudeSessionsDir(cfg.Data.ClaudeSessionsDir)
@@ -999,4 +1002,60 @@ func parseLogLevel(s string) slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+// initAgentConfigDrivenSystems wires up config-driven agent metadata to subsystems
+// that previously relied on hardcoded agent name maps (classifier, discord, token detector).
+func initAgentConfigDrivenSystems(cfg *config.Config) {
+	var lanes []classify.LaneConfig
+	var agentNames []string
+	detectKeywords := make(map[string][]string)
+	discordIdentities := make(map[string]discord.AgentIdentity)
+	discordAliases := make(map[string]string)
+
+	for name, agent := range cfg.Agents {
+		agentNames = append(agentNames, name)
+
+		if len(agent.LaneKeywords) > 0 {
+			lanes = append(lanes, classify.LaneConfig{
+				Name:     name,
+				Keywords: agent.LaneKeywords,
+			})
+		}
+		if len(agent.DetectKeywords) > 0 {
+			detectKeywords[name] = agent.DetectKeywords
+		}
+		if agent.Emoji != "" || agent.Color != "" {
+			discordIdentities[name] = discord.AgentIdentity{
+				Emoji: agent.Emoji,
+				Color: parseColorInt(agent.Color),
+			}
+		}
+		for _, alias := range agent.Aliases {
+			discordAliases[alias] = name
+		}
+	}
+
+	if len(lanes) > 0 {
+		classify.SetLanes(lanes)
+	}
+	if len(detectKeywords) > 0 {
+		tokens.SetDetectKeywords(detectKeywords)
+	}
+	tokens.SetAgentNames(agentNames)
+	discord.SetAgentIdentities(discordIdentities)
+	if len(discordAliases) > 0 {
+		discord.SetAgentAliases(discordAliases)
+	}
+}
+
+// parseColorInt converts a hex color string like "#3498db" to an int.
+func parseColorInt(color string) int {
+	color = strings.TrimPrefix(color, "#")
+	if color == "" {
+		return 0x95a5a6
+	}
+	var result int
+	fmt.Sscanf(color, "%x", &result)
+	return result
 }
