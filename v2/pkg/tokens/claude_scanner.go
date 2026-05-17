@@ -332,7 +332,7 @@ func EnhancedAgentDetector(sessionPath string, fallbackDetector func(string) str
 		// Claude projects dir structure: ~/.claude/projects/<hash-of-working-dir>/
 		// The working dir for agents is typically /data/agents/<agent-name>/
 		lower := strings.ToLower(sessionPath)
-		agents := []string{"scanner", "ci-maintainer", "architect", "outreach", "supervisor", "sec-check", "tester", "analyst"}
+		agents := ConfiguredAgentNames()
 		for _, agent := range agents {
 			if strings.Contains(lower, agent) {
 				return agent

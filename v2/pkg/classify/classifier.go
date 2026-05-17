@@ -24,12 +24,22 @@ const (
 
 type Lane string
 
+// LaneConfig maps a lane name to its keywords for classification.
+type LaneConfig struct {
+	Name     string
+	Keywords []string
+}
+
+// DefaultLane is the fallback lane for issues that don't match any keywords.
+const DefaultLane = "scanner"
+
+// Backward-compatible lane constants used by tests and other packages.
 const (
-	LaneScanner   Lane = "scanner"
-	LaneCIMaintainer  Lane = "ci-maintainer"
-	LaneArchitect Lane = "architect"
-	LaneOutreach  Lane = "outreach"
-	LaneTester    Lane = "tester"
+	LaneScanner      Lane = "scanner"
+	LaneCIMaintainer Lane = "ci-maintainer"
+	LaneArchitect    Lane = "architect"
+	LaneOutreach     Lane = "outreach"
+	LaneTester       Lane = "tester"
 )
 
 type Classification struct {
@@ -44,30 +54,36 @@ var simpleKeywords = []string{
 	"tooltip", "placeholder", "aria", "alt text",
 }
 
-var architectKeywords = []string{
-	"rfc", "architecture", "refactor", "redesign", "migration",
-	"breaking change", "protocol", "api design",
+// defaultLanes is the built-in lane config used when no config-driven lanes are provided.
+var defaultLanes = []LaneConfig{
+	{Name: "architect", Keywords: []string{"rfc", "architecture", "refactor", "redesign", "migration", "breaking change", "protocol", "api design"}},
+	{Name: "ci-maintainer", Keywords: []string{"workflow-failure", "ci-failure", "nightly", "coverage", "regression", "ga4", "analytics"}},
+	{Name: "outreach", Keywords: []string{"adopters", "outreach", "community", "engagement"}},
+	{Name: "tester", Keywords: []string{"test-gap", "test-strategy", "test-coverage", "test-scaffold", "untested", "missing-tests"}},
 }
 
-var ciMaintainerKeywords = []string{
-	"workflow-failure", "ci-failure", "nightly", "coverage",
-	"regression", "ga4", "analytics",
+// configuredLanes holds the active lane configuration. Set via SetLanes().
+var configuredLanes []LaneConfig
+
+// SetLanes replaces the lane configuration used by the classifier.
+// Called at startup with lanes built from agent config LaneKeywords fields.
+func SetLanes(lanes []LaneConfig) {
+	configuredLanes = lanes
 }
 
-var outreachKeywords = []string{
-	"adopters", "outreach", "community", "engagement",
-}
-
-var testerKeywords = []string{
-	"test-gap", "test-strategy", "test-coverage", "test-scaffold",
-	"untested", "missing-tests",
+// activeLanes returns the current effective lane config.
+func activeLanes() []LaneConfig {
+	if len(configuredLanes) > 0 {
+		return configuredLanes
+	}
+	return defaultLanes
 }
 
 func Classify(issue github.Issue) Classification {
 	c := Classification{
 		Tier:  TierMedium,
 		Model: ModelSonnet,
-		Lane:  LaneScanner,
+		Lane:  Lane(DefaultLane),
 	}
 
 	titleLower := strings.ToLower(issue.Title)
@@ -82,27 +98,14 @@ func Classify(issue github.Issue) Classification {
 }
 
 func classifyLane(titleLower, labelsStr string) Lane {
-	for _, kw := range architectKeywords {
-		if strings.Contains(titleLower, kw) || strings.Contains(labelsStr, kw) {
-			return LaneArchitect
+	for _, lane := range activeLanes() {
+		for _, kw := range lane.Keywords {
+			if strings.Contains(titleLower, kw) || strings.Contains(labelsStr, kw) {
+				return Lane(lane.Name)
+			}
 		}
 	}
-	for _, kw := range ciMaintainerKeywords {
-		if strings.Contains(titleLower, kw) || strings.Contains(labelsStr, kw) {
-			return LaneCIMaintainer
-		}
-	}
-	for _, kw := range outreachKeywords {
-		if strings.Contains(titleLower, kw) || strings.Contains(labelsStr, kw) {
-			return LaneOutreach
-		}
-	}
-	for _, kw := range testerKeywords {
-		if strings.Contains(titleLower, kw) || strings.Contains(labelsStr, kw) {
-			return LaneTester
-		}
-	}
-	return LaneScanner
+	return Lane(DefaultLane)
 }
 
 func classifyTier(titleLower, labelsStr string, labels []string) Tier {

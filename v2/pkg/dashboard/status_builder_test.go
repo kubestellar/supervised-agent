@@ -362,8 +362,8 @@ func TestBuildAgents(t *testing.T) {
 
 	cfg := &config.Config{
 		Agents: map[string]config.AgentConfig{
-			"scanner":    {Backend: "claude", Model: "sonnet"},
-			"supervisor": {Backend: "claude", Model: "opus"},
+			"scanner":    {Backend: "claude", Model: "sonnet", SortOrder: 20},
+			"supervisor": {Backend: "claude", Model: "opus", BeadRole: "supervisor", SortOrder: 10},
 		},
 		Governor: config.GovernorConfig{
 			Modes: map[string]config.ModeConfig{

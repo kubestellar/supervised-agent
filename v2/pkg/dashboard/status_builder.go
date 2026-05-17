@@ -73,7 +73,7 @@ func BuildFrontendStatus(
 		Governor:     buildGovernor(govState, cfg),
 		Tokens:       buildTokens(tokenCollector),
 		Repos:        buildRepos(cfg, actionable),
-		Beads:        buildBeads(beadStores),
+		Beads:        BuildBeadsFromConfig(beadStores, cfg),
 		Health:       buildHealth(ghClient, ctx),
 		Budget:       buildBudget(gov, tokenCollector),
 		CadenceMatrix: buildCadenceMatrix(cfg, agentStatuses),
@@ -93,12 +93,16 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, go
 		names = append(names, name)
 	}
 	sort.Slice(names, func(i, j int) bool {
-		// Supervisor always comes first in the sidebar.
-		if names[i] == "supervisor" {
-			return true
+		orderI := 100
+		orderJ := 100
+		if agentI, ok := cfg.Agents[names[i]]; ok {
+			orderI = agentI.GetSortOrder()
 		}
-		if names[j] == "supervisor" {
-			return false
+		if agentJ, ok := cfg.Agents[names[j]]; ok {
+			orderJ = agentJ.GetSortOrder()
+		}
+		if orderI != orderJ {
+			return orderI < orderJ
 		}
 		return names[i] < names[j]
 	})
@@ -146,11 +150,17 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, go
 			agentID = name
 		}
 
+		agentCfg := proc.Config
 		a := FrontendAgent{
 			Name:          name,
 			ID:            agentID,
-			DisplayName:   proc.Config.DisplayName,
-			Description:   proc.Config.Description,
+			DisplayName:   agentCfg.DisplayName,
+			Description:   agentCfg.Description,
+			Role:          agentCfg.Role,
+			SortOrder:     agentCfg.GetSortOrder(),
+			Emoji:         agentCfg.Emoji,
+			Color:         agentCfg.Color,
+			BeadRole:      agentCfg.GetBeadRole(),
 			Session:       name,
 			State:         string(proc.State),
 			Busy:          busy,
@@ -177,7 +187,7 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, go
 }
 
 // loadStatsConfig reads the per-agent stats configuration from /data/agents/{name}/stats.json.
-// Falls back to built-in defaults when the file is missing or empty.
+// Falls back to config StatsDisplay, then built-in defaults when the file is missing or empty.
 func loadStatsConfig(name string) []any {
 	statsFile := fmt.Sprintf("/data/agents/%s/stats.json", name)
 	data, err := os.ReadFile(statsFile)
@@ -192,6 +202,42 @@ func loadStatsConfig(name string) []any {
 		if json.Unmarshal(data, &stats) == nil && len(stats) > 0 {
 			return stats
 		}
+	}
+	return defaultStatsConfig(name)
+}
+
+// LoadStatsConfigWithCfg reads stats from disk, then falls back to config StatsDisplay field.
+func LoadStatsConfigWithCfg(name string, cfg *config.Config) []any {
+	statsFile := fmt.Sprintf("/data/agents/%s/stats.json", name)
+	data, err := os.ReadFile(statsFile)
+	if err == nil {
+		var wrapper struct {
+			Stats []any `json:"stats"`
+		}
+		if json.Unmarshal(data, &wrapper) == nil && len(wrapper.Stats) > 0 {
+			return wrapper.Stats
+		}
+		var stats []any
+		if json.Unmarshal(data, &stats) == nil && len(stats) > 0 {
+			return stats
+		}
+	}
+	if agentCfg, ok := cfg.Agents[name]; ok && len(agentCfg.StatsDisplay) > 0 {
+		result := make([]any, 0, len(agentCfg.StatsDisplay))
+		for _, s := range agentCfg.StatsDisplay {
+			entry := map[string]any{
+				"key": s.Key, "label": s.Label,
+				"source": s.Source, "field": s.Field, "style": s.Style,
+			}
+			if s.TrendField != "" {
+				entry["trendField"] = s.TrendField
+			}
+			if s.Target > 0 {
+				entry["target"] = s.Target
+			}
+			result = append(result, entry)
+		}
+		return result
 	}
 	return defaultStatsConfig(name)
 }
@@ -574,6 +620,24 @@ func buildBeads(stores map[string]*beads.Store) FrontendBeads {
 	for name, store := range stores {
 		count := store.Count()
 		if name == "supervisor" {
+			fb.Supervisor = count
+		} else {
+			fb.Workers += count
+		}
+	}
+	return fb
+}
+
+// BuildBeadsFromConfig uses agent config bead_role to partition bead counts.
+func BuildBeadsFromConfig(stores map[string]*beads.Store, cfg *config.Config) FrontendBeads {
+	fb := FrontendBeads{}
+	for name, store := range stores {
+		count := store.Count()
+		role := "worker"
+		if agentCfg, ok := cfg.Agents[name]; ok {
+			role = agentCfg.GetBeadRole()
+		}
+		if role == "supervisor" {
 			fb.Supervisor = count
 		} else {
 			fb.Workers += count

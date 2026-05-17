@@ -53,6 +53,25 @@ func (s *Scheduler) loadPromptTemplate(agentName string) string {
 	return ""
 }
 
+// loadNamedTemplate loads a kick template by explicit filename (from config kick_template field).
+func (s *Scheduler) loadNamedTemplate(templateName string) string {
+	paths := []string{
+		fmt.Sprintf("/data/policies/examples/kubestellar/agents/%s", templateName),
+	}
+	if s.cfg.Policies.LocalDir != "" {
+		paths = append(paths,
+			fmt.Sprintf("%s/examples/kubestellar/agents/%s", s.cfg.Policies.LocalDir, templateName),
+			fmt.Sprintf("%s/%s%s", s.cfg.Policies.LocalDir, s.cfg.Policies.Path, templateName),
+		)
+	}
+	for _, p := range paths {
+		if data, err := os.ReadFile(p); err == nil {
+			return string(data)
+		}
+	}
+	return ""
+}
+
 // substituteTemplate replaces ${VAR} placeholders in a prompt template.
 func (s *Scheduler) substituteTemplate(template string, actionable *github.ActionableResult, agentName string, issues []github.Issue) string {
 	now := time.Now().In(time.FixedZone("EDT", -4*3600))
@@ -176,7 +195,13 @@ func (s *Scheduler) BuildKickMessages(actionable *github.ActionableResult, agent
 	for _, agentName := range agentsDue {
 		msg := s.buildAgentMessage(agentName, classifiedIssues, actionable)
 		if msg != "" {
-			if agentName != "outreach" {
+			includeRepos := true
+			if agentCfg, ok := s.cfg.Agents[agentName]; ok {
+				includeRepos = agentCfg.ShouldIncludeRepos()
+			} else if agentName == "outreach" {
+				includeRepos = false
+			}
+			if includeRepos {
 				msg += "\n" + reposSection
 			}
 			messages = append(messages, KickMessage{
@@ -206,7 +231,17 @@ func (s *Scheduler) buildReposSection() string {
 const maxIssuesPerKick = 20
 
 func (s *Scheduler) buildAgentMessage(agentName string, issues []github.Issue, actionable *github.ActionableResult) string {
-	// Prefer CLAUDE.md prompt template if it exists — allows config-driven kicks
+	// 1. Config-driven: use kick_template field if set
+	if agentCfg, ok := s.cfg.Agents[agentName]; ok && agentCfg.KickTemplate != "" {
+		if template := s.loadNamedTemplate(agentCfg.KickTemplate); template != "" {
+			s.logger.Info("using config kick_template", "agent", agentName, "template", agentCfg.KickTemplate)
+			msg := fmt.Sprintf("[agent:%s] [KICK]\n\n", agentName)
+			msg += s.substituteTemplate(template, actionable, agentName, issues)
+			return msg
+		}
+	}
+
+	// 2. Convention: look for <agent>-CLAUDE.md template file
 	if template := s.loadPromptTemplate(agentName); template != "" {
 		s.logger.Info("using prompt template for kick", "agent", agentName)
 		msg := fmt.Sprintf("[agent:%s] [KICK]\n\n", agentName)
@@ -214,7 +249,7 @@ func (s *Scheduler) buildAgentMessage(agentName string, issues []github.Issue, a
 		return msg
 	}
 
-	// Fall back to hardcoded messages for agents without templates
+	// 3. Legacy hardcoded fallback (removed in Phase 4 when all agents use templates)
 	s.logger.Info("no prompt template found, using hardcoded kick", "agent", agentName)
 	switch agentName {
 	case "scanner":

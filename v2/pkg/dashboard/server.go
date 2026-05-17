@@ -67,6 +67,11 @@ type FrontendAgent struct {
 	ID               string `json:"id"`
 	DisplayName      string `json:"displayName,omitempty"`
 	Description      string `json:"description,omitempty"`
+	Role             string `json:"role,omitempty"`
+	SortOrder        int    `json:"sortOrder"`
+	Emoji            string `json:"emoji,omitempty"`
+	Color            string `json:"color,omitempty"`
+	BeadRole         string `json:"beadRole,omitempty"`
 	Session          string `json:"session"`
 	State            string `json:"state"`
 	Busy             string `json:"busy"`

@@ -26,24 +26,21 @@ const (
 	sseReconnectMax    = 60 * time.Second
 )
 
-type agentIdentity struct {
+// AgentIdentity holds the Discord display metadata for an agent.
+type AgentIdentity struct {
 	Emoji string
 	Color int
 }
 
-var agentIdentities = map[string]agentIdentity{
-	"scanner":        {Emoji: "🔍", Color: 0x3498db},
-	"ci-maintainer":  {Emoji: "🔧", Color: 0x2ecc71},
-	"architect":      {Emoji: "🏗", Color: 0x9b59b6},
-	"outreach":       {Emoji: "🌐", Color: 0xe67e22},
-	"supervisor":     {Emoji: "👑", Color: 0xe74c3c},
-	"sec-check":      {Emoji: "🛡", Color: 0x1abc9c},
-	"strategist":     {Emoji: "🧠", Color: 0xf39c12},
-	"tester":         {Emoji: "🧪", Color: 0x3498db},
-	"governor":       {Emoji: "🚦", Color: 0xf1c40f},
-	"pipeline":       {Emoji: "⚙️", Color: 0x95a5a6},
+// agentIdentities maps agent names to their Discord display identity.
+// Populated from config via SetAgentIdentities; defaults used if not called.
+var agentIdentities = map[string]AgentIdentity{
+	"governor": {Emoji: "🚦", Color: 0xf1c40f},
+	"pipeline": {Emoji: "⚙️", Color: 0x95a5a6},
 }
 
+// aliases maps shortcodes to full command/agent names.
+// Includes built-in defaults; overridable via SetAgentAliases from config.
 var aliases = map[string]string{
 	"s": "status", "st": "status",
 	"g": "governor", "gov": "governor",
@@ -52,6 +49,26 @@ var aliases = map[string]string{
 	"sc": "scanner", "ar": "architect", "ou": "outreach",
 	"su": "supervisor", "ci": "ci-maintainer", "se": "sec-check",
 	"sg": "strategist", "te": "tester",
+}
+
+// SetAgentIdentities rebuilds agentIdentities from config at startup.
+func SetAgentIdentities(identities map[string]AgentIdentity) {
+	merged := map[string]AgentIdentity{
+		"governor": {Emoji: "🚦", Color: 0xf1c40f},
+		"pipeline": {Emoji: "⚙️", Color: 0x95a5a6},
+	}
+	for k, v := range identities {
+		merged[k] = v
+	}
+	agentIdentities = merged
+}
+
+// SetAgentAliases replaces agent aliases in the aliases map with config-driven values.
+// Command aliases (status, governor, help, kick, pause, resume) are always preserved.
+func SetAgentAliases(agentAliases map[string]string) {
+	for k, v := range agentAliases {
+		aliases[k] = v
+	}
 }
 
 type CommandHandler func(ctx context.Context, args string) (string, error)
@@ -787,7 +804,7 @@ func resolveAlias(s string) string {
 	return s
 }
 
-func getIdentity(name string) agentIdentity {
+func getIdentity(name string) AgentIdentity {
 	if id, ok := agentIdentities[name]; ok {
 		return id
 	}
