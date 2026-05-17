@@ -77,6 +77,7 @@ type PoliciesConfig struct {
 }
 
 type AgentConfig struct {
+	ID              string `yaml:"id"`
 	Backend         string `yaml:"backend"`
 	Model           string `yaml:"model"`
 	BeadsDir        string `yaml:"beads_dir"`
@@ -90,6 +91,13 @@ type AgentConfig struct {
 	Description     string `yaml:"description"`
 	// clearOnKickSet tracks whether YAML explicitly set clear_on_kick to false
 	clearOnKickSet bool
+	// name is the YAML map key, set during config load
+	name string
+}
+
+// Name returns the human-readable YAML key for this agent.
+func (a *AgentConfig) Name() string {
+	return a.name
 }
 
 func (a *AgentConfig) UnmarshalYAML(value *yaml.Node) error {
@@ -416,6 +424,10 @@ func (c *Config) applyDefaults() {
 		c.Data.CopilotSessionsDir = "/data/home/.copilot/session-state"
 	}
 	for name, agent := range c.Agents {
+		agent.name = name
+		if agent.ID == "" {
+			agent.ID = name
+		}
 		if agent.BeadsDir == "" {
 			agent.BeadsDir = fmt.Sprintf("/data/beads/%s", name)
 		}
@@ -557,4 +569,28 @@ func (c *Config) EnabledAgents() map[string]AgentConfig {
 		}
 	}
 	return result
+}
+
+// ResolveAgent finds an agent by name or ID and returns its YAML key (name).
+// Returns the key and true if found, empty string and false otherwise.
+func (c *Config) ResolveAgent(nameOrID string) (string, bool) {
+	if _, ok := c.Agents[nameOrID]; ok {
+		return nameOrID, true
+	}
+	for name, agent := range c.Agents {
+		if agent.ID == nameOrID {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// AgentByID returns the agent config with the given ID.
+func (c *Config) AgentByID(id string) (AgentConfig, bool) {
+	for _, agent := range c.Agents {
+		if agent.ID == id {
+			return agent, true
+		}
+	}
+	return AgentConfig{}, false
 }

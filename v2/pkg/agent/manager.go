@@ -39,6 +39,7 @@ const (
 
 type AgentProcess struct {
 	Name            string
+	ID              string
 	Config          config.AgentConfig
 	State           ProcessState
 	PID             int
@@ -57,10 +58,11 @@ type AgentProcess struct {
 }
 
 type Manager struct {
-	agents  map[string]*AgentProcess
-	mu      sync.RWMutex
-	logger  *slog.Logger
-	workDir string
+	agents    map[string]*AgentProcess
+	idToName  map[string]string
+	mu        sync.RWMutex
+	logger    *slog.Logger
+	workDir   string
 }
 
 func NewManager(agents map[string]config.AgentConfig, logger *slog.Logger) *Manager {
@@ -70,22 +72,42 @@ func NewManager(agents map[string]config.AgentConfig, logger *slog.Logger) *Mana
 	}
 
 	m := &Manager{
-		agents:  make(map[string]*AgentProcess),
-		logger:  logger,
-		workDir: workDir,
+		agents:   make(map[string]*AgentProcess),
+		idToName: make(map[string]string),
+		logger:   logger,
+		workDir:  workDir,
 	}
 
 	for name, cfg := range agents {
+		agentID := cfg.ID
+		if agentID == "" {
+			agentID = name
+		}
 		m.agents[name] = &AgentProcess{
 			Name:         name,
+			ID:           agentID,
 			Config:       cfg,
 			State:        StateStopped,
 			OutputBuffer: NewRingBuffer(outputBufferCapacity),
 			tmuxSession:  "hive-" + name,
 		}
+		m.idToName[agentID] = name
 	}
 
 	return m
+}
+
+// ResolveAgent returns the YAML key (name) for a given name or ID.
+// If the input matches neither, it returns the input unchanged (callers
+// will get a "not found" error from the specific method).
+func (m *Manager) ResolveAgent(nameOrID string) string {
+	if _, ok := m.agents[nameOrID]; ok {
+		return nameOrID
+	}
+	if name, ok := m.idToName[nameOrID]; ok {
+		return name
+	}
+	return nameOrID
 }
 
 func (m *Manager) Start(ctx context.Context, name string) error {
@@ -409,14 +431,20 @@ func (m *Manager) AddAgent(name string, cfg config.AgentConfig) {
 		return
 	}
 
+	agentID := cfg.ID
+	if agentID == "" {
+		agentID = name
+	}
 	m.agents[name] = &AgentProcess{
 		Name:         name,
+		ID:           agentID,
 		Config:       cfg,
 		State:        StateStopped,
 		OutputBuffer: NewRingBuffer(outputBufferCapacity),
 		tmuxSession:  "hive-" + name,
 	}
-	m.logger.Info("agent added", "name", name)
+	m.idToName[agentID] = name
+	m.logger.Info("agent added", "name", name, "id", agentID)
 }
 
 // UpdateConfig updates the stored config for a running agent process so that
@@ -448,8 +476,9 @@ func (m *Manager) RemoveAgent(name string) {
 		agent.cancel()
 	}
 
+	delete(m.idToName, agent.ID)
 	delete(m.agents, name)
-	m.logger.Info("agent removed", "name", name)
+	m.logger.Info("agent removed", "name", name, "id", agent.ID)
 }
 
 func (m *Manager) SendKick(name string, message string) error {
@@ -593,6 +622,7 @@ func (a *AgentProcess) snapshot() AgentProcess {
 	copy(history, a.KickHistory)
 	return AgentProcess{
 		Name:            a.Name,
+		ID:              a.ID,
 		Config:          a.Config,
 		State:           a.State,
 		PID:             a.PID,
