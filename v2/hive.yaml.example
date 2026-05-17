@@ -21,50 +21,92 @@ policies:
   local_dir: /data/policies               # Where to clone locally
   poll_interval: 5m                       # How often to git pull for changes
 
-# Agent definitions — each agent runs as a child process
+# Agent definitions — each agent runs as a child process.
+# All behavior metadata (color, sort, keywords, etc.) is optional and auto-populated
+# for known agent names. New/custom agents should set these fields explicitly.
 agents:
   scanner:
+    # id: scan-01                         # Stable internal key (defaults to YAML key)
     enabled: true
     backend: claude                       # claude | copilot | gemini | goose
     model: claude-sonnet-4-6
     beads_dir: /data/beads/scanner
     clear_on_kick: true                   # Send /clear before each kick to reset context
+    display_name: Code Scanner
+    description: Triages GitHub issues and PRs — dispatches fix agents, enforces SLA
+    role: scanner                         # Semantic role for behavioral dispatch
+    sort_order: 20                        # Sidebar ordering (lower = higher)
+    emoji: "🔍"                           # Discord identity
+    color: "#3498db"                      # Dashboard color (hex)
+    aliases: ["sc"]                       # Discord shortcodes
+    lane_keywords: ["bug", "triage", "typo", "fix"]  # Issue classification routing
+    detect_keywords: ["scanner", "triage", "issue", "bug"]  # Token session detection
+    kick_template: scanner-CLAUDE.md      # Prompt template filename (or omit for convention)
+    include_repos: true                   # Append repos section to kicks
+    bead_role: worker                     # "supervisor" or "worker"
+    # stats_display:                      # Custom stats for sidebar (omit for defaults)
+    #   - key: actionable
+    #     label: Actionable
+    #     source: status
+    #     field: actionableCount
+    #     style: spark
+    #     trend_field: actionable
   ci-maintainer:
     enabled: true
     backend: claude
     model: claude-sonnet-4-6
     beads_dir: /data/beads/ci-maintainer
     clear_on_kick: true
+    display_name: CI Maintainer
+    description: Post-merge quality gate — monitors CI health, coverage, GA4 errors
+    sort_order: 30
   tester:
     enabled: true
     backend: claude
     model: claude-sonnet-4-6
     beads_dir: /data/beads/tester
     clear_on_kick: true
+    display_name: Tester
+    description: Runs automated test suites — coverage gates and nightly regression checks
+    sort_order: 35
   architect:
     enabled: false                        # Disabled by default — enable for design work
     backend: claude
     model: claude-sonnet-4-6
     beads_dir: /data/beads/architect
     clear_on_kick: false
+    display_name: Architect
+    description: Designs RFCs for cross-cutting changes
+    sort_order: 40
   supervisor:
     enabled: true
     backend: claude
     model: claude-sonnet-4-6
     beads_dir: /data/beads/supervisor
     clear_on_kick: true
+    display_name: Supervisor
+    description: Orchestrates all agents — sweeps, enforces cadence, monitors health
+    sort_order: 10
+    bead_role: supervisor
   outreach:
     enabled: false
     backend: claude
     model: claude-sonnet-4-6
     beads_dir: /data/beads/outreach
     clear_on_kick: false
+    display_name: Outreach
+    description: Drives CNCF ecosystem engagement — ADOPTERS, ACMM badges, community PRs
+    sort_order: 50
+    include_repos: false                  # Outreach targets external repos
   sec-check:
     enabled: false
     backend: claude
     model: claude-sonnet-4-6
     beads_dir: /data/beads/sec-check
     clear_on_kick: true
+    display_name: Security
+    description: Audits dependencies, container images, secrets exposure
+    sort_order: 60
 
 # Governor — adaptive scheduler that adjusts agent cadences based on queue depth
 governor:
