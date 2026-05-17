@@ -155,6 +155,15 @@ func okResponse(w http.ResponseWriter, extra map[string]string) {
 	jsonResponse(w, result)
 }
 
+// resolveAgentParam resolves an agent path parameter (name or ID) to the
+// canonical YAML key (name). Returns the resolved name.
+func (s *Server) resolveAgentParam(nameOrID string) string {
+	if s.deps != nil && s.deps.AgentMgr != nil {
+		return s.deps.AgentMgr.ResolveAgent(nameOrID)
+	}
+	return nameOrID
+}
+
 func (s *Server) refreshAfterMutation() {
 	if s.deps != nil && s.deps.RefreshFunc != nil {
 		go s.deps.RefreshFunc()
@@ -375,7 +384,7 @@ func (s *Server) handleWidget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePane(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("agent")
+	name := s.resolveAgentParam(r.PathValue("agent"))
 	lines, _ := strconv.Atoi(r.URL.Query().Get("lines"))
 	if lines <= 0 {
 		lines = 100
@@ -397,7 +406,7 @@ func (s *Server) handlePane(w http.ResponseWriter, r *http.Request) {
 // --- Agent control endpoints ---
 
 func (s *Server) handleKick(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("agent")
+	name := s.resolveAgentParam(r.PathValue("agent"))
 	var body struct {
 		Message string `json:"message"`
 	}
@@ -417,7 +426,7 @@ func (s *Server) handleKick(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSwitch(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("agent")
+	name := s.resolveAgentParam(r.PathValue("agent"))
 	backend := r.PathValue("backend")
 
 	if err := s.deps.AgentMgr.SetBackendOverride(name, backend); err != nil {
@@ -430,7 +439,7 @@ func (s *Server) handleSwitch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleModelSet(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("agent")
+	name := s.resolveAgentParam(r.PathValue("agent"))
 	model := r.PathValue("model")
 
 	if err := s.deps.AgentMgr.SetModelOverride(name, model); err != nil {
@@ -443,7 +452,7 @@ func (s *Server) handleModelSet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("agent")
+	name := s.resolveAgentParam(r.PathValue("agent"))
 
 	if err := s.deps.AgentMgr.Pause(name); err != nil {
 		jsonError(w, err.Error(), http.StatusBadRequest)
@@ -455,7 +464,7 @@ func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleResume(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("agent")
+	name := s.resolveAgentParam(r.PathValue("agent"))
 
 	if err := s.deps.AgentMgr.Resume(s.deps.Ctx, name); err != nil {
 		jsonError(w, err.Error(), http.StatusBadRequest)
@@ -467,7 +476,7 @@ func (s *Server) handleResume(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePin(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("agent")
+	name := s.resolveAgentParam(r.PathValue("agent"))
 	dimension := r.PathValue("dimension")
 
 	var body struct {
@@ -516,7 +525,7 @@ func (s *Server) handlePin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUnpin(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("agent")
+	name := s.resolveAgentParam(r.PathValue("agent"))
 	dimension := r.PathValue("dimension")
 
 	var err error
@@ -540,7 +549,7 @@ func (s *Server) handleUnpin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("agent")
+	name := s.resolveAgentParam(r.PathValue("agent"))
 
 	if err := s.deps.AgentMgr.Restart(s.deps.Ctx, name); err != nil {
 		jsonError(w, err.Error(), http.StatusBadRequest)
@@ -552,7 +561,7 @@ func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleResetRestarts(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("agent")
+	name := s.resolveAgentParam(r.PathValue("agent"))
 
 	if err := s.deps.AgentMgr.ResetRestartCount(name); err != nil {
 		jsonError(w, err.Error(), http.StatusBadRequest)

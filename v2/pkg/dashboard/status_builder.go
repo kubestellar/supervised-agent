@@ -141,8 +141,14 @@ func buildAgents(statuses map[string]*agent.AgentProcess, cfg *config.Config, go
 			liveSummary = strings.Join(lines, "\n")
 		}
 
+		agentID := proc.ID
+		if agentID == "" {
+			agentID = name
+		}
+
 		a := FrontendAgent{
 			Name:          name,
+			ID:            agentID,
 			DisplayName:   proc.Config.DisplayName,
 			Description:   proc.Config.Description,
 			Session:       name,
